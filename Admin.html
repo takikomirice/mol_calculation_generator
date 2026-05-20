@@ -1,0 +1,1527 @@
+<!doctype html>
+<html>
+<head>
+  <base target="_top">
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <style>
+    :root {
+      --bg: #f5f7fa;
+      --surface: #ffffff;
+      --surface-soft: #f8fafc;
+      --text: #17202a;
+      --muted: #5b6675;
+      --border: #d9e0ea;
+      --accent: #2563eb;
+      --accent-soft: #eaf1ff;
+      --success: #047857;
+      --success-soft: #e6f4ef;
+      --warning: #b45309;
+      --warning-soft: #fff4d6;
+      --danger: #b91c1c;
+      --danger-soft: #fee2e2;
+      --dry: #0f766e;
+      --dry-soft: #ddf7f1;
+      --shadow: 0 10px 24px rgba(23, 32, 42, 0.08);
+      --radius: 8px;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--text);
+      font-family: Inter, Arial, "Hiragino Sans", "Yu Gothic", sans-serif;
+      font-size: 14px;
+      letter-spacing: 0;
+    }
+
+    button,
+    input,
+    textarea,
+    select {
+      font: inherit;
+    }
+
+    button {
+      border: 0;
+    }
+
+    a {
+      color: var(--accent);
+      text-decoration: none;
+    }
+
+    .app-shell {
+      min-width: 1180px;
+    }
+
+    .topbar {
+      position: sticky;
+      top: 0;
+      z-index: 20;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 24px;
+      padding: 18px 28px;
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+    }
+
+    .topbar h1 {
+      margin: 0;
+      font-size: 24px;
+      line-height: 1.2;
+    }
+
+    .topbar p {
+      margin: 4px 0 0;
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    .topbar-actions {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      white-space: nowrap;
+    }
+
+    .layout {
+      display: grid;
+      grid-template-columns: 272px minmax(860px, 1fr);
+      gap: 22px;
+      padding: 22px;
+    }
+
+    .rail,
+    .panel,
+    .metric-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+    }
+
+    .rail {
+      position: sticky;
+      top: 96px;
+      height: calc(100vh - 118px);
+      padding: 16px;
+      overflow: auto;
+    }
+
+    .rail h2 {
+      margin: 0 0 14px;
+      font-size: 16px;
+    }
+
+    .step-nav {
+      display: grid;
+      gap: 8px;
+    }
+
+    .flow-button {
+      display: grid;
+      grid-template-columns: 28px 1fr;
+      gap: 10px;
+      align-items: center;
+      width: 100%;
+      padding: 10px;
+      border: 1px solid transparent;
+      border-radius: 6px;
+      color: var(--text);
+      background: transparent;
+      text-align: left;
+      cursor: pointer;
+    }
+
+    .flow-button:hover {
+      border-color: var(--border);
+      background: var(--surface-soft);
+    }
+
+    .flow-button.active {
+      background: var(--warning-soft);
+      border-color: #f4d184;
+    }
+
+    .step-index {
+      display: grid;
+      place-items: center;
+      width: 28px;
+      height: 28px;
+      border-radius: 6px;
+      background: var(--accent);
+      color: #fff;
+      font-weight: 800;
+      font-size: 12px;
+    }
+
+    .flow-button.active .step-index {
+      background: var(--warning);
+    }
+
+    .step-title {
+      display: block;
+      font-weight: 800;
+      font-size: 13px;
+    }
+
+    .step-subtitle {
+      display: block;
+      color: var(--muted);
+      font-size: 11px;
+      margin-top: 2px;
+    }
+
+    .rail-warning {
+      margin-top: 16px;
+      padding: 12px;
+      border-radius: 6px;
+      background: var(--danger-soft);
+      color: var(--danger);
+      font-size: 12px;
+      line-height: 1.5;
+    }
+
+    .main {
+      display: grid;
+      gap: 16px;
+    }
+
+    .metrics {
+      display: grid;
+      grid-template-columns: repeat(5, minmax(150px, 1fr));
+      gap: 12px;
+    }
+
+    .metric-card {
+      min-height: 104px;
+      padding: 14px;
+    }
+
+    .metric-label {
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 800;
+    }
+
+    .metric-value {
+      margin-top: 4px;
+      font-family: "IBM Plex Mono", Consolas, monospace;
+      font-size: 28px;
+      font-weight: 800;
+    }
+
+    .metric-note {
+      margin-top: 4px;
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    .panel {
+      padding: 16px;
+      scroll-margin-top: 102px;
+    }
+
+    .panel-screen[hidden] {
+      display: none;
+    }
+
+    .panel-screen.is-active {
+      display: block;
+    }
+
+    .panel-header {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 12px;
+      margin-bottom: 14px;
+    }
+
+    .panel-title {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+
+    .panel h2 {
+      margin: 0;
+      font-size: 18px;
+      line-height: 1.3;
+    }
+
+    .panel-description {
+      margin: 4px 0 0;
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    .panel-actions {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      justify-content: flex-end;
+    }
+
+    .field-grid {
+      display: grid;
+      grid-template-columns: minmax(240px, 1.3fr) minmax(180px, 0.8fr) minmax(180px, 0.8fr);
+      gap: 12px;
+      align-items: end;
+    }
+
+    .field {
+      display: grid;
+      gap: 6px;
+    }
+
+    .field label {
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 800;
+    }
+
+    .field input,
+    .field textarea,
+    .field select,
+    .filter-input {
+      width: 100%;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      background: var(--surface-soft);
+      color: var(--text);
+      padding: 9px 10px;
+      outline: none;
+    }
+
+    .field input:focus,
+    .field textarea:focus,
+    .field select:focus,
+    .filter-input:focus {
+      border-color: var(--accent);
+      box-shadow: 0 0 0 3px var(--accent-soft);
+    }
+
+    .field textarea {
+      min-height: 96px;
+      resize: vertical;
+      line-height: 1.5;
+    }
+
+    .toggle-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      min-height: 38px;
+    }
+
+    .toggle-row input {
+      width: 18px;
+      height: 18px;
+    }
+
+    .subsection {
+      display: grid;
+      gap: 10px;
+    }
+
+    .stacked-sections {
+      display: grid;
+      gap: 16px;
+    }
+
+    .toolbar-row {
+      display: grid;
+      grid-template-columns: minmax(240px, 1fr) 180px 180px;
+      gap: 10px;
+      margin-bottom: 10px;
+    }
+
+    .table-wrap {
+      max-height: 430px;
+      overflow-x: hidden;
+      overflow-y: auto;
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      background: var(--surface);
+    }
+
+    table {
+      width: 100%;
+      table-layout: fixed;
+      border-collapse: separate;
+      border-spacing: 0;
+      font-size: 13px;
+    }
+
+    th,
+    td {
+      padding: 9px 10px;
+      border-bottom: 1px solid var(--border);
+      text-align: left;
+      vertical-align: middle;
+      white-space: normal;
+      overflow-wrap: anywhere;
+      word-break: break-word;
+    }
+
+    th {
+      position: sticky;
+      top: 0;
+      z-index: 2;
+      background: #f0f4f8;
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 800;
+    }
+
+    tr:last-child td {
+      border-bottom: 0;
+    }
+
+    td.wrap {
+      white-space: normal;
+      line-height: 1.45;
+    }
+
+    .col-check {
+      width: 64px;
+    }
+
+    .col-count {
+      width: 84px;
+    }
+
+    .col-status {
+      width: 112px;
+    }
+
+    .col-actions {
+      width: 210px;
+    }
+
+    .col-student {
+      width: 32%;
+    }
+
+    .cell-main {
+      font-weight: 800;
+    }
+
+    .cell-sub {
+      display: block;
+      margin-top: 2px;
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.35;
+    }
+
+    .actions-cell {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+    }
+
+    .status-area {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      min-height: 38px;
+      padding: 9px 12px;
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      background: var(--surface);
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    .status-area.error {
+      border-color: #f3b4b4;
+      background: var(--danger-soft);
+      color: var(--danger);
+    }
+
+    .status-area.success {
+      border-color: #b7dfd0;
+      background: var(--success-soft);
+      color: var(--success);
+    }
+
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 24px;
+      padding: 4px 9px;
+      border-radius: 999px;
+      font-size: 12px;
+      font-weight: 800;
+      white-space: nowrap;
+    }
+
+    .badge.ok {
+      background: var(--success-soft);
+      color: var(--success);
+    }
+
+    .badge.warn {
+      background: var(--warning-soft);
+      color: var(--warning);
+    }
+
+    .badge.danger {
+      background: var(--danger-soft);
+      color: var(--danger);
+    }
+
+    .badge.dry {
+      background: var(--dry-soft);
+      color: var(--dry);
+    }
+
+    .badge.neutral {
+      background: var(--accent-soft);
+      color: var(--accent);
+    }
+
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 36px;
+      padding: 0 13px;
+      border-radius: 6px;
+      border: 1px solid var(--border);
+      background: var(--surface);
+      color: var(--text);
+      font-weight: 800;
+      font-size: 13px;
+      cursor: pointer;
+      white-space: nowrap;
+    }
+
+    .btn:hover {
+      border-color: var(--accent);
+    }
+
+    .btn.primary {
+      background: var(--accent);
+      border-color: var(--accent);
+      color: #fff;
+    }
+
+    .btn.dry {
+      background: var(--dry);
+      border-color: var(--dry);
+      color: #fff;
+    }
+
+    .btn.danger {
+      background: var(--danger);
+      border-color: var(--danger);
+      color: #fff;
+    }
+
+    .btn.ghost {
+      background: transparent;
+    }
+
+    .btn:disabled {
+      cursor: progress;
+      opacity: 0.55;
+    }
+
+    .button-icon {
+      width: 16px;
+      text-align: center;
+      font-weight: 900;
+    }
+
+    .progress-shell {
+      display: grid;
+      gap: 8px;
+      margin: 4px 0 10px;
+    }
+
+    .progress-bar {
+      height: 10px;
+      overflow: hidden;
+      border-radius: 999px;
+      background: #e5eaf2;
+    }
+
+    .progress-fill {
+      height: 100%;
+      width: 0%;
+      background: var(--dry);
+      transition: width 0.2s ease;
+    }
+
+    .empty {
+      padding: 18px;
+      color: var(--muted);
+      text-align: center;
+    }
+
+    .modal-backdrop {
+      position: fixed;
+      inset: 0;
+      z-index: 100;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      background: rgba(23, 32, 42, 0.42);
+    }
+
+    .modal-backdrop.open {
+      display: flex;
+    }
+
+    .modal {
+      width: min(520px, calc(100vw - 48px));
+      padding: 18px;
+      border-radius: var(--radius);
+      background: var(--surface);
+      box-shadow: var(--shadow);
+    }
+
+    .modal h2 {
+      margin: 0 0 8px;
+      font-size: 18px;
+    }
+
+    .modal p {
+      margin: 0 0 16px;
+      color: var(--muted);
+      line-height: 1.6;
+      white-space: pre-wrap;
+    }
+
+    .modal-actions {
+      display: flex;
+      justify-content: flex-end;
+      gap: 8px;
+    }
+
+    @media (max-width: 980px) {
+      .app-shell {
+        min-width: 0;
+      }
+
+      .layout,
+      .metrics,
+      .field-grid,
+      .toolbar-row {
+        grid-template-columns: 1fr;
+      }
+
+      .rail {
+        position: static;
+        height: auto;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="app-shell">
+    <header class="topbar">
+      <div>
+        <h1>モル計算ドリル 管理</h1>
+        <p id="versionLabel">読み込み待ち</p>
+      </div>
+      <div class="topbar-actions">
+        <span id="adminTokenBadge" class="badge warn">管理者トークン確認中</span>
+        <span id="distributionModeBadge" class="badge dry">DRY_RUN確認中</span>
+        <button id="refreshButton" class="btn" type="button"><span class="button-icon">R</span>更新</button>
+      </div>
+    </header>
+
+    <div class="layout">
+      <aside class="rail">
+        <h2>操作フロー</h2>
+        <nav class="step-nav" aria-label="管理画面の操作フロー">
+          <button class="flow-button active" data-panel="setupPanel" type="button"><span class="step-index">1</span><span><span class="step-title">1. 初期設定</span><span class="step-subtitle">URL・トークン・DRY_RUN</span></span></button>
+          <button class="flow-button" data-panel="classroomPanel" type="button"><span class="step-index">2</span><span><span class="step-title">2. Classroom取得</span><span class="step-subtitle">一覧と同期対象</span></span></button>
+          <button class="flow-button" data-panel="studentRosterPanel" type="button"><span class="step-index">3</span><span><span class="step-title">3. 名簿取得</span><span class="step-subtitle">生徒数を確認</span></span></button>
+          <button class="flow-button" data-panel="tokenPanel" type="button"><span class="step-index">4</span><span><span class="step-title">4. トークン発行</span><span class="step-subtitle">個別URL作成</span></span></button>
+          <button class="flow-button" data-panel="distributionPanel" type="button"><span class="step-index">5</span><span><span class="step-title">5. URL配付</span><span class="step-subtitle">DRY_RUN後に本送信</span></span></button>
+          <button class="flow-button" data-panel="summaryPanel" type="button"><span class="step-index">6</span><span><span class="step-title">6. 実施状況確認</span><span class="step-subtitle">未実施・低正答率</span></span></button>
+          <button class="flow-button" data-panel="logsPanel" type="button"><span class="step-index">7</span><span><span class="step-title">ログ確認</span><span class="step-subtitle">解答・配付・実行</span></span></button>
+        </nav>
+        <div class="rail-warning">
+          本送信、再発行、無効化は確認ダイアログを通します。DRY_RUNか本送信かは画面上部とURL配付パネルで常時表示します。
+        </div>
+      </aside>
+
+      <main class="main">
+        <div id="statusText" class="status-area">管理画面を読み込みます。</div>
+
+        <section class="metrics" aria-label="管理指標">
+          <div class="metric-card"><div class="metric-label">Classroom</div><div id="courseCount" class="metric-value">0</div><div id="checkedCourseCount" class="metric-note">同期対象 0</div></div>
+          <div class="metric-card"><div class="metric-label">生徒</div><div id="studentCount" class="metric-value">0</div><div id="retiredStudentCount" class="metric-note">退籍 0</div></div>
+          <div class="metric-card"><div class="metric-label">有効トークン</div><div id="tokenCount" class="metric-value">0</div><div id="revokedTokenCount" class="metric-note">無効 0</div></div>
+          <div class="metric-card"><div class="metric-label">配付待ち</div><div id="distributionTargetCount" class="metric-value">0</div><div id="distributionFailedCount" class="metric-note">失敗 0</div></div>
+          <div class="metric-card"><div class="metric-label">要確認</div><div id="riskStudentCount" class="metric-value">0</div><div id="notStartedCount" class="metric-note">未実施 0</div></div>
+        </section>
+
+        <section id="setupPanel" class="panel panel-screen is-active">
+          <div class="panel-header">
+            <div>
+              <div class="panel-title">
+                <h2>初期設定</h2>
+                <span id="settingsStatusBadge" class="badge warn">未確認</span>
+              </div>
+              <p class="panel-description">WebアプリURL、管理者トークン、投稿本文、DRY_RUN、バッチサイズを設定します。</p>
+            </div>
+            <div class="panel-actions">
+              <button id="saveSettingsButton" class="btn primary" type="button">設定を保存</button>
+            </div>
+          </div>
+          <div class="field-grid">
+            <div class="field">
+              <label for="webAppUrlInput">WebアプリURL</label>
+              <input id="webAppUrlInput" type="url" placeholder="https://script.google.com/macros/s/.../exec" autocomplete="off">
+            </div>
+            <div class="field">
+              <label for="adminTokenInput">管理者トークン</label>
+              <input id="adminTokenInput" type="password" placeholder="変更時のみ入力" autocomplete="new-password">
+            </div>
+            <div class="field">
+              <label for="batchSizeInput">バッチサイズ</label>
+              <input id="batchSizeInput" type="number" min="1" max="100" step="1" value="30">
+            </div>
+            <div class="field">
+              <label>DRY_RUN</label>
+              <label class="toggle-row"><input id="dryRunToggle" type="checkbox">Classroom投稿を作らずログだけ記録</label>
+            </div>
+            <div class="field">
+              <label>配付ログ</label>
+              <label class="toggle-row"><input id="distributionLogToggle" type="checkbox" checked>配付結果をログに残す</label>
+            </div>
+            <div class="field">
+              <label>状態</label>
+              <div id="adminTokenStatus" class="status-area">管理者トークン未確認</div>
+            </div>
+          </div>
+          <div class="field" style="margin-top:12px;">
+            <label for="postTextTemplateInput">投稿本文テンプレート</label>
+            <textarea id="postTextTemplateInput" spellcheck="false"></textarea>
+          </div>
+        </section>
+
+        <section id="classroomPanel" class="panel panel-screen" hidden>
+          <div class="panel-header">
+            <div>
+              <div class="panel-title"><h2>Classroom管理</h2><span id="courseStatusBadge" class="badge neutral">未取得</span></div>
+              <p class="panel-description">担当Classroomを取得し、名簿取得や配付の対象にするClassroomだけを選びます。</p>
+            </div>
+            <div class="panel-actions">
+              <button id="refreshCoursesButton" class="btn primary" type="button">Classroom一覧取得</button>
+              <button id="saveCourseSelectionButton" class="btn" type="button">同期対象を保存</button>
+            </div>
+          </div>
+          <div class="toolbar-row">
+            <input id="courseSearchInput" class="filter-input" type="search" placeholder="Classroom名・sectionで検索">
+            <select id="courseCheckedFilter" class="filter-input">
+              <option value="all">同期状態: すべて</option>
+              <option value="checked">同期対象のみ</option>
+              <option value="unchecked">未選択のみ</option>
+            </select>
+            <select id="courseStateFilter" class="filter-input">
+              <option value="all">状態: すべて</option>
+              <option value="ACTIVE">ACTIVE</option>
+            </select>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <colgroup>
+                <col class="col-check">
+                <col>
+                <col class="col-count">
+                <col class="col-status">
+              </colgroup>
+              <thead><tr><th>同期</th><th>Classroom</th><th>生徒数</th><th>状態</th></tr></thead>
+              <tbody id="courseBody"><tr><td colspan="4" class="empty">読み込み中...</td></tr></tbody>
+            </table>
+          </div>
+        </section>
+
+        <section id="studentRosterPanel" class="panel panel-screen" hidden>
+          <div class="panel-header">
+            <div>
+              <div class="panel-title"><h2>生徒名簿</h2><span id="studentStatusBadge" class="badge neutral">未取得</span></div>
+              <p class="panel-description">同期対象Classroomの生徒を取得し、生徒数・在籍状態を確認します。</p>
+            </div>
+            <div class="panel-actions">
+              <button id="refreshStudentsButton" class="btn primary" type="button">生徒名簿取得</button>
+            </div>
+          </div>
+          <div class="toolbar-row">
+            <input id="studentSearchInput" class="filter-input" type="search" placeholder="氏名・メール・Classroomで検索">
+            <select id="studentCourseFilter" class="filter-input"><option value="all">Classroom: すべて</option></select>
+            <select id="studentStatusFilter" class="filter-input">
+              <option value="active">在籍のみ</option>
+              <option value="all">すべて</option>
+              <option value="retired">退籍のみ</option>
+            </select>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <colgroup>
+                <col>
+                <col class="col-student">
+                <col class="col-status">
+              </colgroup>
+              <thead><tr><th>Classroom</th><th>生徒</th><th>状態</th></tr></thead>
+              <tbody id="studentBody"><tr><td colspan="3" class="empty">生徒名簿は未取得です。</td></tr></tbody>
+            </table>
+          </div>
+        </section>
+
+        <section id="tokenPanel" class="panel panel-screen" hidden>
+          <div class="panel-header">
+            <div>
+              <div class="panel-title"><h2>トークン管理</h2><span id="tokenStatusBadge" class="badge neutral">未確認</span></div>
+              <p class="panel-description">トークン発行、再発行、無効化、生徒URL確認を行います。</p>
+            </div>
+            <div class="panel-actions">
+              <button id="issueTokensButton" class="btn primary" type="button">トークン発行</button>
+            </div>
+          </div>
+          <div class="toolbar-row">
+            <input id="tokenSearchInput" class="filter-input" type="search" placeholder="氏名・Classroom・tokenで検索">
+            <select id="tokenStateFilter" class="filter-input">
+              <option value="all">状態: すべて</option>
+              <option value="active">有効</option>
+              <option value="missing">未発行</option>
+              <option value="revoked">無効</option>
+            </select>
+            <input id="tokenCourseFilter" class="filter-input" type="search" placeholder="Classroom絞り込み">
+          </div>
+          <div class="table-wrap">
+            <table>
+              <colgroup>
+                <col class="col-student">
+                <col>
+                <col class="col-status">
+                <col class="col-actions">
+              </colgroup>
+              <thead><tr><th>生徒</th><th>URL / token</th><th>状態</th><th>操作</th></tr></thead>
+              <tbody id="tokenBody"><tr><td colspan="4" class="empty">トークンは未発行です。</td></tr></tbody>
+            </table>
+          </div>
+        </section>
+
+        <section id="distributionPanel" class="panel panel-screen" hidden>
+          <div class="panel-header">
+            <div>
+              <div class="panel-title"><h2>URL配付</h2><span id="distributionPanelModeBadge" class="badge dry">DRY_RUN確認中</span></div>
+              <p class="panel-description">配付対象確認、DRY_RUN、Classroomお知らせ本送信、失敗分再送をバッチ単位で進めます。</p>
+            </div>
+            <div class="panel-actions">
+              <button id="previewDistributionButton" class="btn" type="button">配付対象確認</button>
+              <button id="dryRunButton" class="btn dry" type="button">DRY_RUN</button>
+              <button id="distributeButton" class="btn danger" type="button">Classroomお知らせ本送信</button>
+              <button id="retryFailedButton" class="btn" type="button">失敗分再送</button>
+            </div>
+          </div>
+          <div id="distributionProgress" class="progress-shell">
+            <div id="distributionProgressText">配付対象を確認してください。</div>
+            <div class="progress-bar"><div id="distributionProgressFill" class="progress-fill"></div></div>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <colgroup>
+                <col>
+                <col class="col-student">
+                <col class="col-status">
+                <col>
+              </colgroup>
+              <thead><tr><th>実行</th><th>対象</th><th>status</th><th>error</th></tr></thead>
+              <tbody id="distributionLogBody"><tr><td colspan="4" class="empty">ログはまだありません。</td></tr></tbody>
+            </table>
+          </div>
+        </section>
+
+        <section id="summaryPanel" class="panel panel-screen" hidden>
+          <div class="panel-header">
+            <div>
+              <div class="panel-title"><h2>実施状況</h2><span id="summaryStatusBadge" class="badge neutral">未集計</span></div>
+              <p class="panel-description">生徒ごとの総解答数、直近10問正答率、レベル別解答数、未実施者、低正答率者、最終解答日時を確認します。</p>
+            </div>
+            <div class="panel-actions">
+              <button id="aggregateButton" class="btn primary" type="button">集計更新</button>
+            </div>
+          </div>
+          <div class="toolbar-row">
+            <input id="summarySearchInput" class="filter-input" type="search" placeholder="氏名・Classroomで検索">
+            <select id="summaryStatusFilter" class="filter-input">
+              <option value="all">状態: すべて</option>
+              <option value="未実施">未実施者</option>
+              <option value="低正答率">低正答率者</option>
+              <option value="良好">良好</option>
+            </select>
+            <select id="summaryCourseFilter" class="filter-input"><option value="all">Classroom: すべて</option></select>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <colgroup>
+                <col class="col-student">
+                <col class="col-count">
+                <col>
+                <col>
+                <col>
+                <col class="col-status">
+              </colgroup>
+              <thead><tr><th>生徒</th><th>解答数</th><th>正答率</th><th>レベル別</th><th>最終解答日時</th><th>状態</th></tr></thead>
+              <tbody id="summaryBody"><tr><td colspan="6" class="empty">集計データはまだありません。</td></tr></tbody>
+            </table>
+          </div>
+        </section>
+
+        <section id="logsPanel" class="panel panel-screen" hidden>
+          <div class="panel-header">
+            <div>
+              <div class="panel-title"><h2>ログ確認</h2><span class="badge neutral">最新50件</span></div>
+              <p class="panel-description">解答ログ、配付ログ、実行ログの簡易表示とシートリンクです。</p>
+            </div>
+            <div id="sheetLinks" class="panel-actions"></div>
+          </div>
+          <div class="stacked-sections">
+            <div class="subsection">
+              <h3>解答ログ</h3>
+              <div class="table-wrap">
+                <table>
+                  <colgroup><col><col class="col-student"><col class="col-status"><col class="col-status"></colgroup>
+                  <thead><tr><th>時刻</th><th>氏名</th><th>level</th><th>正誤</th></tr></thead>
+                  <tbody id="answerLogBody"><tr><td colspan="4" class="empty">ログはまだありません。</td></tr></tbody>
+                </table>
+              </div>
+            </div>
+            <div class="subsection">
+              <h3>実行ログ</h3>
+              <div class="table-wrap">
+                <table>
+                  <colgroup><col><col><col class="col-count"><col class="col-count"><col class="col-count"><col class="col-status"></colgroup>
+                  <thead><tr><th>operation</th><th>開始</th><th>処理</th><th>成功</th><th>失敗</th><th>next</th></tr></thead>
+                  <tbody id="runLogBody"><tr><td colspan="6" class="empty">ログはまだありません。</td></tr></tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        </section>
+      </main>
+    </div>
+  </div>
+
+  <div id="confirmModal" class="modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="confirmTitle">
+    <div class="modal">
+      <h2 id="confirmTitle">確認</h2>
+      <p id="confirmMessage"></p>
+      <div class="modal-actions">
+        <button id="confirmCancelButton" class="btn" type="button">キャンセル</button>
+        <button id="confirmOkButton" class="btn danger" type="button">実行</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const initialAdminToken = <?!= JSON.stringify(typeof initialAdminToken === 'undefined' ? '' : initialAdminToken) ?>;
+    const params = new URLSearchParams(window.location.search);
+    const urlAdminToken = params.get('admin') || params.get('adminToken') || '';
+
+    const state = {
+      authToken: initialAdminToken || urlAdminToken,
+      dashboard: null,
+      busy: false,
+      activePanel: 'setupPanel',
+      lastDistributionResult: null
+    };
+
+    const elements = {
+      versionLabel: document.getElementById('versionLabel'),
+      adminTokenBadge: document.getElementById('adminTokenBadge'),
+      distributionModeBadge: document.getElementById('distributionModeBadge'),
+      distributionPanelModeBadge: document.getElementById('distributionPanelModeBadge'),
+      statusText: document.getElementById('statusText'),
+      refreshButton: document.getElementById('refreshButton'),
+      flowButtons: Array.from(document.querySelectorAll('.flow-button')),
+      panelScreens: Array.from(document.querySelectorAll('.panel-screen')),
+      setupPanel: document.getElementById('setupPanel'),
+      webAppUrlInput: document.getElementById('webAppUrlInput'),
+      adminTokenInput: document.getElementById('adminTokenInput'),
+      postTextTemplateInput: document.getElementById('postTextTemplateInput'),
+      dryRunToggle: document.getElementById('dryRunToggle'),
+      distributionLogToggle: document.getElementById('distributionLogToggle'),
+      batchSizeInput: document.getElementById('batchSizeInput'),
+      saveSettingsButton: document.getElementById('saveSettingsButton'),
+      settingsStatusBadge: document.getElementById('settingsStatusBadge'),
+      adminTokenStatus: document.getElementById('adminTokenStatus'),
+      courseCount: document.getElementById('courseCount'),
+      checkedCourseCount: document.getElementById('checkedCourseCount'),
+      studentCount: document.getElementById('studentCount'),
+      retiredStudentCount: document.getElementById('retiredStudentCount'),
+      tokenCount: document.getElementById('tokenCount'),
+      revokedTokenCount: document.getElementById('revokedTokenCount'),
+      distributionTargetCount: document.getElementById('distributionTargetCount'),
+      distributionFailedCount: document.getElementById('distributionFailedCount'),
+      riskStudentCount: document.getElementById('riskStudentCount'),
+      notStartedCount: document.getElementById('notStartedCount'),
+      classroomPanel: document.getElementById('classroomPanel'),
+      courseStatusBadge: document.getElementById('courseStatusBadge'),
+      refreshCoursesButton: document.getElementById('refreshCoursesButton'),
+      saveCourseSelectionButton: document.getElementById('saveCourseSelectionButton'),
+      refreshStudentsButton: document.getElementById('refreshStudentsButton'),
+      courseSearchInput: document.getElementById('courseSearchInput'),
+      courseCheckedFilter: document.getElementById('courseCheckedFilter'),
+      courseStateFilter: document.getElementById('courseStateFilter'),
+      courseBody: document.getElementById('courseBody'),
+      studentRosterPanel: document.getElementById('studentRosterPanel'),
+      studentStatusBadge: document.getElementById('studentStatusBadge'),
+      studentSearchInput: document.getElementById('studentSearchInput'),
+      studentCourseFilter: document.getElementById('studentCourseFilter'),
+      studentStatusFilter: document.getElementById('studentStatusFilter'),
+      studentBody: document.getElementById('studentBody'),
+      tokenPanel: document.getElementById('tokenPanel'),
+      tokenStatusBadge: document.getElementById('tokenStatusBadge'),
+      issueTokensButton: document.getElementById('issueTokensButton'),
+      tokenSearchInput: document.getElementById('tokenSearchInput'),
+      tokenStateFilter: document.getElementById('tokenStateFilter'),
+      tokenCourseFilter: document.getElementById('tokenCourseFilter'),
+      tokenBody: document.getElementById('tokenBody'),
+      distributionProgress: document.getElementById('distributionProgress'),
+      distributionProgressText: document.getElementById('distributionProgressText'),
+      distributionProgressFill: document.getElementById('distributionProgressFill'),
+      previewDistributionButton: document.getElementById('previewDistributionButton'),
+      dryRunButton: document.getElementById('dryRunButton'),
+      distributeButton: document.getElementById('distributeButton'),
+      retryFailedButton: document.getElementById('retryFailedButton'),
+      distributionLogBody: document.getElementById('distributionLogBody'),
+      summaryStatusBadge: document.getElementById('summaryStatusBadge'),
+      aggregateButton: document.getElementById('aggregateButton'),
+      summarySearchInput: document.getElementById('summarySearchInput'),
+      summaryStatusFilter: document.getElementById('summaryStatusFilter'),
+      summaryCourseFilter: document.getElementById('summaryCourseFilter'),
+      summaryBody: document.getElementById('summaryBody'),
+      sheetLinks: document.getElementById('sheetLinks'),
+      answerLogBody: document.getElementById('answerLogBody'),
+      runLogBody: document.getElementById('runLogBody'),
+      confirmModal: document.getElementById('confirmModal'),
+      confirmTitle: document.getElementById('confirmTitle'),
+      confirmMessage: document.getElementById('confirmMessage'),
+      confirmCancelButton: document.getElementById('confirmCancelButton'),
+      confirmOkButton: document.getElementById('confirmOkButton')
+    };
+
+    let confirmResolver = null;
+
+    function runServer(method, args) {
+      const callArgs = [state.authToken].concat(args || []);
+      return new Promise(function (resolve, reject) {
+        google.script.run
+          .withSuccessHandler(resolve)
+          .withFailureHandler(reject)[method].apply(google.script.run, callArgs);
+      });
+    }
+
+    function callAdminAction(method, args) {
+      if (method === 'refreshClassroomList') return runServer('refreshClassroomList', args);
+      if (method === 'saveCourseSyncSelection') return runServer('saveCourseSyncSelection', args);
+      if (method === 'refreshStudentsForCheckedCourses') return runServer('refreshStudentsForCheckedCourses', args);
+      if (method === 'issueTokensForActiveStudents') return runServer('issueTokensForActiveStudents', args);
+      if (method === 'reissueStudentToken') return runServer('reissueStudentToken', args);
+      if (method === 'revokeStudentToken') return runServer('revokeStudentToken', args);
+      if (method === 'dryRunStudentUrlDistribution') return runServer('dryRunStudentUrlDistribution', args);
+      if (method === 'distributeStudentUrlsForCheckedCourses') return runServer('distributeStudentUrlsForCheckedCourses', args);
+      if (method === 'retryFailedStudentUrlDistributions') return runServer('retryFailedStudentUrlDistributions', args);
+      if (method === 'rebuildAggregateCache') return runServer('rebuildAggregateCache', args);
+      return runServer(method, args);
+    }
+
+    function escapeHtml(value) {
+      return String(value == null ? '' : value)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+    }
+
+    function escapeAttr(value) {
+      return escapeHtml(value).replace(/`/g, '&#96;');
+    }
+
+    function formatRate(value) {
+      const numeric = Number(value || 0);
+      return Math.round(numeric * 1000) / 10 + '%';
+    }
+
+    function shortToken(token) {
+      const text = String(token || '');
+      return text.length > 16 ? text.slice(0, 10) + '...' + text.slice(-4) : text;
+    }
+
+    function setStatus(message, kind) {
+      elements.statusText.textContent = message || '';
+      elements.statusText.className = 'status-area' + (kind ? ' ' + kind : '');
+    }
+
+    function badgeClass(label) {
+      if (label === '未実施' || label === '無効' || label === 'ERROR') return 'danger';
+      if (label === '低正答率' || label === '要観察' || label === 'DRY_RUN') return 'warn';
+      if (label === '有効' || label === '良好' || label === 'SUCCESS') return 'ok';
+      return 'neutral';
+    }
+
+    function badge(label, type) {
+      return '<span class="badge ' + (type || badgeClass(label)) + '">' + escapeHtml(label) + '</span>';
+    }
+
+    function emptyRow(colspan, message) {
+      return '<tr><td colspan="' + colspan + '" class="empty">' + escapeHtml(message) + '</td></tr>';
+    }
+
+    function showConfirm(options) {
+      elements.confirmTitle.textContent = options.title || '確認';
+      elements.confirmMessage.textContent = options.message || '';
+      elements.confirmOkButton.textContent = options.confirmLabel || '実行';
+      elements.confirmOkButton.className = 'btn ' + (options.danger === false ? 'primary' : 'danger');
+      elements.confirmModal.classList.add('open');
+      return new Promise(function (resolve) {
+        confirmResolver = resolve;
+      });
+    }
+
+    function closeConfirm(value) {
+      elements.confirmModal.classList.remove('open');
+      if (confirmResolver) {
+        confirmResolver(value);
+        confirmResolver = null;
+      }
+    }
+
+    function showPanel(panelId) {
+      state.activePanel = panelId || 'setupPanel';
+      for (const panel of elements.panelScreens) {
+        const active = panel.id === state.activePanel;
+        panel.hidden = !active;
+        panel.classList.toggle('is-active', active);
+      }
+      for (const button of elements.flowButtons) {
+        button.classList.toggle('active', button.dataset.panel === state.activePanel);
+      }
+      applyFilters();
+    }
+
+    function getStudentCountByCourse() {
+      const counts = new Map();
+      for (const row of state.dashboard.students || []) {
+        if (row.status === '退籍') continue;
+        counts.set(row.courseId, (counts.get(row.courseId) || 0) + 1);
+      }
+      return counts;
+    }
+
+    function getTokenRowsWithMissing() {
+      const tokensByRoster = new Map((state.dashboard.tokens || []).map(function (row) {
+        return [row.rosterKey, row];
+      }));
+      const rows = [];
+      for (const student of state.dashboard.students || []) {
+        if (student.status === '退籍') continue;
+        rows.push(Object.assign({
+          token: '',
+          studentUrl: '',
+          issuedAt: '',
+          revoked: false,
+          note: ''
+        }, student, tokensByRoster.get(student.rosterKey) || {}));
+      }
+      return rows;
+    }
+
+    function renderMetrics() {
+      const courses = state.dashboard.courses || [];
+      const students = state.dashboard.students || [];
+      const tokens = state.dashboard.tokens || [];
+      const progressRows = state.dashboard.progressRows || [];
+      const preview = state.dashboard.distributionPreview || {};
+      const checked = courses.filter(function (row) { return row.checked; }).length;
+      const activeStudents = students.filter(function (row) { return row.status !== '退籍'; }).length;
+      const retired = students.length - activeStudents;
+      const activeTokens = tokens.filter(function (row) { return row.token && !row.revoked; }).length;
+      const revokedTokens = tokens.filter(function (row) { return row.revoked; }).length;
+      const risk = progressRows.filter(function (row) { return row.statusLabel === '低正答率'; }).length;
+      const notStarted = progressRows.filter(function (row) { return row.statusLabel === '未実施'; }).length;
+
+      elements.courseCount.textContent = String(courses.length);
+      elements.checkedCourseCount.textContent = '同期対象 ' + checked;
+      elements.studentCount.textContent = String(activeStudents);
+      elements.retiredStudentCount.textContent = '退籍 ' + retired;
+      elements.tokenCount.textContent = String(activeTokens);
+      elements.revokedTokenCount.textContent = '無効 ' + revokedTokens;
+      elements.distributionTargetCount.textContent = String(preview.targetCount || 0);
+      elements.distributionFailedCount.textContent = '失敗 ' + (preview.failedTargetCount || 0);
+      elements.riskStudentCount.textContent = String(risk);
+      elements.notStartedCount.textContent = '未実施 ' + notStarted;
+    }
+
+    function renderSettings() {
+      const settings = state.dashboard.settings || {};
+      elements.webAppUrlInput.value = settings.webAppUrl || '';
+      elements.postTextTemplateInput.value = settings.postTextTemplate || '';
+      elements.batchSizeInput.value = String(settings.batchSize || 30);
+      elements.dryRunToggle.checked = settings.dryRun === true;
+      elements.distributionLogToggle.checked = settings.enableDistributionLog !== false;
+      elements.adminTokenBadge.textContent = settings.adminTokenConfigured ? '管理者トークン設定済み' : '管理者トークン未設定';
+      elements.adminTokenBadge.className = 'badge ' + (settings.adminTokenConfigured ? 'ok' : 'danger');
+      elements.adminTokenStatus.textContent = settings.adminTokenConfigured ? '設定済み。変更時だけ新しい値を入力してください。' : '未設定です。保存してください。';
+      elements.adminTokenStatus.className = 'status-area ' + (settings.adminTokenConfigured ? 'success' : 'error');
+      elements.settingsStatusBadge.textContent = settings.webAppUrl ? '設定済み' : 'WebアプリURL未設定';
+      elements.settingsStatusBadge.className = 'badge ' + (settings.webAppUrl ? 'ok' : 'danger');
+      const modeText = settings.dryRun ? 'DRY_RUN 有効' : '本送信モード';
+      const modeClass = settings.dryRun ? 'dry' : 'danger';
+      elements.distributionModeBadge.textContent = modeText;
+      elements.distributionModeBadge.className = 'badge ' + modeClass;
+      elements.distributionPanelModeBadge.textContent = modeText;
+      elements.distributionPanelModeBadge.className = 'badge ' + modeClass;
+    }
+
+    function renderFilterOptions() {
+      const courses = state.dashboard.courses || [];
+      const selectedStudent = elements.studentCourseFilter.value;
+      const selectedSummary = elements.summaryCourseFilter.value;
+      const options = ['<option value="all">Classroom: すべて</option>'].concat(courses.map(function (course) {
+        return '<option value="' + escapeAttr(course.courseId) + '">' + escapeHtml(course.name || course.courseId) + '</option>';
+      })).join('');
+      elements.studentCourseFilter.innerHTML = options;
+      elements.summaryCourseFilter.innerHTML = options;
+      elements.studentCourseFilter.value = selectedStudent || 'all';
+      elements.summaryCourseFilter.value = selectedSummary || 'all';
+    }
+
+    function renderCourses() {
+      const counts = getStudentCountByCourse();
+      const search = elements.courseSearchInput.value.trim().toLowerCase();
+      const checkedFilter = elements.courseCheckedFilter.value;
+      const stateFilter = elements.courseStateFilter.value;
+      const rows = (state.dashboard.courses || []).filter(function (row) {
+        const haystack = [row.name, row.section, row.courseId, row.courseState].join(' ').toLowerCase();
+        if (search && haystack.indexOf(search) === -1) return false;
+        if (checkedFilter === 'checked' && !row.checked) return false;
+        if (checkedFilter === 'unchecked' && row.checked) return false;
+        if (stateFilter !== 'all' && row.courseState !== stateFilter) return false;
+        return true;
+      });
+      elements.courseStatusBadge.textContent = rows.length > 0 ? rows.length + '件表示' : '未取得';
+      elements.courseStatusBadge.className = 'badge ' + (rows.length > 0 ? 'ok' : 'neutral');
+      elements.courseBody.innerHTML = rows.length ? rows.map(function (row) {
+        return '<tr>'
+          + '<td><input type="checkbox" class="course-check" data-course-id="' + escapeAttr(row.courseId) + '"' + (row.checked ? ' checked' : '') + '></td>'
+          + '<td><span class="cell-main">' + escapeHtml(row.name) + '</span><span class="cell-sub">' + escapeHtml([row.section, row.courseId].filter(Boolean).join(' / ')) + '</span></td>'
+          + '<td>' + String(counts.get(row.courseId) || 0) + '</td>'
+          + '<td>' + badge(row.courseState || 'ACTIVE', row.courseState === 'ACTIVE' ? 'ok' : 'neutral') + '</td>'
+          + '</tr>';
+      }).join('') : emptyRow(4, 'Classroom一覧は未取得です。');
+    }
+
+    function renderStudents() {
+      const search = elements.studentSearchInput.value.trim().toLowerCase();
+      const courseId = elements.studentCourseFilter.value;
+      const status = elements.studentStatusFilter.value;
+      const rows = (state.dashboard.students || []).filter(function (row) {
+        const haystack = [row.courseName, row.name, row.email, row.number].join(' ').toLowerCase();
+        if (search && haystack.indexOf(search) === -1) return false;
+        if (courseId !== 'all' && row.courseId !== courseId) return false;
+        if (status === 'active' && row.status === '退籍') return false;
+        if (status === 'retired' && row.status !== '退籍') return false;
+        return true;
+      });
+      elements.studentStatusBadge.textContent = rows.length + '件表示';
+      elements.studentStatusBadge.className = 'badge ' + (rows.length > 0 ? 'ok' : 'neutral');
+      elements.studentBody.innerHTML = rows.length ? rows.map(function (row) {
+        return '<tr>'
+          + '<td>' + escapeHtml(row.courseName) + '<span class="cell-sub">' + escapeHtml(row.courseId) + '</span></td>'
+          + '<td><span class="cell-main">' + escapeHtml(row.name) + '</span><span class="cell-sub">出席 ' + escapeHtml(row.number || '-') + ' / ' + escapeHtml(row.email) + '</span></td>'
+          + '<td>' + badge(row.status || '在籍', row.status === '退籍' ? 'danger' : 'ok') + '</td>'
+          + '</tr>';
+      }).join('') : emptyRow(3, '条件に一致する生徒はいません。');
+    }
+
+    function renderTokens() {
+      const search = elements.tokenSearchInput.value.trim().toLowerCase();
+      const stateFilter = elements.tokenStateFilter.value;
+      const courseFilter = elements.tokenCourseFilter.value.trim().toLowerCase();
+      const rows = getTokenRowsWithMissing().filter(function (row) {
+        const hasToken = String(row.token || '') !== '';
+        const tokenState = !hasToken ? 'missing' : row.revoked ? 'revoked' : 'active';
+        const haystack = [row.courseName, row.name, row.token, row.studentUrl].join(' ').toLowerCase();
+        if (search && haystack.indexOf(search) === -1) return false;
+        if (courseFilter && String(row.courseName || '').toLowerCase().indexOf(courseFilter) === -1) return false;
+        if (stateFilter !== 'all' && tokenState !== stateFilter) return false;
+        return true;
+      });
+      const active = (state.dashboard.tokens || []).filter(function (row) { return row.token && !row.revoked; }).length;
+      elements.tokenStatusBadge.textContent = active + '件有効';
+      elements.tokenStatusBadge.className = 'badge ' + (active > 0 ? 'ok' : 'neutral');
+      elements.tokenBody.innerHTML = rows.length ? rows.map(function (row) {
+        const hasToken = String(row.token || '') !== '';
+        const tokenLabel = !hasToken ? '未発行' : row.revoked ? '無効' : '有効';
+        const urlButton = hasToken ? '<button class="btn ghost token-action" data-action="url" data-url="' + escapeAttr(row.studentUrl) + '" type="button">URL確認</button>' : '';
+        const reissueButton = hasToken ? '<button class="btn token-action" data-action="reissue" data-roster-key="' + escapeAttr(row.rosterKey) + '" type="button">再発行</button>' : '';
+        const revokeButton = hasToken && !row.revoked ? '<button class="btn danger token-action" data-action="revoke" data-roster-key="' + escapeAttr(row.rosterKey) + '" type="button">無効化</button>' : '';
+        return '<tr>'
+          + '<td><span class="cell-main">' + escapeHtml(row.name) + '</span><span class="cell-sub">' + escapeHtml(row.courseName) + ' / 出席 ' + escapeHtml(row.number || '-') + '</span></td>'
+          + '<td class="wrap"><span title="' + escapeAttr(row.token) + '">' + escapeHtml(hasToken ? shortToken(row.token) : '未発行') + '</span><span class="cell-sub">' + escapeHtml(row.studentUrl || '') + '</span></td>'
+          + '<td>' + badge(tokenLabel) + '</td>'
+          + '<td><div class="actions-cell">' + urlButton + reissueButton + revokeButton + '</div></td>'
+          + '</tr>';
+      }).join('') : emptyRow(4, '条件に一致するトークンはありません。');
+    }
+
+    function renderDistribution() {
+      const preview = state.dashboard.distributionPreview || {};
+      const processed = state.lastDistributionResult ? Number(state.lastDistributionResult.processed || 0) : 0;
+      const batchSize = Number(preview.batchSize || elements.batchSizeInput.value || 30);
+      const percent = batchSize > 0 ? Math.min(100, Math.round(processed / batchSize * 100)) : 0;
+      const failed = Number(preview.failedTargetCount || 0);
+      elements.distributionProgressText.textContent = '配付待ち ' + (preview.targetCount || 0) + '件 / 失敗再送 ' + failed + '件 / バッチサイズ ' + batchSize + (state.lastDistributionResult ? ' / 直近処理 ' + processed + '件' : '');
+      elements.distributionProgressFill.style.width = percent + '%';
+      const logs = state.dashboard.distributionLogs || [];
+      elements.distributionLogBody.innerHTML = logs.length ? logs.map(function (row) {
+        return '<tr>'
+          + '<td><span class="cell-main">' + escapeHtml(row.timestamp) + '</span><span class="cell-sub">' + escapeHtml(row.runId) + '</span></td>'
+          + '<td><span class="cell-main">' + escapeHtml(row.courseId) + '</span><span class="cell-sub">' + escapeHtml(row.rosterKey) + ' / ' + escapeHtml(shortToken(row.token)) + '</span></td>'
+          + '<td>' + badge(row.status) + '</td>'
+          + '<td class="wrap">' + escapeHtml(row.errorMessage) + '</td>'
+          + '</tr>';
+      }).join('') : emptyRow(4, 'ログはまだありません。');
+    }
+
+    function renderSummary() {
+      const search = elements.summarySearchInput.value.trim().toLowerCase();
+      const status = elements.summaryStatusFilter.value;
+      const courseId = elements.summaryCourseFilter.value;
+      const rows = (state.dashboard.progressRows || []).filter(function (row) {
+        const haystack = [row.courseName, row.name, row.number].join(' ').toLowerCase();
+        if (search && haystack.indexOf(search) === -1) return false;
+        if (status !== 'all' && row.statusLabel !== status) return false;
+        if (courseId !== 'all' && row.courseId !== courseId) return false;
+        return true;
+      });
+      elements.summaryStatusBadge.textContent = rows.length + '件表示';
+      elements.summaryStatusBadge.className = 'badge ' + (rows.length > 0 ? 'ok' : 'neutral');
+      elements.summaryBody.innerHTML = rows.length ? rows.map(function (row) {
+        const recent = row.recent10Correct + '/' + row.recent10Attempts + ' (' + formatRate(row.recent10Accuracy) + ')';
+        const levels = '基礎 ' + row.beginnerAttempts + ' / 標準 ' + row.intermediateAttempts + ' / 発展 ' + row.advancedAttempts;
+        return '<tr>'
+          + '<td><span class="cell-main">' + escapeHtml(row.name) + '</span><span class="cell-sub">' + escapeHtml(row.courseName) + ' / 出席 ' + escapeHtml(row.number || '-') + '</span></td>'
+          + '<td>' + escapeHtml(row.totalAttempts) + '</td>'
+          + '<td><span class="cell-main">' + formatRate(row.totalAccuracy) + '</span><span class="cell-sub">直近10問 ' + escapeHtml(recent) + '</span></td>'
+          + '<td>' + escapeHtml(levels) + '</td>'
+          + '<td>' + escapeHtml(row.lastAnsweredAt || '未実施') + '</td>'
+          + '<td>' + badge(row.statusLabel) + '</td>'
+          + '</tr>';
+      }).join('') : emptyRow(6, '条件に一致する集計行はありません。');
+    }
+
+    function renderLogs() {
+      const links = state.dashboard.sheetLinks || {};
+      const linkNames = ['解答ログ', '配付ログ', '実行ログ'];
+      elements.sheetLinks.innerHTML = linkNames.map(function (name) {
+        return links[name] ? '<a class="btn" target="_blank" href="' + escapeAttr(links[name]) + '">' + escapeHtml(name) + 'を開く</a>' : '';
+      }).join('');
+      const answerLogs = state.dashboard.answerLogs || [];
+      elements.answerLogBody.innerHTML = answerLogs.length ? answerLogs.map(function (row) {
+        return '<tr><td>' + escapeHtml(row.timestamp) + '</td><td>' + escapeHtml(row.name) + '</td><td>' + escapeHtml(row.level) + '</td><td>' + badge(row.isCorrect ? '正答' : '誤答', row.isCorrect ? 'ok' : 'warn') + '</td></tr>';
+      }).join('') : emptyRow(4, '解答ログはまだありません。');
+      const runLogs = state.dashboard.runLogs || [];
+      elements.runLogBody.innerHTML = runLogs.length ? runLogs.map(function (row) {
+        return '<tr><td>' + escapeHtml(row.operation) + '</td><td>' + escapeHtml(row.startedAt) + '</td><td>' + escapeHtml(row.processedCount) + '</td><td>' + escapeHtml(row.successCount) + '</td><td>' + escapeHtml(row.errorCount) + '</td><td>' + escapeHtml(row.nextAction) + '</td></tr>';
+      }).join('') : emptyRow(6, '実行ログはまだありません。');
+    }
+
+    function render(statePayload) {
+      state.dashboard = statePayload;
+      elements.versionLabel.textContent = statePayload.appName + ' v' + statePayload.appVersion + ' / schema ' + statePayload.schemaVersion;
+      renderSettings();
+      renderMetrics();
+      renderFilterOptions();
+      applyFilters();
+      renderDistribution();
+      renderLogs();
+      showPanel(state.activePanel);
+    }
+
+    function applyFilters() {
+      if (!state.dashboard) return;
+      renderCourses();
+      renderStudents();
+      renderTokens();
+      renderSummary();
+    }
+
+    async function load() {
+      try {
+        setStatus('読み込み中...');
+        render(await runServer('getAdminDashboardState'));
+        setStatus('読み込みました。', 'success');
+      } catch (error) {
+        setStatus(error.message || String(error), 'error');
+      }
+    }
+
+    async function runAction(method, label, args) {
+      try {
+        state.busy = true;
+        setStatus(label + 'を実行中...');
+        const result = await callAdminAction(method, args || []);
+        if (method === 'dryRunStudentUrlDistribution' || method === 'distributeStudentUrlsForCheckedCourses' || method === 'retryFailedStudentUrlDistributions') {
+          state.lastDistributionResult = result;
+        }
+        await load();
+        setStatus(label + 'が完了しました。', 'success');
+        return result;
+      } catch (error) {
+        setStatus(error.message || String(error), 'error');
+        throw error;
+      } finally {
+        state.busy = false;
+      }
+    }
+
+    async function saveSettings() {
+      const payload = {
+        webAppUrl: elements.webAppUrlInput.value,
+        adminToken: elements.adminTokenInput.value,
+        postTextTemplate: elements.postTextTemplateInput.value,
+        dryRun: elements.dryRunToggle.checked,
+        batchSize: elements.batchSizeInput.value,
+        enableDistributionLog: elements.distributionLogToggle.checked
+      };
+      const result = await runServer('saveAdminSettings', [payload]);
+      if (result && result.authToken) {
+        state.authToken = result.authToken;
+      }
+      elements.adminTokenInput.value = '';
+      await load();
+      setStatus('初期設定を保存しました。', 'success');
+    }
+
+    async function saveCourseSelection() {
+      const selected = Array.from(document.querySelectorAll('.course-check:checked')).map(function (input) {
+        return input.dataset.courseId;
+      });
+      await runAction('saveCourseSyncSelection', '同期対象保存', [selected]);
+    }
+
+    async function previewDistribution() {
+      try {
+        setStatus('配付対象を確認中...');
+        const preview = await runServer('getDistributionTargetsPreview', [{}]);
+        state.dashboard.distributionPreview = preview;
+        renderMetrics();
+        renderDistribution();
+        setStatus('配付対象を確認しました。', 'success');
+      } catch (error) {
+        setStatus(error.message || String(error), 'error');
+      }
+    }
+
+    async function runDangerousDistribution(method, label, message) {
+      const ok = await showConfirm({
+        title: label,
+        message,
+        confirmLabel: label,
+        danger: method !== 'dryRunStudentUrlDistribution'
+      });
+      if (!ok) return;
+      await runAction(method, label, [{}]);
+    }
+
+    elements.confirmCancelButton.addEventListener('click', function () { closeConfirm(false); });
+    elements.confirmOkButton.addEventListener('click', function () { closeConfirm(true); });
+    elements.confirmModal.addEventListener('click', function (event) {
+      if (event.target === elements.confirmModal) closeConfirm(false);
+    });
+
+    elements.refreshButton.addEventListener('click', load);
+    for (const button of elements.flowButtons) {
+      button.addEventListener('click', function () {
+        showPanel(button.dataset.panel);
+      });
+    }
+    elements.saveSettingsButton.addEventListener('click', saveSettings);
+    elements.refreshCoursesButton.addEventListener('click', function () { runAction('refreshClassroomList', 'Classroom一覧取得'); });
+    elements.saveCourseSelectionButton.addEventListener('click', saveCourseSelection);
+    elements.refreshStudentsButton.addEventListener('click', function () { runAction('refreshStudentsForCheckedCourses', '生徒名簿取得'); });
+    elements.issueTokensButton.addEventListener('click', function () { runAction('issueTokensForActiveStudents', 'トークン発行'); });
+    elements.previewDistributionButton.addEventListener('click', previewDistribution);
+    elements.dryRunButton.addEventListener('click', function () { runDangerousDistribution('dryRunStudentUrlDistribution', 'DRY_RUN', 'Classroom投稿は作成せず、配付ログだけ記録します。'); });
+    elements.distributeButton.addEventListener('click', function () { runDangerousDistribution('distributeStudentUrlsForCheckedCourses', 'Classroomお知らせ本送信', '同期対象Classroomの配付待ち生徒へ個別URLを本送信します。送信済み生徒は除外されます。'); });
+    elements.retryFailedButton.addEventListener('click', function () { runDangerousDistribution('retryFailedStudentUrlDistributions', '失敗分再送', '配付ログでERRORになっている生徒だけ再送します。'); });
+    elements.aggregateButton.addEventListener('click', function () { runAction('rebuildAggregateCache', '集計更新'); });
+
+    for (const element of [
+      elements.courseSearchInput,
+      elements.courseCheckedFilter,
+      elements.courseStateFilter,
+      elements.studentSearchInput,
+      elements.studentCourseFilter,
+      elements.studentStatusFilter,
+      elements.tokenSearchInput,
+      elements.tokenStateFilter,
+      elements.tokenCourseFilter,
+      elements.summarySearchInput,
+      elements.summaryStatusFilter,
+      elements.summaryCourseFilter
+    ]) {
+      element.addEventListener('input', applyFilters);
+      element.addEventListener('change', applyFilters);
+    }
+
+    elements.tokenBody.addEventListener('click', async function (event) {
+      const button = event.target.closest('.token-action');
+      if (!button) return;
+      const action = button.dataset.action;
+      if (action === 'url') {
+        await showConfirm({
+          title: '生徒URL確認',
+          message: button.dataset.url || 'URLがありません。',
+          confirmLabel: '閉じる',
+          danger: false
+        });
+        return;
+      }
+      if (action === 'reissue') {
+        const ok = await showConfirm({
+          title: 'トークン再発行',
+          message: 'この生徒の既存URLは差し替わります。Classroomへ再配付が必要です。',
+          confirmLabel: '再発行',
+          danger: true
+        });
+        if (ok) await runAction('reissueStudentToken', 'トークン再発行', [button.dataset.rosterKey, {}]);
+      }
+      if (action === 'revoke') {
+        const ok = await showConfirm({
+          title: 'トークン無効化',
+          message: 'この生徒の既存URLを無効化します。生徒はそのURLで解答できなくなります。',
+          confirmLabel: '無効化',
+          danger: true
+        });
+        if (ok) await runAction('revokeStudentToken', 'トークン無効化', [button.dataset.rosterKey]);
+      }
+    });
+
+    load();
+  </script>
+</body>
+</html>
