@@ -1,0 +1,5 @@
+node_modules/
+.vscode/
+.playwright-mcp/
+playwright-report/
+test-results/

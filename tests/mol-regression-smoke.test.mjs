@@ -5,11 +5,15 @@ import test from 'node:test';
 
 async function loadApi() {
   const code = await readFile('Code.gs', 'utf8');
+  let uuidCounter = 0;
   const sandbox = {
     console,
     globalThis: {},
     Utilities: {
-      getUuid: () => 'uuid-from-test',
+      getUuid: () => {
+        uuidCounter += 1;
+        return `uuid-from-test-${uuidCounter}`;
+      },
       computeDigest: () => [1, 2, 3, 255],
       DigestAlgorithm: { SHA_256: 'SHA_256' }
     }
@@ -56,9 +60,11 @@ test('problem generation keeps each level numerically manageable and uses the ex
     assert.equal(intermediate.significantDigits, 3);
     assert.equal(
       intermediate.expectedAnswer,
-      MolProblemService.roundToSignificantDigits(intermediate.expectedAnswer, 3),
-      `intermediate answer should already be rounded to 3 significant digits: ${intermediate.expectedAnswer}`
+      intermediate.rawExpectedAnswer,
+      `intermediate answer should keep the exact generated answer: ${intermediate.expectedAnswer}`
     );
+    assert.equal(typeof intermediate.displayAnswer, 'string');
+    assert.notEqual(intermediate.displayAnswer.trim(), '');
 
     const advanced = MolProblemService.generateProblem('advanced');
     assert.equal(advanced.avogadroConstant, 6.02e23);
@@ -85,13 +91,24 @@ test('numeric normalization accepts supported formats and rejects empty or inval
   assert.equal(Number.isNaN(normalizeNumericInput('abc')), true);
 });
 
-test('answer judgment handles exact matches tolerance failures and significant-digit rounding', async () => {
+test('answer judgment handles exact matches enumerated basic rounding and significant-digit rounding', async () => {
   const { isAnswerCorrect } = await loadApi();
 
-  assert.equal(isAnswerCorrect('2.50', 2.5, 0.01, 3), true);
-  assert.equal(isAnswerCorrect('101', 100, 0.01, 3), true);
-  assert.equal(isAnswerCorrect('102', 100, 0.01, 3), false);
-  assert.equal(isAnswerCorrect('2.004', 2.0039, 0.00001, 3), true);
+  assert.equal(isAnswerCorrect('2', 2.0, 0.01, 2, 'beginner'), true);
+  assert.equal(isAnswerCorrect('0.5', 0.50, 0.01, 2, 'beginner'), true);
+  assert.equal(isAnswerCorrect('19.5', 20.4, 0.01, 2, 'beginner'), false);
+  assert.equal(isAnswerCorrect('2.00', 2.004, 0.02, 3, 'intermediate'), true);
+  assert.equal(isAnswerCorrect('0.5', 0.50, 0.02, 3, 'intermediate'), true);
+  assert.equal(isAnswerCorrect('29.25', 29.25, 0.02, 3, 'beginner'), true);
+  assert.equal(isAnswerCorrect('29.250', 29.25, 0.02, 3, 'beginner'), true);
+  assert.equal(isAnswerCorrect('29.3', 29.25, 0.02, 3, 'beginner'), true);
+  assert.equal(isAnswerCorrect('29', 29.25, 0.02, 3, 'beginner'), true);
+  assert.equal(isAnswerCorrect('29.26', 29.25, 0.02, 3, 'beginner'), false);
+  assert.equal(isAnswerCorrect('29.24', 29.25, 0.02, 3, 'beginner'), false);
+  assert.equal(isAnswerCorrect('30', 29.25, 0.02, 3, 'beginner'), false);
+  assert.equal(isAnswerCorrect('2.004', 2.0039, 0.00001, 3, 'advanced'), true);
+  assert.equal(isAnswerCorrect('2.014', 2.0039, 0.00001, 3, 'advanced'), false);
+  assert.equal(isAnswerCorrect('0', 1.99e-23, 0.005, 3, 'advanced'), false);
 });
 
 test('token validation accepts active tokens and rejects missing or revoked tokens', async () => {
@@ -125,6 +142,7 @@ test('answer log schema contains required fields including attemptId', async () 
     'isCorrect',
     'significantDigits',
     'avogadroConstant',
+    'requiresRounding',
     'elapsedMs',
     'clientInfo'
   ]) {
@@ -153,7 +171,7 @@ test('answer submission appends an attemptId and returns recent ten accuracy', a
   }));
   let appendedEntry = null;
 
-  SheetRepository.readTokenRows = () => [tokenRow];
+  SheetRepository.findToken = (token) => token === tokenRow.token ? tokenRow : null;
   SheetRepository.withDocumentLock = (callback) => callback();
   SheetRepository.findAnswerLogByAttemptId = () => null;
   SheetRepository.appendAnswerLog = (entry) => {
@@ -161,7 +179,11 @@ test('answer submission appends an attemptId and returns recent ten accuracy', a
     existingLogs.push(entry);
   };
   SheetRepository.readAnswerLogsForRosterKey = () => existingLogs;
+  SheetRepository.findAggregateCacheByRosterKey = () => null;
+  SheetRepository.readLatestAnswerLogsForRosterKey = () => existingLogs.slice(-10);
   SheetRepository.upsertAggregateCacheRow = () => {};
+  SheetRepository.findProblemTypeStatsRow = () => null;
+  SheetRepository.upsertProblemTypeStatsRow = () => {};
 
   const response = AnswerService.submitAnswer({
     token: 'active-token',
@@ -171,7 +193,8 @@ test('answer submission appends an attemptId and returns recent ten accuracy', a
     clientInfo: { userAgent: 'node-test' }
   });
 
-  assert.equal(appendedEntry.attemptId, issued.problem.problemId);
+  assert.equal(appendedEntry.attemptId, issued.problem.attemptId);
+  assert.ok(appendedEntry.attemptId.startsWith('ATT_'));
   assert.equal(appendedEntry.isCorrect, true);
   assert.equal(appendedEntry.normalizedSubmittedAnswer, issued.problem.expectedAnswer);
   assert.equal(response.result.recent10Attempts, 10);

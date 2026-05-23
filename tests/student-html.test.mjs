@@ -9,6 +9,9 @@ async function loadStudentHtml() {
 test('student screen exposes required learner, status, level, problem, result, and error regions', async () => {
   const html = await loadStudentHtml();
 
+  assert.match(html, /<h1 class="app-title">もるくえ！<\/h1>/);
+  assert.match(html, /Classroom連携型モル計算練習アプリ/);
+
   for (const id of [
     'studentName',
     'className',
@@ -40,6 +43,37 @@ test('student screen exposes required learner, status, level, problem, result, a
   }
 });
 
+test('student screen uses encouraging result titles with advanced-only significant-digit context', async () => {
+  const html = await loadStudentHtml();
+
+  for (const copy of [
+    'できた！',
+    'いい感じ！',
+    'その調子！',
+    'いいですね！式の立て方も合っています！',
+    '3問連続',
+    '5問連続',
+    'まずは変換に慣れよう',
+    '少し手順が増える問題に挑戦',
+    '有効数字3桁で仕上げよう',
+    '有効数字までOK',
+    'もう一歩！',
+    '惜しい！',
+    'ここで整理しておこう！解説を見て、次の1問で確認しよう。',
+    'ここで整理しておこう！次はきっと近づく！'
+  ]) {
+    assert.match(html, new RegExp(copy), `${copy} should be available in result copy`);
+  }
+
+  assert.match(html, /function buildResultTitle/);
+  assert.match(html, /currentCorrectStreak/);
+  assert.match(html, /requiresRounding/);
+  assert.match(html, /significantDigits/);
+  assert.match(html, /data\.level === 'advanced'/);
+  assert.doesNotMatch(html, /有効数字に合わせて丸めて判定します/);
+  assert.match(html, /elements\.resultTitle\.textContent = buildResultTitle\(data, correct\)/);
+});
+
 test('student screen reads token from URL params and uses Apps Script server functions', async () => {
   const html = await loadStudentHtml();
 
@@ -47,10 +81,34 @@ test('student screen reads token from URL params and uses Apps Script server fun
   assert.match(html, /params\.get\('t'\)/);
   assert.match(html, /params\.get\('token'\)/);
   assert.match(html, /initialToken/);
+  assert.match(html, /const initialToken = <\?!= JSON\.stringify\(typeof initialToken === 'undefined' \? '' : initialToken\) \?>/);
 
   for (const method of ['initializeStudentSession', 'getPracticeProblem', 'submitAnswer']) {
-    assert.match(html, new RegExp(`runServer\\('${method}'`), `${method} should be called through runServer`);
+    assert.match(html, new RegExp(`'${method}'`), `${method} should be available through mode-aware server dispatch`);
   }
+  assert.match(html, /runServer\(method, args\)/);
+  assert.match(html, /const runner = google\.script\.run/);
+  assert.match(html, /runner\[method\]\.apply\(runner, args \|\| \[\]\)/);
+});
+
+test('student screen supports teacher preview without requiring a student token', async () => {
+  const html = await loadStudentHtml();
+
+  assert.match(html, /initialAdminToken/);
+  assert.match(html, /initialTeacherPreview/);
+  assert.match(html, /teacherPreview/);
+  assert.match(html, /adminToken/);
+  assert.match(html, /教師プレビュー中：この操作は解答ログに保存されません/);
+  assert.doesNotMatch(html, /params\.get\('admin'\)/);
+  assert.doesNotMatch(html, /params\.get\('adminToken'\)/);
+  assert.match(html, /params\.get\('teacherPreview'\)/);
+  assert.match(html, /params\.get\('preview'\)\s*===\s*'teacher'/);
+  assert.match(html, /initializeTeacherPreviewSession/);
+  assert.match(html, /getTeacherPreviewProblem/);
+  assert.match(html, /submitTeacherPreviewAnswer/);
+  assert.match(html, /state\.teacherPreview\s*\?\s*'initializeTeacherPreviewSession'\s*:\s*'initializeStudentSession'/);
+  assert.match(html, /if \(!state\.teacherPreview && !state\.token\)/);
+  assert.match(html, /if \(state\.teacherPreview && !state\.adminToken\)/);
 });
 
 test('student screen prevents double submit and keeps a retryable error path', async () => {
@@ -70,6 +128,19 @@ test('student screen prevents double submit and keeps a retryable error path', a
   assert.match(html, /token不正/);
 });
 
+test('student screen advances to prefetched next problem with Enter after grading', async () => {
+  const html = await loadStudentHtml();
+  const keydownBody = html.slice(html.indexOf("elements.answerInput.addEventListener('keydown'"), html.indexOf('selectLevel(state.selectedLevel)'));
+
+  assert.match(html, /function canShowPrefetchedProblem/);
+  assert.match(html, /showNextProblem\(\)/);
+  assert.match(keydownBody, /if \(canShowPrefetchedProblem\(\)\)/);
+  assert.match(keydownBody, /showNextProblem\(\)/);
+  assert.match(keydownBody, /submitAnswer\(\)/);
+  assert.match(html, /state\.pendingProblem = response\.nextProblem \|\| null/);
+  assert.match(html, /elements\.answerInput\.focus\(\)/);
+});
+
 test('student screen renders given values between question text and answer input', async () => {
   const html = await loadStudentHtml();
   const questionIndex = html.indexOf('id="questionText"');
@@ -83,4 +154,25 @@ test('student screen renders given values between question text and answer input
   assert.match(html, /与えられた値/);
   assert.match(html, /renderGivenValues/);
   assert.match(html, /givenValuesTitle/);
+});
+
+test('student screen renders only server-provided chemical formula html safely', async () => {
+  const html = await loadStudentHtml();
+  const applyProblemBody = html.slice(html.indexOf('function applyProblem'), html.indexOf('async function initialize'));
+  const renderGivenValuesBody = html.slice(html.indexOf('function renderGivenValues'), html.indexOf('function normalizeClientNumber'));
+  const renderResultBody = html.slice(html.indexOf('function renderResult'), html.indexOf('async function submitAnswer'));
+
+  assert.match(html, /function isSafeServerHtml/);
+  assert.match(html, /function renderServerHtmlOrText/);
+  assert.match(html, /tagName !== 'SUB'/);
+  assert.match(html, /questionHtml/);
+  assert.match(html, /labelHtml/);
+  assert.match(html, /valueHtml/);
+  assert.match(html, /explanationHtml/);
+  assert.match(applyProblemBody, /renderServerHtmlOrText\(elements\.questionText,\s*state\.problem\.questionHtml,\s*state\.problem\.questionText/);
+  assert.match(renderGivenValuesBody, /renderServerHtmlOrText\(label,\s*item\.labelHtml/);
+  assert.match(renderGivenValuesBody, /renderServerHtmlOrText\(value,\s*item\.valueHtml/);
+  assert.match(renderResultBody, /renderServerHtmlOrText\(elements\.explanationText,\s*data\.explanationHtml,\s*data\.explanation/);
+  assert.doesNotMatch(applyProblemBody, /elements\.questionText\.innerHTML\s*=\s*state\.problem\.questionHtml/);
+  assert.doesNotMatch(renderResultBody, /elements\.explanationText\.innerHTML\s*=\s*data\.explanationHtml/);
 });

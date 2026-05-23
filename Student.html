@@ -82,6 +82,14 @@
       font-weight: 700;
     }
 
+    .app-subtitle {
+      margin: 3px 0 0;
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1.45;
+      font-weight: 700;
+    }
+
     .student-meta {
       display: flex;
       flex-wrap: wrap;
@@ -104,6 +112,18 @@
     .meta-chip.empty {
       background: #eef2f7;
       color: var(--muted);
+    }
+
+    .preview-banner {
+      margin-bottom: 14px;
+      padding: 10px 12px;
+      border: 1px solid #f4c277;
+      border-radius: 8px;
+      background: #fffaf0;
+      color: #92400e;
+      font-size: 13px;
+      line-height: 1.45;
+      font-weight: 800;
     }
 
     .status-grid {
@@ -205,11 +225,25 @@
     }
 
     .level-button {
+      display: grid;
+      place-items: center;
+      gap: 2px;
       min-width: 0;
+      padding: 6px 4px;
       background: transparent;
       color: #344054;
-      font-size: 14px;
       font-weight: 800;
+    }
+
+    .level-name {
+      font-size: 14px;
+      line-height: 1.15;
+    }
+
+    .level-copy {
+      font-size: 10px;
+      line-height: 1.25;
+      overflow-wrap: anywhere;
     }
 
     .level-button.active {
@@ -515,7 +549,8 @@
 
     <header class="app-header">
       <div>
-        <h1 class="app-title">モル計算ドリル</h1>
+        <h1 class="app-title">もるくえ！</h1>
+        <p class="app-subtitle">Classroom連携型モル計算練習アプリ</p>
       </div>
       <div class="student-meta" aria-label="生徒情報">
         <span class="meta-chip empty" id="className">クラス確認中</span>
@@ -523,6 +558,10 @@
         <span class="meta-chip empty" id="studentName">名前確認中</span>
       </div>
     </header>
+
+    <section class="preview-banner hidden" id="teacherPreviewBanner" aria-live="polite">
+      教師プレビュー中：この操作は解答ログに保存されません
+    </section>
 
     <section class="status-grid" aria-label="学習状況">
       <div class="status-card">
@@ -542,9 +581,9 @@
     <section class="card" aria-label="レベル選択">
       <span class="section-label">レベル選択</span>
       <div class="level-buttons" id="levelButtons" role="group" aria-label="問題レベル">
-        <button class="level-button active" type="button" data-level="beginner" aria-pressed="true">初級</button>
-        <button class="level-button" type="button" data-level="intermediate" aria-pressed="false">中級</button>
-        <button class="level-button" type="button" data-level="advanced" aria-pressed="false">上級</button>
+        <button class="level-button active" type="button" data-level="beginner" aria-pressed="true"><span class="level-name">初級</span><span class="level-copy">まずは変換に慣れよう</span></button>
+        <button class="level-button" type="button" data-level="intermediate" aria-pressed="false"><span class="level-name">中級</span><span class="level-copy">少し手順が増える問題に挑戦</span></button>
+        <button class="level-button" type="button" data-level="advanced" aria-pressed="false"><span class="level-name">上級</span><span class="level-copy">有効数字3桁で仕上げよう</span></button>
       </div>
     </section>
 
@@ -580,7 +619,7 @@
     <section class="card result-panel hidden" id="resultPanel" aria-live="polite" aria-label="結果表示">
       <div class="result-heading">
         <span class="result-mark" id="resultMark">○</span>
-        <h2 class="result-title" id="resultTitle">正解</h2>
+        <h2 class="result-title" id="resultTitle">正解: できた！</h2>
       </div>
       <div class="answer-summary">
         <div class="answer-summary-item">
@@ -593,7 +632,7 @@
         </div>
       </div>
       <p class="explanation" id="explanationText">解説を表示します。</p>
-      <p class="rounding-note" id="roundingNoteText">有効数字や四捨五入に注意してください。</p>
+      <p class="rounding-note" id="roundingNoteText">正答と解説を見て確認しましょう。</p>
     </section>
 
     <section class="card error-panel hidden" id="errorPanel" aria-live="assertive" data-error-types="token不正 通信失敗 入力不正">
@@ -605,17 +644,37 @@
   </main>
 
   <script>
-    const initialToken = '<?= initialToken ?>';
+    const initialToken = <?!= JSON.stringify(typeof initialToken === 'undefined' ? '' : initialToken) ?>;
+    const initialAdminToken = <?!= JSON.stringify(typeof initialAdminToken === 'undefined' ? '' : initialAdminToken) ?>;
+    const initialTeacherPreview = <?!= JSON.stringify(typeof initialTeacherPreview === 'undefined' ? false : initialTeacherPreview) ?>;
     const LEVEL_LABELS = {
       beginner: '初級',
       intermediate: '中級',
       advanced: '上級'
     };
-    const DEFAULT_ROUNDING_NOTE = '有効数字に合わせて丸めて判定します。単位は入力せず、数値だけ入力してください。';
+    const DEFAULT_ROUNDING_NOTE = '単位は入力せず、数値だけ入力してください。';
+    const RESULT_COPY = {
+      correct: [
+        'できた！',
+        'ばっちり合っています！',
+        'いい感じ！',
+        'その調子！',
+        'いいですね！式の立て方も合っています！',
+        'いい感じです！単位までよく見られています！'
+      ],
+      incorrect: [
+        'もう一歩！',
+        '惜しい！',
+        '惜しい！単位を確認してみよう！',
+        'ここで整理しておこう！次はきっと近づく！'
+      ]
+    };
 
     const params = new URLSearchParams(window.location.search);
     const state = {
       token: (params.get('t') || params.get('token') || initialToken || '').trim(),
+      adminToken: (initialAdminToken || '').trim(),
+      teacherPreview: initialTeacherPreview === true || params.get('preview') === 'teacher' || params.get('teacherPreview') === '1',
       selectedLevel: 'beginner',
       problem: null,
       pendingProblem: null,
@@ -629,6 +688,7 @@
     const elements = {
       appRoot: document.getElementById('appRoot'),
       loadingText: document.getElementById('loadingText'),
+      teacherPreviewBanner: document.getElementById('teacherPreviewBanner'),
       className: document.getElementById('className'),
       studentNumber: document.getElementById('studentNumber'),
       studentName: document.getElementById('studentName'),
@@ -661,14 +721,82 @@
 
     function runServer(method, args) {
       return new Promise(function (resolve, reject) {
-        google.script.run
+        const runner = google.script.run
           .withSuccessHandler(resolve)
-          .withFailureHandler(reject)[method].apply(google.script.run, args || []);
+          .withFailureHandler(reject);
+        runner[method].apply(runner, args || []);
       });
     }
 
     function formatRate(value) {
       return Math.round(Number(value || 0) * 1000) / 10 + '%';
+    }
+
+    function pickCopy(candidates) {
+      const list = Array.isArray(candidates) && candidates.length > 0 ? candidates : ['確認してみよう'];
+      return list[Math.floor(Math.random() * list.length)];
+    }
+
+    function isSafeServerHtml(html) {
+      const source = String(html == null ? '' : html);
+      if (source === '') {
+        return false;
+      }
+      const template = document.createElement('template');
+      template.innerHTML = source;
+      const nodes = template.content.querySelectorAll('*');
+      for (const node of nodes) {
+        if (node.tagName !== 'SUB' || node.attributes.length > 0 || !/^\d+$/.test(node.textContent || '')) {
+          return false;
+        }
+      }
+      return true;
+    }
+
+    function renderServerHtmlOrText(element, html, text, fallback) {
+      const source = String(html == null ? '' : html);
+      if (isSafeServerHtml(source)) {
+        element.innerHTML = source;
+        return;
+      }
+      element.textContent = String(text || fallback || '');
+    }
+
+    function hasSignificantDigitContext(data) {
+      return data.level === 'advanced' && (data.requiresRounding === true || Number(data.significantDigits || 0) >= 3);
+    }
+
+    function buildResultTitle(data, correct) {
+      if (correct) {
+        const streak = Number(data.currentCorrectStreak || 0);
+        if (streak >= 5) {
+          return '正解: 5問連続、いい感じ！';
+        }
+        if (streak >= 3) {
+          return '正解: 3問連続、その調子！';
+        }
+        if (hasSignificantDigitContext(data)) {
+          return '正解: 有効数字までOK！ここは大事！';
+        }
+        return '正解: ' + pickCopy(RESULT_COPY.correct);
+      }
+      if (hasSignificantDigitContext(data)) {
+        return '不正解: 惜しい！有効数字を確認してみよう！';
+      }
+      return '不正解: ' + pickCopy(RESULT_COPY.incorrect);
+    }
+
+    function buildRoundingNote(data, correct) {
+      if (correct && data.acceptedAnswerType === 'rounded' && data.exactAnswerText) {
+        return '正解。ただし正確な値は ' + data.exactAnswerText + ' です。';
+      }
+      if (correct && hasSignificantDigitContext(data)) {
+        return '有効数字3桁まで確認できています。この調子で次へ進みましょう。';
+      }
+      if (!correct) {
+        return 'ここで整理しておこう！解説を見て、次の1問で確認しよう。';
+      }
+      return DEFAULT_ROUNDING_NOTE;
     }
 
     function setLoading(isLoading, message) {
@@ -677,11 +805,16 @@
       updateButtonStates();
     }
 
+    function renderTeacherPreviewMode() {
+      elements.teacherPreviewBanner.classList.toggle('hidden', !state.teacherPreview);
+    }
+
     function updateButtonStates() {
       const busy = state.isInitializing || state.isSubmitting;
       elements.submitButton.disabled = busy || !state.problem || state.answerLocked;
       elements.nextProblemButton.disabled = busy || (!state.pendingProblem && !state.answerLocked);
-      elements.answerInput.disabled = busy || !state.problem || state.answerLocked;
+      elements.answerInput.disabled = busy || !state.problem;
+      elements.answerInput.readOnly = state.answerLocked;
       elements.levelButtons.forEach(function (button) {
         button.disabled = busy;
       });
@@ -742,8 +875,9 @@
         const row = document.createElement('li');
         const label = document.createElement('span');
         const value = document.createElement('strong');
-        label.textContent = '・' + String(item.label || '');
-        value.textContent = String(item.value || '');
+        renderServerHtmlOrText(label, item.labelHtml, item.label, '');
+        label.insertBefore(document.createTextNode('・'), label.firstChild);
+        renderServerHtmlOrText(value, item.valueHtml, item.value, '');
         row.appendChild(label);
         row.appendChild(value);
         elements.givenValuesList.appendChild(row);
@@ -817,7 +951,7 @@
       }
 
       selectLevel(state.problem.level || state.selectedLevel);
-      elements.questionText.textContent = state.problem.questionText || '問題文を取得できませんでした。';
+      renderServerHtmlOrText(elements.questionText, state.problem.questionHtml, state.problem.questionText, '問題文を取得できませんでした。');
       elements.inputHintText.textContent = state.problem.inputHint || '数値のみを入力してください。';
       renderGivenValues(state.problem);
       elements.unitLabel.textContent = state.problem.unit || '-';
@@ -833,8 +967,14 @@
 
     async function initialize() {
       state.lastAction = 'initialize';
-      if (!state.token) {
+      renderTeacherPreviewMode();
+      if (!state.teacherPreview && !state.token) {
         showError('token', 'URLに token がありません。先生から配付されたURLで開いてください。', 'initialize');
+        updateButtonStates();
+        return;
+      }
+      if (state.teacherPreview && !state.adminToken) {
+        showError('token', '教師プレビュー用の管理者tokenがありません。管理画面から開き直してください。', 'initialize');
         updateButtonStates();
         return;
       }
@@ -842,7 +982,11 @@
       setLoading(true, '読み込み中...');
       try {
         hideError();
-        const result = await runServer('initializeStudentSession', [state.token, { level: state.selectedLevel }]);
+        const method = state.teacherPreview ? 'initializeTeacherPreviewSession' : 'initializeStudentSession';
+        const args = state.teacherPreview
+          ? [state.adminToken, { level: state.selectedLevel, studentToken: state.token }]
+          : [state.token, { level: state.selectedLevel }];
+        const result = await runServer(method, args);
         renderStudent(result.student);
         renderSummary(result.summary);
         applyProblem(result.problem, true);
@@ -857,10 +1001,14 @@
     async function fetchProblem() {
       state.lastAction = 'fetchProblem';
       state.isInitializing = true;
-      setLoading(true, '問題を作成中...');
+      setLoading(true, '作成中...');
       try {
         hideError();
-        const problem = await runServer('getPracticeProblem', [state.token, { level: state.selectedLevel }]);
+        const method = state.teacherPreview ? 'getTeacherPreviewProblem' : 'getPracticeProblem';
+        const args = state.teacherPreview
+          ? [state.adminToken, { level: state.selectedLevel }]
+          : [state.token, { level: state.selectedLevel }];
+        const problem = await runServer(method, args);
         applyProblem(problem, true);
       } catch (error) {
         showError('network', error, 'fetchProblem');
@@ -875,11 +1023,11 @@
       const correct = data.isCorrect === true;
       elements.resultPanel.classList.toggle('incorrect', !correct);
       elements.resultMark.textContent = correct ? '○' : '×';
-      elements.resultTitle.textContent = correct ? '正解' : '不正解';
+      elements.resultTitle.textContent = buildResultTitle(data, correct);
       elements.expectedAnswerText.textContent = data.expectedAnswerText || '-';
       elements.submittedAnswerText.textContent = data.submittedAnswerText || elements.answerInput.value || '-';
-      elements.explanationText.textContent = data.explanation || '解説はありません。';
-      elements.roundingNoteText.textContent = DEFAULT_ROUNDING_NOTE;
+      renderServerHtmlOrText(elements.explanationText, data.explanationHtml, data.explanation, '解説はありません。');
+      elements.roundingNoteText.textContent = buildRoundingNote(data, correct);
       elements.resultPanel.classList.remove('hidden');
     }
 
@@ -900,26 +1048,36 @@
       setLoading(true, '採点中...');
       try {
         hideError();
-        const response = await runServer('submitAnswer', [{
+        const request = {
           token: state.token,
           problem: state.problem,
           submittedAnswer: elements.answerInput.value,
           elapsedMs: Date.now() - state.startedAt,
           nextLevel: state.selectedLevel,
           clientInfo: { userAgent: navigator.userAgent }
-        }]);
+        };
+        const method = state.teacherPreview ? 'submitTeacherPreviewAnswer' : 'submitAnswer';
+        const args = state.teacherPreview ? [state.adminToken, request] : [request];
+        const response = await runServer(method, args);
         const result = response.result || {};
         renderResult(result);
         renderSummary(result);
         state.answerLocked = true;
         state.pendingProblem = response.nextProblem || null;
         elements.nextProblemButton.disabled = !state.pendingProblem;
+        setTimeout(function () {
+          elements.answerInput.focus();
+        }, 0);
       } catch (error) {
         showError('network', error, 'submitAnswer');
       } finally {
         state.isSubmitting = false;
         setLoading(false, '');
       }
+    }
+
+    function canShowPrefetchedProblem() {
+      return state.answerLocked && !!state.pendingProblem && !state.isSubmitting && !state.isInitializing;
     }
 
     function showNextProblem() {
@@ -964,11 +1122,16 @@
     elements.answerInput.addEventListener('keydown', function (event) {
       if (event.key === 'Enter') {
         event.preventDefault();
+        if (canShowPrefetchedProblem()) {
+          showNextProblem();
+          return;
+        }
         submitAnswer();
       }
     });
 
     selectLevel(state.selectedLevel);
+    renderTeacherPreviewMode();
     initialize();
   </script>
 </body>

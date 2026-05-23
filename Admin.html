@@ -56,7 +56,8 @@
     }
 
     .app-shell {
-      min-width: 1180px;
+      width: 100%;
+      min-width: 0;
     }
 
     .topbar {
@@ -66,10 +67,15 @@
       display: flex;
       align-items: center;
       justify-content: space-between;
-      gap: 24px;
-      padding: 18px 28px;
+      flex-wrap: wrap;
+      gap: 14px;
+      padding: 16px;
       background: var(--surface);
       border-bottom: 1px solid var(--border);
+    }
+
+    .topbar > div {
+      min-width: 0;
     }
 
     .topbar h1 {
@@ -87,15 +93,18 @@
     .topbar-actions {
       display: flex;
       align-items: center;
+      justify-content: flex-end;
+      flex-wrap: wrap;
       gap: 10px;
-      white-space: nowrap;
+      white-space: normal;
     }
 
     .layout {
       display: grid;
-      grid-template-columns: 272px minmax(860px, 1fr);
-      gap: 22px;
-      padding: 22px;
+      grid-template-columns: 240px minmax(0, 1fr);
+      gap: 16px;
+      padding: 16px;
+      align-items: start;
     }
 
     .rail,
@@ -108,8 +117,8 @@
 
     .rail {
       position: sticky;
-      top: 96px;
-      height: calc(100vh - 118px);
+      top: 88px;
+      height: calc(100vh - 104px);
       padding: 16px;
       overflow: auto;
     }
@@ -122,6 +131,13 @@
     .step-nav {
       display: grid;
       gap: 8px;
+    }
+
+    .nav-group-label {
+      margin: 10px 2px 4px;
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 800;
     }
 
     .flow-button {
@@ -191,17 +207,32 @@
     .main {
       display: grid;
       gap: 16px;
+      min-width: 0;
     }
 
     .metrics {
       display: grid;
-      grid-template-columns: repeat(5, minmax(150px, 1fr));
-      gap: 12px;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 10px;
     }
 
     .metric-card {
-      min-height: 104px;
-      padding: 14px;
+      min-height: 92px;
+      padding: 12px;
+    }
+
+    .metric-card.primary {
+      min-height: 100px;
+    }
+
+    .metric-card.secondary {
+      min-height: 78px;
+      background: var(--surface-soft);
+    }
+
+    .metric-card.critical {
+      border-color: #f4c277;
+      background: #fffaf0;
     }
 
     .metric-label {
@@ -213,8 +244,13 @@
     .metric-value {
       margin-top: 4px;
       font-family: "IBM Plex Mono", Consolas, monospace;
-      font-size: 28px;
+      font-size: 26px;
       font-weight: 800;
+      line-height: 1.1;
+    }
+
+    .metric-card.secondary .metric-value {
+      font-size: 22px;
     }
 
     .metric-note {
@@ -223,7 +259,15 @@
       font-size: 12px;
     }
 
+    .metric-level-value {
+      display: flex;
+      align-items: baseline;
+      gap: 5px;
+      font-size: 22px;
+    }
+
     .panel {
+      min-width: 0;
       padding: 16px;
       scroll-margin-top: 102px;
     }
@@ -327,6 +371,28 @@
       height: 18px;
     }
 
+    .priority-filter {
+      justify-content: center;
+      min-height: 42px;
+      padding: 0 14px;
+      border: 1px solid #f4c277;
+      border-radius: 6px;
+      background: var(--warning-soft);
+      color: var(--warning);
+      font-weight: 800;
+    }
+
+    .advanced-note {
+      margin: -4px 0 12px;
+      padding: 10px 12px;
+      border: 1px solid #f4c277;
+      border-radius: 6px;
+      background: #fffaf0;
+      color: var(--warning);
+      font-size: 12px;
+      line-height: 1.5;
+    }
+
     .subsection {
       display: grid;
       gap: 10px;
@@ -345,8 +411,11 @@
     }
 
     .table-wrap {
+      width: 100%;
+      min-width: 0;
+      max-width: 100%;
       max-height: 430px;
-      overflow-x: hidden;
+      overflow-x: auto;
       overflow-y: auto;
       border: 1px solid var(--border);
       border-radius: var(--radius);
@@ -403,12 +472,76 @@
       width: 112px;
     }
 
+    .col-speed {
+      width: 188px;
+    }
+
+    .col-level {
+      width: 220px;
+    }
+
     .col-actions {
       width: 210px;
     }
 
     .col-student {
       width: 32%;
+    }
+
+    .summary-table {
+      min-width: 1040px;
+    }
+
+    .summary-table .col-summary-course {
+      width: 108px;
+    }
+
+    .summary-table .col-count {
+      width: 68px;
+    }
+
+    .summary-table .col-student {
+      width: 132px;
+    }
+
+    .summary-table .col-state {
+      width: 132px;
+    }
+
+    .summary-table .col-level {
+      width: 134px;
+    }
+
+    .summary-table .col-accuracy {
+      width: 68px;
+    }
+
+    .summary-table .col-recent {
+      width: 90px;
+    }
+
+    .summary-table .col-speed {
+      width: 94px;
+    }
+
+    .summary-table .col-date {
+      width: 78px;
+    }
+
+    .summary-table .col-history {
+      width: 74px;
+    }
+
+    .summary-table th,
+    .summary-table td {
+      padding: 8px;
+      vertical-align: top;
+    }
+
+    .summary-table th {
+      white-space: nowrap;
+      overflow-wrap: normal;
+      word-break: keep-all;
     }
 
     .cell-main {
@@ -423,10 +556,161 @@
       line-height: 1.35;
     }
 
+    .level-stack {
+      display: grid;
+      gap: 5px;
+      line-height: 1.4;
+    }
+
+    .level-line {
+      display: flex;
+      align-items: baseline;
+      justify-content: space-between;
+      gap: 8px;
+    }
+
+    .level-label {
+      min-width: 2.4em;
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 800;
+    }
+
+    .level-value {
+      font-family: "IBM Plex Mono", Consolas, monospace;
+      font-size: 12px;
+      font-weight: 800;
+    }
+
+    .status-stack {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 4px;
+      align-items: center;
+    }
+
     .actions-cell {
       display: flex;
       flex-wrap: wrap;
       gap: 6px;
+    }
+
+    .distribution-target-panel {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 12px;
+      margin: 0 0 14px;
+      padding: 12px;
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      background: var(--surface-soft);
+    }
+
+    .distribution-target-panel .form-row {
+      margin: 0;
+    }
+
+    .distribution-target-panel .wide {
+      grid-column: 1 / -1;
+    }
+
+    .distribution-target-panel select,
+    .distribution-target-panel input[type="search"] {
+      width: 100%;
+    }
+
+    .distribution-force-note {
+      margin: 4px 0 0;
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.5;
+    }
+
+    .distribution-target-summary {
+      min-height: 38px;
+      padding: 9px 12px;
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      background: var(--surface);
+      color: var(--text);
+      font-size: 13px;
+      line-height: 1.6;
+    }
+
+    .distribution-kpis {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin: 0 0 10px;
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 800;
+    }
+
+    .distribution-kpis span {
+      display: inline-flex;
+      align-items: center;
+      min-height: 28px;
+      padding: 4px 10px;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      background: var(--surface-soft);
+      color: var(--text);
+    }
+
+    .token-table .col-student {
+      width: 34%;
+    }
+
+    .token-table .col-actions {
+      width: 330px;
+    }
+
+    .token-table .actions-cell {
+      position: relative;
+      align-items: flex-start;
+      flex-wrap: wrap;
+      overflow-x: visible;
+      padding-bottom: 0;
+    }
+
+    .token-more-wrapper {
+      display: inline-flex;
+    }
+
+    .token-action-menu {
+      position: fixed;
+      z-index: 80;
+      display: none;
+      min-width: 190px;
+      max-width: min(260px, calc(100vw - 16px));
+      padding: 6px;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      background: var(--surface);
+      box-shadow: var(--shadow);
+    }
+
+    .token-action-menu.is-open {
+      display: grid;
+      gap: 4px;
+    }
+
+    .token-action-menu .btn {
+      width: 100%;
+      justify-content: flex-start;
+      white-space: normal;
+      text-align: left;
+    }
+
+    @media (max-width: 860px) {
+      .distribution-target-panel {
+        grid-template-columns: 1fr;
+      }
+
+      .distribution-target-panel .wide {
+        grid-column: auto;
+      }
     }
 
     .status-area {
@@ -593,6 +877,12 @@
       box-shadow: var(--shadow);
     }
 
+    .modal.history-modal {
+      width: min(980px, calc(100vw - 32px));
+      max-height: calc(100vh - 48px);
+      overflow: auto;
+    }
+
     .modal h2 {
       margin: 0 0 8px;
       font-size: 18px;
@@ -609,6 +899,59 @@
       display: flex;
       justify-content: flex-end;
       gap: 8px;
+    }
+
+    .history-header {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 12px;
+      margin-bottom: 12px;
+    }
+
+    .history-trend {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      margin: 0 0 12px;
+    }
+
+    .trend-pill {
+      display: inline-flex;
+      gap: 6px;
+      align-items: baseline;
+      padding: 5px 8px;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      background: var(--surface-soft);
+      font-size: 12px;
+    }
+
+    .trend-pill.low {
+      border-color: #f3b4b4;
+      background: var(--danger-soft);
+      color: var(--danger);
+    }
+
+    .history-table {
+      min-width: 900px;
+    }
+
+    .history-stats-section {
+      margin-bottom: 12px;
+    }
+
+    .problem-type-stats-table {
+      min-width: 880px;
+    }
+
+    .history-table tr.incorrect td {
+      background: var(--danger-soft);
+    }
+
+    .answer-text {
+      font-family: "IBM Plex Mono", Consolas, monospace;
+      font-weight: 800;
     }
 
     @media (max-width: 980px) {
@@ -634,11 +977,11 @@
   <div class="app-shell">
     <header class="topbar">
       <div>
-        <h1>モル計算ドリル 管理</h1>
+        <h1>もるくえ！ 管理ダッシュボード</h1>
         <p id="versionLabel">読み込み待ち</p>
       </div>
       <div class="topbar-actions">
-        <span id="adminTokenBadge" class="badge warn">管理者トークン確認中</span>
+        <span id="adminLaunchBadge" class="badge ok">メニューから起動</span>
         <span id="distributionModeBadge" class="badge dry">DRY_RUN確認中</span>
         <button id="refreshButton" class="btn" type="button"><span class="button-icon">R</span>更新</button>
       </div>
@@ -646,18 +989,19 @@
 
     <div class="layout">
       <aside class="rail">
-        <h2>操作フロー</h2>
+        <h2>管理ビュー</h2>
         <nav class="step-nav" aria-label="管理画面の操作フロー">
-          <button class="flow-button active" data-panel="setupPanel" type="button"><span class="step-index">1</span><span><span class="step-title">1. 初期設定</span><span class="step-subtitle">URL・トークン・DRY_RUN</span></span></button>
-          <button class="flow-button" data-panel="classroomPanel" type="button"><span class="step-index">2</span><span><span class="step-title">2. Classroom取得</span><span class="step-subtitle">一覧と同期対象</span></span></button>
-          <button class="flow-button" data-panel="studentRosterPanel" type="button"><span class="step-index">3</span><span><span class="step-title">3. 名簿取得</span><span class="step-subtitle">生徒数を確認</span></span></button>
-          <button class="flow-button" data-panel="tokenPanel" type="button"><span class="step-index">4</span><span><span class="step-title">4. トークン発行</span><span class="step-subtitle">個別URL作成</span></span></button>
-          <button class="flow-button" data-panel="distributionPanel" type="button"><span class="step-index">5</span><span><span class="step-title">5. URL配付</span><span class="step-subtitle">DRY_RUN後に本送信</span></span></button>
-          <button class="flow-button" data-panel="summaryPanel" type="button"><span class="step-index">6</span><span><span class="step-title">6. 実施状況確認</span><span class="step-subtitle">未実施・低正答率</span></span></button>
-          <button class="flow-button" data-panel="logsPanel" type="button"><span class="step-index">7</span><span><span class="step-title">ログ確認</span><span class="step-subtitle">解答・配付・実行</span></span></button>
+          <button class="flow-button active" data-panel="dashboardPanel" type="button"><span class="step-index">1</span><span><span class="step-title">実施状況ダッシュボード</span><span class="step-subtitle">集計・未実施・要フォロー</span></span></button>
+          <button class="flow-button" data-panel="logsPanel" type="button"><span class="step-index">2</span><span><span class="step-title">ログ確認</span><span class="step-subtitle">最後の成功・失敗</span></span></button>
+          <div class="nav-group-label">高度な操作</div>
+          <button class="flow-button" data-panel="setupPanel" type="button"><span class="step-index">3</span><span><span class="step-title">初期設定</span><span class="step-subtitle">配付設定・DRY_RUN</span></span></button>
+          <button class="flow-button" data-panel="classroomPanel" type="button"><span class="step-index">4</span><span><span class="step-title">Classroom取得</span><span class="step-subtitle">一覧と同期対象</span></span></button>
+          <button class="flow-button" data-panel="studentRosterPanel" type="button"><span class="step-index">5</span><span><span class="step-title">名簿取得</span><span class="step-subtitle">生徒数を確認</span></span></button>
+          <button class="flow-button" data-panel="tokenPanel" type="button"><span class="step-index">6</span><span><span class="step-title">トークン発行</span><span class="step-subtitle">個別URL作成</span></span></button>
+          <button class="flow-button" data-panel="distributionPanel" type="button"><span class="step-index">7</span><span><span class="step-title">URL配付</span><span class="step-subtitle">DRY_RUN後に本送信</span></span></button>
         </nav>
         <div class="rail-warning">
-          本送信、再発行、無効化は確認ダイアログを通します。DRY_RUNか本送信かは画面上部とURL配付パネルで常時表示します。
+          Classroom取得、生徒名簿取得、トークン発行、URL配付はスプレッドシートメニューを正式ルートにします。ここに残した実行操作は高度な操作です。
         </div>
       </aside>
 
@@ -665,21 +1009,22 @@
         <div id="statusText" class="status-area">管理画面を読み込みます。</div>
 
         <section class="metrics" aria-label="管理指標">
-          <div class="metric-card"><div class="metric-label">Classroom</div><div id="courseCount" class="metric-value">0</div><div id="checkedCourseCount" class="metric-note">同期対象 0</div></div>
-          <div class="metric-card"><div class="metric-label">生徒</div><div id="studentCount" class="metric-value">0</div><div id="retiredStudentCount" class="metric-note">退籍 0</div></div>
-          <div class="metric-card"><div class="metric-label">有効トークン</div><div id="tokenCount" class="metric-value">0</div><div id="revokedTokenCount" class="metric-note">無効 0</div></div>
-          <div class="metric-card"><div class="metric-label">配付待ち</div><div id="distributionTargetCount" class="metric-value">0</div><div id="distributionFailedCount" class="metric-note">失敗 0</div></div>
-          <div class="metric-card"><div class="metric-label">要確認</div><div id="riskStudentCount" class="metric-value">0</div><div id="notStartedCount" class="metric-note">未実施 0</div></div>
+          <div class="metric-card primary"><div class="metric-label">解答済み人数</div><div id="answeredStudentCount" class="metric-value">0</div><div class="metric-note">解答1回以上</div></div>
+          <div class="metric-card primary critical"><div class="metric-label">未実施人数</div><div id="dashboardNotStartedCount" class="metric-value">0</div><div class="metric-note">解答数 0</div></div>
+          <div class="metric-card primary"><div class="metric-label">総解答数</div><div id="totalAnswerCount" class="metric-value">0</div><div class="metric-note">全レベル合計</div></div>
+          <div class="metric-card primary"><div class="metric-label">直近10問平均正答率</div><div id="recent10AverageAccuracy" class="metric-value">0%</div><div class="metric-note">直近の解答傾向</div></div>
+          <div class="metric-card primary"><div class="metric-label">初級/中級/上級の解答数</div><div class="metric-value metric-level-value"><span id="beginnerAnswerCount">0</span><span>/</span><span id="intermediateAnswerCount">0</span><span>/</span><span id="advancedAnswerCount">0</span></div><div class="metric-note">初級 / 中級 / 上級</div></div>
+          <div class="metric-card primary critical"><div class="metric-label">要フォロー人数</div><div id="followUpStudentCount" class="metric-value">0</div><div class="metric-note">未実施・低正答率・解答数不足</div></div>
         </section>
 
-        <section id="setupPanel" class="panel panel-screen is-active">
+        <section id="setupPanel" class="panel panel-screen" hidden>
           <div class="panel-header">
             <div>
               <div class="panel-title">
                 <h2>初期設定</h2>
                 <span id="settingsStatusBadge" class="badge warn">未確認</span>
               </div>
-              <p class="panel-description">WebアプリURL、管理者トークン、投稿本文、DRY_RUN、バッチサイズを設定します。</p>
+              <p class="panel-description">生徒用WebアプリURL、投稿本文、配付設定、レベル別の問題生成・採点定数を設定します。</p>
             </div>
             <div class="panel-actions">
               <button id="saveSettingsButton" class="btn primary" type="button">設定を保存</button>
@@ -689,10 +1034,6 @@
             <div class="field">
               <label for="webAppUrlInput">WebアプリURL</label>
               <input id="webAppUrlInput" type="url" placeholder="https://script.google.com/macros/s/.../exec" autocomplete="off">
-            </div>
-            <div class="field">
-              <label for="adminTokenInput">管理者トークン</label>
-              <input id="adminTokenInput" type="password" placeholder="変更時のみ入力" autocomplete="new-password">
             </div>
             <div class="field">
               <label for="batchSizeInput">バッチサイズ</label>
@@ -707,8 +1048,37 @@
               <label class="toggle-row"><input id="distributionLogToggle" type="checkbox" checked>配付結果をログに残す</label>
             </div>
             <div class="field">
-              <label>状態</label>
-              <div id="adminTokenStatus" class="status-area">管理者トークン未確認</div>
+              <label>個別最適化出題</label>
+              <label class="toggle-row"><input id="adaptiveProblemSelectionToggle" type="checkbox" checked>履歴に応じて問題タイプを調整する</label>
+            </div>
+          </div>
+          <div class="subsection" style="margin-top:12px;">
+            <h3>問題生成・採点定数</h3>
+            <div class="field-grid">
+              <div class="field">
+                <label for="beginnerAvogadroInput">初級 アボガドロ定数</label>
+                <input id="beginnerAvogadroInput" type="number" min="1" step="any" inputmode="decimal">
+              </div>
+              <div class="field">
+                <label for="intermediateAvogadroInput">中級 アボガドロ定数</label>
+                <input id="intermediateAvogadroInput" type="number" min="1" step="any" inputmode="decimal">
+              </div>
+              <div class="field">
+                <label for="advancedAvogadroInput">上級 アボガドロ定数</label>
+                <input id="advancedAvogadroInput" type="number" min="1" step="any" inputmode="decimal">
+              </div>
+              <div class="field">
+                <label for="beginnerToleranceInput">初級 許容誤差</label>
+                <input id="beginnerToleranceInput" type="number" min="0.000001" max="1" step="0.001" inputmode="decimal">
+              </div>
+              <div class="field">
+                <label for="intermediateToleranceInput">中級 許容誤差</label>
+                <input id="intermediateToleranceInput" type="number" min="0.000001" max="1" step="0.001" inputmode="decimal">
+              </div>
+              <div class="field">
+                <label for="advancedToleranceInput">上級 許容誤差</label>
+                <input id="advancedToleranceInput" type="number" min="0.000001" max="1" step="0.001" inputmode="decimal">
+              </div>
             </div>
           </div>
           <div class="field" style="margin-top:12px;">
@@ -724,10 +1094,11 @@
               <p class="panel-description">担当Classroomを取得し、名簿取得や配付の対象にするClassroomだけを選びます。</p>
             </div>
             <div class="panel-actions">
-              <button id="refreshCoursesButton" class="btn primary" type="button">Classroom一覧取得</button>
+              <button id="refreshCoursesButton" class="btn" type="button">Classroom一覧取得</button>
               <button id="saveCourseSelectionButton" class="btn" type="button">同期対象を保存</button>
             </div>
           </div>
+          <div class="advanced-note">メニュー推奨操作: 通常はスプレッドシートの もるくえ！ メニューから Classroom一覧取得 を実行します。ここで実行した場合も上部に進行状態と件数を表示します。</div>
           <div class="toolbar-row">
             <input id="courseSearchInput" class="filter-input" type="search" placeholder="Classroom名・sectionで検索">
             <select id="courseCheckedFilter" class="filter-input">
@@ -761,9 +1132,10 @@
               <p class="panel-description">同期対象Classroomの生徒を取得し、生徒数・在籍状態を確認します。</p>
             </div>
             <div class="panel-actions">
-              <button id="refreshStudentsButton" class="btn primary" type="button">生徒名簿取得</button>
+              <button id="refreshStudentsButton" class="btn" type="button">生徒名簿取得</button>
             </div>
           </div>
+          <div class="advanced-note">メニュー推奨操作: 通常はスプレッドシートの もるくえ！ メニューから 生徒名簿取得 を実行します。長時間処理中は上部の状態表示を確認してください。</div>
           <div class="toolbar-row">
             <input id="studentSearchInput" class="filter-input" type="search" placeholder="氏名・メール・Classroomで検索">
             <select id="studentCourseFilter" class="filter-input"><option value="all">Classroom: すべて</option></select>
@@ -793,11 +1165,12 @@
               <p class="panel-description">トークン発行、再発行、無効化、生徒URL確認を行います。</p>
             </div>
             <div class="panel-actions">
-              <button id="issueTokensButton" class="btn primary" type="button">トークン発行</button>
+              <button id="issueTokensButton" class="btn" type="button">トークン発行</button>
             </div>
           </div>
+          <div class="advanced-note">メニュー推奨操作: 通常はスプレッドシートの もるくえ！ メニューから トークン発行 を実行します。再発行・無効化は確認ダイアログ付きで処理します。</div>
           <div class="toolbar-row">
-            <input id="tokenSearchInput" class="filter-input" type="search" placeholder="氏名・Classroom・tokenで検索">
+            <input id="tokenSearchInput" class="filter-input" type="search" placeholder="氏名・Classroomで検索">
             <select id="tokenStateFilter" class="filter-input">
               <option value="all">状態: すべて</option>
               <option value="active">有効</option>
@@ -807,15 +1180,14 @@
             <input id="tokenCourseFilter" class="filter-input" type="search" placeholder="Classroom絞り込み">
           </div>
           <div class="table-wrap">
-            <table>
+            <table class="token-table">
               <colgroup>
                 <col class="col-student">
-                <col>
                 <col class="col-status">
                 <col class="col-actions">
               </colgroup>
-              <thead><tr><th>生徒</th><th>URL / token</th><th>状態</th><th>操作</th></tr></thead>
-              <tbody id="tokenBody"><tr><td colspan="4" class="empty">トークンは未発行です。</td></tr></tbody>
+              <thead><tr><th>生徒</th><th>状態</th><th>操作</th></tr></thead>
+              <tbody id="tokenBody"><tr><td colspan="3" class="empty">トークンは未発行です。</td></tr></tbody>
             </table>
           </div>
         </section>
@@ -833,9 +1205,53 @@
               <button id="retryFailedButton" class="btn" type="button">失敗分再送</button>
             </div>
           </div>
+          <div class="advanced-note">メニュー推奨操作: 通常はスプレッドシートの もるくえ！ メニューから 配付対象確認、DRY_RUN、URL配付 を実行します。本送信と再送は確認後にだけ実行します。</div>
+          <div class="distribution-target-panel" aria-label="URL配付対象設定">
+            <div class="form-row">
+              <label for="distributionTargetModeSelect">配付対象モード</label>
+              <select id="distributionTargetModeSelect" class="filter-input">
+                <option value="pending">未配付のみ（通常）</option>
+                <option value="course">Classroom指定</option>
+                <option value="student">生徒指定</option>
+                <option value="failed">失敗分再送</option>
+              </select>
+            </div>
+            <div class="form-row">
+              <label for="distributionCourseSelect">Classroom指定</label>
+              <select id="distributionCourseSelect" class="filter-input">
+                <option value="">Classroomを選択</option>
+              </select>
+            </div>
+            <div class="form-row">
+              <label for="distributionStudentSearchInput">生徒指定検索</label>
+              <input id="distributionStudentSearchInput" class="filter-input" type="search" placeholder="氏名・Classroomで検索">
+            </div>
+            <div class="form-row">
+              <label for="distributionStudentSelect">生徒指定</label>
+              <select id="distributionStudentSelect" class="filter-input">
+                <option value="">生徒を選択</option>
+              </select>
+            </div>
+            <div class="form-row wide">
+              <label class="toggle-row"><input id="forceRedistributeToggle" type="checkbox">強制再配付</label>
+              <p class="distribution-force-note">強制再配付: 過去に配付済みの生徒にも、現在のURLをもう一度Classroomへ送ります。未配付のみ・失敗分再送では使えません。</p>
+            </div>
+            <div class="form-row">
+              <label>現在のDRY_RUN状態</label>
+              <div id="distributionDryRunState" class="status-area">DRY_RUN確認中</div>
+            </div>
+            <div class="form-row">
+              <label>現在の配付対象</label>
+              <div id="distributionTargetSummary" class="distribution-target-summary">対象を選択してください。</div>
+            </div>
+          </div>
           <div id="distributionProgress" class="progress-shell">
             <div id="distributionProgressText">配付対象を確認してください。</div>
             <div class="progress-bar"><div id="distributionProgressFill" class="progress-fill"></div></div>
+          </div>
+          <div class="distribution-kpis" aria-label="URL配付指標">
+            <span id="distributionTargetCount">配付待ち 未確認</span>
+            <span>配付失敗 <strong id="distributionFailedCount">0</strong></span>
           </div>
           <div class="table-wrap">
             <table>
@@ -851,38 +1267,56 @@
           </div>
         </section>
 
-        <section id="summaryPanel" class="panel panel-screen" hidden>
+        <section id="dashboardPanel" class="panel panel-screen is-active">
           <div class="panel-header">
             <div>
-              <div class="panel-title"><h2>実施状況</h2><span id="summaryStatusBadge" class="badge neutral">未集計</span></div>
-              <p class="panel-description">生徒ごとの総解答数、直近10問正答率、レベル別解答数、未実施者、低正答率者、最終解答日時を確認します。</p>
-            </div>
-            <div class="panel-actions">
-              <button id="aggregateButton" class="btn primary" type="button">集計更新</button>
+              <div class="panel-title"><h2>実施状況ダッシュボード</h2><span id="summaryStatusBadge" class="badge neutral">未集計</span></div>
+              <p class="panel-description">管理画面を開いた時点の配付、アクセス、解答、レベル別正答率、直近10問、要フォロー対象を確認します。</p>
             </div>
           </div>
           <div class="toolbar-row">
             <input id="summarySearchInput" class="filter-input" type="search" placeholder="氏名・Classroomで検索">
+            <select id="summaryCourseFilter" class="filter-input"><option value="all">Classroom: すべて</option></select>
             <select id="summaryStatusFilter" class="filter-input">
               <option value="all">状態: すべて</option>
-              <option value="未実施">未実施者</option>
-              <option value="低正答率">低正答率者</option>
-              <option value="良好">良好</option>
+              <option value="配付失敗">配付失敗</option>
+              <option value="未配付">未配付</option>
+              <option value="未アクセス">未アクセス</option>
+              <option value="未実施">未実施</option>
+              <option value="解答中">解答中</option>
+              <option value="順調">順調</option>
+              <option value="要フォロー">要フォロー</option>
+              <option value="上級挑戦中">上級挑戦中</option>
             </select>
-            <select id="summaryCourseFilter" class="filter-input"><option value="all">Classroom: すべて</option></select>
+            <select id="dashboardSortFilter" class="filter-input">
+              <option value="default">並び順: クラス・出席番号</option>
+              <option value="recentAccuracyAsc">直近10問正答率が低い順</option>
+              <option value="attemptsAsc">解答数が少ない順</option>
+              <option value="lastAnsweredAsc">最終解答が古い順</option>
+            </select>
+          </div>
+          <div class="toolbar-row">
+            <label class="toggle-row priority-filter"><input id="summaryFollowOnlyToggle" type="checkbox">要フォローのみ</label>
+            <label class="toggle-row"><input id="summaryNotStartedOnlyToggle" type="checkbox">未実施者のみ</label>
           </div>
           <div class="table-wrap">
-            <table>
+            <table class="summary-table">
               <colgroup>
+                <col class="col-summary-course">
                 <col class="col-student">
+                <col class="col-state">
                 <col class="col-count">
-                <col>
-                <col>
-                <col>
-                <col class="col-status">
+                <col class="col-level">
+                <col class="col-accuracy">
+                <col class="col-accuracy">
+                <col class="col-accuracy">
+                <col class="col-recent">
+                <col class="col-speed">
+                <col class="col-date">
+                <col class="col-history">
               </colgroup>
-              <thead><tr><th>生徒</th><th>解答数</th><th>正答率</th><th>レベル別</th><th>最終解答日時</th><th>状態</th></tr></thead>
-              <tbody id="summaryBody"><tr><td colspan="6" class="empty">集計データはまだありません。</td></tr></tbody>
+              <thead><tr><th>クラス</th><th>氏名</th><th>状態</th><th>解答数</th><th>レベル別</th><th>初級正答率</th><th>中級正答率</th><th>上級正答率</th><th>直近正答率</th><th>現在の平均速度</th><th>最終解答日時</th><th>履歴</th></tr></thead>
+              <tbody id="summaryBody"><tr><td colspan="12" class="empty">集計データはまだありません。</td></tr></tbody>
             </table>
           </div>
         </section>
@@ -893,16 +1327,20 @@
               <div class="panel-title"><h2>ログ確認</h2><span class="badge neutral">最新50件</span></div>
               <p class="panel-description">解答ログ、配付ログ、実行ログの簡易表示とシートリンクです。</p>
             </div>
-            <div id="sheetLinks" class="panel-actions"></div>
+            <div class="panel-actions">
+              <button id="aggregateButton" class="btn" type="button">集計更新</button>
+              <div id="sheetLinks" class="panel-actions"></div>
+            </div>
           </div>
+          <div class="advanced-note">メニュー推奨操作: 集計更新は通常スプレッドシートの もるくえ！ メニューから実行します。ログ確認はこの画面で軽く確認できます。</div>
           <div class="stacked-sections">
             <div class="subsection">
               <h3>解答ログ</h3>
               <div class="table-wrap">
                 <table>
-                  <colgroup><col><col class="col-student"><col class="col-status"><col class="col-status"></colgroup>
-                  <thead><tr><th>時刻</th><th>氏名</th><th>level</th><th>正誤</th></tr></thead>
-                  <tbody id="answerLogBody"><tr><td colspan="4" class="empty">ログはまだありません。</td></tr></tbody>
+                  <colgroup><col><col class="col-student"><col><col><col><col class="col-status"><col class="col-status"></colgroup>
+                  <thead><tr><th>時刻</th><th>氏名</th><th>問題</th><th>正答</th><th>生徒解答</th><th>レベル</th><th>正誤</th></tr></thead>
+                  <tbody id="answerLogBody"><tr><td colspan="7" class="empty">ログはまだありません。</td></tr></tbody>
                 </table>
               </div>
             </div>
@@ -933,22 +1371,72 @@
     </div>
   </div>
 
+  <div id="answerHistoryModal" class="modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="answerHistoryTitle">
+    <div class="modal history-modal">
+      <div class="history-header">
+        <div>
+          <h2 id="answerHistoryTitle">解答履歴</h2>
+          <p id="answerHistoryMeta"></p>
+        </div>
+        <button id="answerHistoryCloseButton" class="btn ghost" type="button">閉じる</button>
+      </div>
+      <div id="answerHistoryTrend" class="history-trend"></div>
+      <div class="subsection history-stats-section">
+        <h3>問題タイプ別傾向</h3>
+        <div class="table-wrap">
+          <table class="problem-type-stats-table">
+            <colgroup><col><col class="col-count"><col class="col-count"><col class="col-accuracy"><col class="col-accuracy"><col class="col-speed"><col class="col-speed"><col class="col-status"></colgroup>
+            <thead><tr><th>問題タイプ</th><th>attempts</th><th>correct</th><th>accuracy</th><th>recentAccuracy</th><th>averageElapsedMs</th><th>recentAverageElapsedMs</th><th>状態</th></tr></thead>
+            <tbody id="answerProblemTypeStatsBody"><tr><td colspan="8" class="empty">問題タイプ別傾向を読み込んでいません。</td></tr></tbody>
+          </table>
+        </div>
+      </div>
+      <div class="table-wrap">
+        <table class="history-table">
+          <colgroup><col class="col-date"><col class="col-status"><col><col><col><col class="col-status"><col class="col-speed"></colgroup>
+          <thead><tr><th>日時</th><th>レベル</th><th>問題</th><th>正答</th><th>生徒解答</th><th>問題タイプ</th><th>解答時間</th></tr></thead>
+          <tbody id="answerHistoryBody"><tr><td colspan="7" class="empty">履歴を読み込んでいません。</td></tr></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
   <script>
     const initialAdminToken = <?!= JSON.stringify(typeof initialAdminToken === 'undefined' ? '' : initialAdminToken) ?>;
-    const params = new URLSearchParams(window.location.search);
-    const urlAdminToken = params.get('admin') || params.get('adminToken') || '';
 
     const state = {
-      authToken: initialAdminToken || urlAdminToken,
+      authToken: initialAdminToken || '',
       dashboard: null,
       busy: false,
-      activePanel: 'setupPanel',
-      lastDistributionResult: null
+      activePanel: 'dashboardPanel',
+      lastDistributionResult: null,
+      answerHistoryByRosterKey: {},
+      problemTypeStatsByRosterKey: {},
+      answerHistoryStudent: null,
+      loadingHistoryRosterKey: '',
+      loadingProblemTypeStatsRosterKey: '',
+      selectedDistributionRosterKey: '',
+      loaded: {
+        overview: false,
+        logs: false,
+        distribution: false,
+        roster: false
+      },
+      loading: {
+        overview: false,
+        logs: false,
+        distribution: false,
+        roster: false
+      },
+      loadingPromises: {
+        logs: null,
+        distribution: null,
+        roster: null
+      }
     };
 
     const elements = {
       versionLabel: document.getElementById('versionLabel'),
-      adminTokenBadge: document.getElementById('adminTokenBadge'),
       distributionModeBadge: document.getElementById('distributionModeBadge'),
       distributionPanelModeBadge: document.getElementById('distributionPanelModeBadge'),
       statusText: document.getElementById('statusText'),
@@ -957,24 +1445,29 @@
       panelScreens: Array.from(document.querySelectorAll('.panel-screen')),
       setupPanel: document.getElementById('setupPanel'),
       webAppUrlInput: document.getElementById('webAppUrlInput'),
-      adminTokenInput: document.getElementById('adminTokenInput'),
       postTextTemplateInput: document.getElementById('postTextTemplateInput'),
       dryRunToggle: document.getElementById('dryRunToggle'),
       distributionLogToggle: document.getElementById('distributionLogToggle'),
+      adaptiveProblemSelectionToggle: document.getElementById('adaptiveProblemSelectionToggle'),
       batchSizeInput: document.getElementById('batchSizeInput'),
+      beginnerAvogadroInput: document.getElementById('beginnerAvogadroInput'),
+      intermediateAvogadroInput: document.getElementById('intermediateAvogadroInput'),
+      advancedAvogadroInput: document.getElementById('advancedAvogadroInput'),
+      beginnerToleranceInput: document.getElementById('beginnerToleranceInput'),
+      intermediateToleranceInput: document.getElementById('intermediateToleranceInput'),
+      advancedToleranceInput: document.getElementById('advancedToleranceInput'),
       saveSettingsButton: document.getElementById('saveSettingsButton'),
       settingsStatusBadge: document.getElementById('settingsStatusBadge'),
-      adminTokenStatus: document.getElementById('adminTokenStatus'),
-      courseCount: document.getElementById('courseCount'),
-      checkedCourseCount: document.getElementById('checkedCourseCount'),
-      studentCount: document.getElementById('studentCount'),
-      retiredStudentCount: document.getElementById('retiredStudentCount'),
-      tokenCount: document.getElementById('tokenCount'),
-      revokedTokenCount: document.getElementById('revokedTokenCount'),
+      answeredStudentCount: document.getElementById('answeredStudentCount'),
+      dashboardNotStartedCount: document.getElementById('dashboardNotStartedCount'),
+      totalAnswerCount: document.getElementById('totalAnswerCount'),
+      recent10AverageAccuracy: document.getElementById('recent10AverageAccuracy'),
+      beginnerAnswerCount: document.getElementById('beginnerAnswerCount'),
+      intermediateAnswerCount: document.getElementById('intermediateAnswerCount'),
+      advancedAnswerCount: document.getElementById('advancedAnswerCount'),
+      followUpStudentCount: document.getElementById('followUpStudentCount'),
       distributionTargetCount: document.getElementById('distributionTargetCount'),
       distributionFailedCount: document.getElementById('distributionFailedCount'),
-      riskStudentCount: document.getElementById('riskStudentCount'),
-      notStartedCount: document.getElementById('notStartedCount'),
       classroomPanel: document.getElementById('classroomPanel'),
       courseStatusBadge: document.getElementById('courseStatusBadge'),
       refreshCoursesButton: document.getElementById('refreshCoursesButton'),
@@ -1000,6 +1493,13 @@
       distributionProgress: document.getElementById('distributionProgress'),
       distributionProgressText: document.getElementById('distributionProgressText'),
       distributionProgressFill: document.getElementById('distributionProgressFill'),
+      distributionTargetModeSelect: document.getElementById('distributionTargetModeSelect'),
+      distributionCourseSelect: document.getElementById('distributionCourseSelect'),
+      distributionStudentSearchInput: document.getElementById('distributionStudentSearchInput'),
+      distributionStudentSelect: document.getElementById('distributionStudentSelect'),
+      forceRedistributeToggle: document.getElementById('forceRedistributeToggle'),
+      distributionDryRunState: document.getElementById('distributionDryRunState'),
+      distributionTargetSummary: document.getElementById('distributionTargetSummary'),
       previewDistributionButton: document.getElementById('previewDistributionButton'),
       dryRunButton: document.getElementById('dryRunButton'),
       distributeButton: document.getElementById('distributeButton'),
@@ -1010,10 +1510,20 @@
       summarySearchInput: document.getElementById('summarySearchInput'),
       summaryStatusFilter: document.getElementById('summaryStatusFilter'),
       summaryCourseFilter: document.getElementById('summaryCourseFilter'),
+      dashboardSortFilter: document.getElementById('dashboardSortFilter'),
+      summaryNotStartedOnlyToggle: document.getElementById('summaryNotStartedOnlyToggle'),
+      summaryFollowOnlyToggle: document.getElementById('summaryFollowOnlyToggle'),
       summaryBody: document.getElementById('summaryBody'),
       sheetLinks: document.getElementById('sheetLinks'),
       answerLogBody: document.getElementById('answerLogBody'),
       runLogBody: document.getElementById('runLogBody'),
+      answerHistoryModal: document.getElementById('answerHistoryModal'),
+      answerHistoryTitle: document.getElementById('answerHistoryTitle'),
+      answerHistoryMeta: document.getElementById('answerHistoryMeta'),
+      answerHistoryTrend: document.getElementById('answerHistoryTrend'),
+      answerProblemTypeStatsBody: document.getElementById('answerProblemTypeStatsBody'),
+      answerHistoryBody: document.getElementById('answerHistoryBody'),
+      answerHistoryCloseButton: document.getElementById('answerHistoryCloseButton'),
       confirmModal: document.getElementById('confirmModal'),
       confirmTitle: document.getElementById('confirmTitle'),
       confirmMessage: document.getElementById('confirmMessage'),
@@ -1022,13 +1532,43 @@
     };
 
     let confirmResolver = null;
+    const ACTION_BUTTON_KEYS = [
+      'refreshButton',
+      'saveSettingsButton',
+      'refreshCoursesButton',
+      'saveCourseSelectionButton',
+      'refreshStudentsButton',
+      'issueTokensButton',
+      'previewDistributionButton',
+      'dryRunButton',
+      'distributeButton',
+      'retryFailedButton',
+      'aggregateButton',
+      'confirmOkButton'
+    ];
+    const ACTION_RUNNING_MESSAGES = {
+      refreshOverview: '集計更新中... ダッシュボード概要を再読み込みしています。',
+      saveAdminSettings: '初期設定保存中... 管理画面の設定を保存しています。',
+      refreshClassroomList: 'Classroom一覧取得中... Classroom APIから担当クラスを確認しています。',
+      saveCourseSyncSelection: '同期対象保存中... 選択したClassroomを保存しています。',
+      refreshStudentsForCheckedCourses: '生徒名簿取得中... 同期対象Classroomの生徒を読み込んでいます。',
+      issueTokensForActiveStudents: 'トークン発行中... 在籍生徒の個別URLを作成しています。',
+      reissueStudentToken: 'トークン再発行中... 生徒の個別URLを差し替えています。',
+      revokeStudentToken: 'トークン無効化中... 生徒の個別URLを無効化しています。',
+      previewDistributionTargets: '配付対象確認中... 配付待ちと失敗再送の件数を確認しています。',
+      dryRunStudentUrlDistribution: 'URL配付中... DRY_RUNでClassroom投稿を作らずログを記録しています。',
+      distributeStudentUrlsForCheckedCourses: 'URL配付中... Classroomお知らせへ個別URLを送信しています。',
+      retryFailedStudentUrlDistributions: 'URL配付中... 配付失敗分だけ再送しています。',
+      rebuildAggregateCache: '集計更新中... 最新の解答ログから集計キャッシュを更新しています。'
+    };
 
     function runServer(method, args) {
       const callArgs = [state.authToken].concat(args || []);
       return new Promise(function (resolve, reject) {
-        google.script.run
+        const runner = google.script.run
           .withSuccessHandler(resolve)
-          .withFailureHandler(reject)[method].apply(google.script.run, callArgs);
+          .withFailureHandler(reject);
+        runner[method].apply(runner, callArgs);
       });
     }
 
@@ -1059,9 +1599,113 @@
       return escapeHtml(value).replace(/`/g, '&#96;');
     }
 
+    function isSafeServerHtml(html) {
+      const source = String(html == null ? '' : html);
+      if (source === '') {
+        return false;
+      }
+      const template = document.createElement('template');
+      template.innerHTML = source;
+      const nodes = template.content.querySelectorAll('*');
+      for (const node of nodes) {
+        if (node.tagName !== 'SUB' || node.attributes.length > 0 || !/^\d+$/.test(node.textContent || '')) {
+          return false;
+        }
+      }
+      return true;
+    }
+
+    function safeServerHtmlOrEscapedText(html, text) {
+      const source = String(html == null ? '' : html);
+      return isSafeServerHtml(source) ? source : escapeHtml(text);
+    }
+
     function formatRate(value) {
       const numeric = Number(value || 0);
       return Math.round(numeric * 1000) / 10 + '%';
+    }
+
+    const LEVEL_LABELS = {
+      beginner: '初級',
+      intermediate: '中級',
+      advanced: '上級'
+    };
+
+    const PROBLEM_TYPE_LABELS = {
+      mol_to_mass: 'mol→質量',
+      mass_to_mol: '質量→mol',
+      mol_to_particles: 'mol→粒子数',
+      particles_to_mol: '粒子数→mol',
+      mol_to_gas_volume: 'mol→気体体積',
+      gas_volume_to_mol: '気体体積→mol',
+      mass_to_particles: '質量→粒子数',
+      particles_to_mass: '粒子数→質量',
+      mass_to_gas_volume: '質量→気体体積',
+      gas_volume_to_mass: '気体体積→質量',
+      gas_volume_to_particles: '気体体積→粒子数',
+      particles_to_gas_volume: '粒子数→気体体積',
+      atomic_mass_to_atom_mass: '原子量→原子1粒の質量',
+      mass_to_molar_mass_estimate: '分子量・式量推定'
+    };
+
+    function formatLevelLabel(level) {
+      const key = String(level || '').trim();
+      return LEVEL_LABELS[key] || key || '-';
+    }
+
+    function formatProblemTypeLabel(problemType) {
+      const key = String(problemType || '').trim();
+      return PROBLEM_TYPE_LABELS[key] || key || '-';
+    }
+
+    function formatAccuracyOrDash(accuracy, attempts) {
+      const attemptCount = Number(attempts || 0);
+      if (!Number.isFinite(attemptCount) || attemptCount <= 0) return '-';
+      return formatRate(accuracy);
+    }
+
+    function formatLevelLine(label, correct, attempts) {
+      return '<div class="level-line"><span class="level-label">' + escapeHtml(label) + '</span><span class="level-value">' + Number(correct || 0) + '/' + Number(attempts || 0) + '問</span></div>';
+    }
+
+    function formatLevelCell(row) {
+      return '<div class="level-stack">'
+        + formatLevelLine(formatLevelLabel('beginner'), row.beginnerCorrect, row.beginnerAttempts)
+        + formatLevelLine(formatLevelLabel('intermediate'), row.intermediateCorrect, row.intermediateAttempts)
+        + formatLevelLine(formatLevelLabel('advanced'), row.advancedCorrect, row.advancedAttempts)
+        + '</div>';
+    }
+
+    function formatElapsedSeconds(value) {
+      const numeric = Number(value || 0);
+      if (!Number.isFinite(numeric) || numeric <= 0) return '未計測';
+      return (Math.round(numeric / 100) / 10).toFixed(1) + '秒';
+    }
+
+    function formatAnswerValue(value, unit) {
+      const text = String(value == null ? '' : value).trim();
+      const unitText = String(unit || '').trim();
+      if (text === '') return '-';
+      return text + (unitText ? ' ' + unitText : '');
+    }
+
+    function getCurrentAverageElapsedMs(row) {
+      const recentAverage = Number(row.recent10AverageElapsedMs || 0);
+      if (Number.isFinite(recentAverage) && recentAverage > 0) return recentAverage;
+      const totalAverage = Number(row.averageElapsedMs || 0);
+      return Number.isFinite(totalAverage) && totalAverage > 0 ? totalAverage : 0;
+    }
+
+    function formatShortDateTime(value) {
+      const text = String(value || '').trim();
+      if (text === '') return '未実施';
+      const date = new Date(text);
+      if (Number.isNaN(date.getTime())) return text;
+      const month = date.getMonth() + 1;
+      const day = date.getDate();
+      const hour = String(date.getHours()).padStart(2, '0');
+      const minute = String(date.getMinutes()).padStart(2, '0');
+      return month + '/' + day + ' ' + hour + ':' + minute;
     }
 
     function shortToken(token) {
@@ -1074,15 +1718,182 @@
       elements.statusText.className = 'status-area' + (kind ? ' ' + kind : '');
     }
 
+    function disableActionButtons(isBusy) {
+      for (const key of ACTION_BUTTON_KEYS) {
+        if (elements[key]) {
+          elements[key].disabled = isBusy;
+        }
+      }
+      for (const button of document.querySelectorAll('.token-more-button')) {
+        button.disabled = isBusy;
+      }
+      for (const button of document.querySelectorAll('.token-action')) {
+        const action = button.dataset.action;
+        if (action === 'reissue' || action === 'revoke' || action === 'redistributeStudent') {
+          button.disabled = isBusy;
+        }
+      }
+      for (const button of document.querySelectorAll('.history-action')) {
+        button.disabled = isBusy;
+      }
+    }
+
+    function closeTokenActionMenus() {
+      for (const menu of document.querySelectorAll('.token-action-menu.is-open')) {
+        menu.classList.remove('is-open');
+        menu.hidden = true;
+      }
+      for (const button of document.querySelectorAll('.token-more-button[aria-expanded="true"]')) {
+        button.setAttribute('aria-expanded', 'false');
+      }
+    }
+
+    function positionTokenActionMenu(button, menu) {
+      const rect = button.getBoundingClientRect();
+      const margin = 8;
+      menu.style.left = '0px';
+      menu.style.top = '0px';
+      const width = menu.offsetWidth;
+      const height = menu.offsetHeight;
+      const left = Math.max(margin, Math.min(window.innerWidth - width - margin, rect.right - width));
+      let top = rect.bottom + 6;
+      if (top + height > window.innerHeight - margin) {
+        top = Math.max(margin, rect.top - height - 6);
+      }
+      menu.style.left = left + 'px';
+      menu.style.top = top + 'px';
+    }
+
+    function toggleTokenActionMenu(button) {
+      const wrapper = button.closest('.token-more-wrapper');
+      if (!wrapper) return;
+      const menu = wrapper.querySelector('.token-action-menu');
+      if (!menu) return;
+      const shouldOpen = button.getAttribute('aria-expanded') !== 'true';
+      closeTokenActionMenus();
+      if (!shouldOpen) return;
+      button.setAttribute('aria-expanded', 'true');
+      menu.hidden = false;
+      menu.classList.add('is-open');
+      positionTokenActionMenu(button, menu);
+    }
+
+    function setBusy(isBusy, message) {
+      state.busy = isBusy === true;
+      disableActionButtons(state.busy);
+      if (state.busy) closeTokenActionMenus();
+      if (message) {
+        setStatus(message);
+      }
+    }
+
+    function getActionRunningMessage(method, label) {
+      return ACTION_RUNNING_MESSAGES[method] || (label + 'を実行中...');
+    }
+
+    function readResultCount(result, keys) {
+      if (!result || typeof result !== 'object') return null;
+      for (const key of keys) {
+        if (result[key] != null && result[key] !== '') {
+          const numeric = Number(result[key]);
+          if (Number.isFinite(numeric)) return numeric;
+        }
+      }
+      return null;
+    }
+
+    function formatActionResultMessage(label, result) {
+      if (Array.isArray(result)) {
+        return label + 'が完了しました: 処理 ' + result.length + '件 / 成功 ' + result.length + '件 / 失敗 0件';
+      }
+      const processedCount = readResultCount(result, ['processed', 'processedCount', 'updated', 'issued', 'targetCount']);
+      const explicitSuccessCount = readResultCount(result, ['success', 'successCount']);
+      const dryRunCount = readResultCount(result, ['dryRun']);
+      const successCount = explicitSuccessCount == null
+        ? processedCount
+        : explicitSuccessCount + Number(dryRunCount || 0);
+      const errorCount = readResultCount(result, ['error', 'errorCount', 'failed', 'failedCount', 'failedTargetCount']);
+      const parts = [];
+      if (processedCount != null) parts.push('処理 ' + processedCount + '件');
+      if (successCount != null) parts.push('成功 ' + successCount + '件');
+      if (errorCount != null) parts.push('失敗 ' + errorCount + '件');
+      return parts.length > 0 ? label + 'が完了しました: ' + parts.join(' / ') : label + 'が完了しました。';
+    }
+
+    async function withBusy(label, task, runningMessage) {
+      if (state.busy) return null;
+      try {
+        if (runningMessage) {
+          setBusy(true, runningMessage);
+        } else {
+          setBusy(true, label + 'を実行中...');
+        }
+        return await task();
+      } finally {
+        setBusy(false);
+      }
+    }
+
+    function mergeDashboard(payload) {
+      state.dashboard = Object.assign({}, state.dashboard || {}, payload || {});
+      return state.dashboard;
+    }
+
+    function getDashboard() {
+      return state.dashboard || {};
+    }
+
     function badgeClass(label) {
-      if (label === '未実施' || label === '無効' || label === 'ERROR') return 'danger';
-      if (label === '低正答率' || label === '要観察' || label === 'DRY_RUN') return 'warn';
-      if (label === '有効' || label === '良好' || label === 'SUCCESS') return 'ok';
+      if (label === '未配付' || label === '未アクセス' || label === '未実施' || label === '無効' || label === 'ERROR' || label === '正答率低い' || label === '苦手') return 'danger';
+      if (label === '要フォロー' || label === '速度上昇・正答率低下' || label === '速度上昇/正答率低下' || label === '解答中' || label === '配付失敗' || label === 'DRY_RUN' || label === '時間がかかる') return 'warn';
+      if (label === '有効' || label === '順調' || label === '上級挑戦中' || label === 'アクセス済み' || label === '配付済み' || label === 'SUCCESS' || label === '安定' || label === '得意') return 'ok';
       return 'neutral';
     }
 
     function badge(label, type) {
       return '<span class="badge ' + (type || badgeClass(label)) + '">' + escapeHtml(label) + '</span>';
+    }
+
+    function uniqueLabels(labels) {
+      return labels.filter(function (label, index) {
+        return label && labels.indexOf(label) === index;
+      });
+    }
+
+    function getUnifiedStatusLabels(row) {
+      const labels = [];
+      const distributionStatus = String(row.distributionStatus || '');
+      const accessStatus = String(row.accessStatus || '');
+      const totalAttempts = Number(row.totalAttempts || 0);
+      const statusLabel = String(row.statusLabel || '').trim();
+
+      if (distributionStatus === '配付失敗') {
+        labels.push('配付失敗');
+      } else if (distributionStatus === '未配付') {
+        labels.push('未配付');
+      }
+
+      if (distributionStatus === '配付済み' && accessStatus !== 'アクセス済み') {
+        labels.push('未アクセス');
+      }
+
+      if (distributionStatus === '配付済み' && accessStatus === 'アクセス済み' && totalAttempts === 0) {
+        labels.push('未実施');
+      }
+
+      if (statusLabel === '要フォロー' || statusLabel === '速度上昇・正答率低下') {
+        labels.push('要フォロー');
+      }
+
+      const normalizedLabels = uniqueLabels(labels);
+      if (normalizedLabels.length > 0) return normalizedLabels.slice(0, 3);
+      return uniqueLabels([statusLabel || '未確認']).slice(0, 1);
+    }
+
+    function formatUnifiedStatusCell(row) {
+      return '<div class="status-stack">' + getUnifiedStatusLabels(row).map(function (label) {
+        return badge(label);
+      }).join('') + '</div>';
     }
 
     function emptyRow(colspan, message) {
@@ -1094,10 +1905,63 @@
       elements.confirmMessage.textContent = options.message || '';
       elements.confirmOkButton.textContent = options.confirmLabel || '実行';
       elements.confirmOkButton.className = 'btn ' + (options.danger === false ? 'primary' : 'danger');
+      elements.confirmOkButton.disabled = state.busy;
       elements.confirmModal.classList.add('open');
       return new Promise(function (resolve) {
         confirmResolver = resolve;
       });
+    }
+
+    async function copyTextToClipboard(text) {
+      const value = String(text || '');
+      if (!value) throw new Error('コピーするURLがありません。');
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        try {
+          await navigator.clipboard.writeText(value);
+          return;
+        } catch (error) {
+          // Apps Script の埋め込み環境では Clipboard API が拒否される場合がある。
+        }
+      }
+      return new Promise(function (resolve, reject) {
+        const textarea = document.createElement('textarea');
+        textarea.value = value;
+        textarea.setAttribute('readonly', '');
+        textarea.style.position = 'fixed';
+        textarea.style.left = '-9999px';
+        textarea.style.top = '0';
+        document.body.appendChild(textarea);
+        textarea.focus();
+        textarea.select();
+        try {
+          if (document.execCommand('copy')) {
+            resolve();
+          } else {
+            reject(new Error('クリップボードへコピーできませんでした。'));
+          }
+        } catch (error) {
+          reject(error);
+        } finally {
+          document.body.removeChild(textarea);
+        }
+      });
+    }
+
+    async function showStudentUrlDialog(url) {
+      const studentUrl = String(url || '');
+      const ok = await showConfirm({
+        title: '生徒URL確認',
+        message: studentUrl || 'URLがありません。',
+        confirmLabel: 'コピー',
+        danger: false
+      });
+      if (!ok) return;
+      try {
+        await copyTextToClipboard(studentUrl);
+        setStatus('生徒URLをコピーしました。', 'success');
+      } catch (error) {
+        setStatus(error.message || String(error), 'error');
+      }
     }
 
     function closeConfirm(value) {
@@ -1108,8 +1972,173 @@
       }
     }
 
-    function showPanel(panelId) {
-      state.activePanel = panelId || 'setupPanel';
+    function closeAnswerHistory() {
+      elements.answerHistoryModal.classList.remove('open');
+      state.answerHistoryStudent = null;
+      state.loadingHistoryRosterKey = '';
+      state.loadingProblemTypeStatsRosterKey = '';
+    }
+
+    function renderProblemTypeTrend(rows) {
+      const grouped = new Map();
+      for (const row of rows || []) {
+        const key = String(row.problemType || '').trim() || '-';
+        if (!grouped.has(key)) {
+          grouped.set(key, { attempts: 0, correct: 0 });
+        }
+        const bucket = grouped.get(key);
+        const attempts = row.attempts == null ? 1 : Number(row.attempts || 0);
+        bucket.attempts += Number.isFinite(attempts) ? attempts : 0;
+        if (row.correct != null) {
+          const correct = Number(row.correct || 0);
+          bucket.correct += Number.isFinite(correct) ? correct : 0;
+        } else if (row.isCorrect === true) {
+          bucket.correct += 1;
+        }
+      }
+      if (grouped.size === 0) {
+        return '<span class="cell-sub">問題タイプ別の傾向はまだありません。</span>';
+      }
+      return Array.from(grouped.entries()).map(function ([problemType, counts]) {
+        const low = counts.attempts > 0 && counts.correct / counts.attempts < 0.6;
+        return '<span class="trend-pill ' + (low ? 'low' : '') + '"><span>' + escapeHtml(formatProblemTypeLabel(problemType)) + '</span><span class="answer-text">' + counts.correct + '/' + counts.attempts + '</span></span>';
+      }).join('');
+    }
+
+    function formatElapsedMsValue(value) {
+      const numeric = Number(value || 0);
+      if (!Number.isFinite(numeric) || numeric <= 0) return '-';
+      return String(Math.round(numeric)) + ' ms';
+    }
+
+    function getProblemTypeStatusLabel(row, peerRows) {
+      const attempts = Number(row && row.attempts || 0);
+      if (!Number.isFinite(attempts) || attempts <= 0) return '未実施';
+      const recentAttempts = Number(row && row.recentAttempts || 0);
+      const accuracy = Number(row && row.accuracy || 0);
+      const recentAccuracy = Number(row && row.recentAccuracy || 0);
+      const referenceAccuracy = recentAttempts >= 3 ? recentAccuracy : accuracy;
+      if (attempts >= 3 && referenceAccuracy < 0.6) return '苦手';
+
+      const elapsedMs = Number((row && row.recentAverageElapsedMs) || (row && row.averageElapsedMs) || 0);
+      const elapsedValues = (peerRows || [])
+        .map(function (item) { return Number(item.recentAverageElapsedMs || item.averageElapsedMs || 0); })
+        .filter(function (value) { return Number.isFinite(value) && value > 0; });
+      const peerAverage = elapsedValues.length
+        ? elapsedValues.reduce(function (sum, value) { return sum + value; }, 0) / elapsedValues.length
+        : 0;
+      if (peerAverage > 0 && elapsedMs > peerAverage * 1.25) return '時間がかかる';
+
+      if (attempts >= 3 && accuracy >= 0.85 && (recentAttempts < 3 || recentAccuracy >= 0.8)) return '得意';
+      return '安定';
+    }
+
+    function renderProblemTypeStats(rows, loading) {
+      if (loading) {
+        elements.answerProblemTypeStatsBody.innerHTML = emptyRow(8, '問題タイプ別傾向を読み込んでいます。');
+        return;
+      }
+      const sourceRows = (rows || []).slice().sort(function (a, b) {
+        const levelOrder = { beginner: 1, intermediate: 2, advanced: 3 };
+        const levelDiff = Number(levelOrder[a.level] || 99) - Number(levelOrder[b.level] || 99);
+        if (levelDiff !== 0) return levelDiff;
+        return String(a.problemType || '').localeCompare(String(b.problemType || ''));
+      });
+      elements.answerProblemTypeStatsBody.innerHTML = sourceRows.length ? sourceRows.map(function (row) {
+        const statusLabel = getProblemTypeStatusLabel(row, sourceRows);
+        return '<tr>'
+          + '<td><span class="cell-main">' + escapeHtml(formatProblemTypeLabel(row.problemType)) + '</span><span class="cell-sub">' + escapeHtml(formatLevelLabel(row.level)) + '</span></td>'
+          + '<td><span class="answer-text">' + escapeHtml(Number(row.attempts || 0)) + '</span></td>'
+          + '<td><span class="answer-text">' + escapeHtml(Number(row.correct || 0)) + '</span></td>'
+          + '<td>' + escapeHtml(formatAccuracyOrDash(row.accuracy, row.attempts)) + '</td>'
+          + '<td>' + escapeHtml(formatAccuracyOrDash(row.recentAccuracy, row.recentAttempts)) + '</td>'
+          + '<td>' + escapeHtml(formatElapsedMsValue(row.averageElapsedMs)) + '</td>'
+          + '<td>' + escapeHtml(formatElapsedMsValue(row.recentAverageElapsedMs)) + '</td>'
+          + '<td>' + badge(statusLabel) + '</td>'
+          + '</tr>';
+      }).join('') : emptyRow(8, '問題タイプ別の成績はまだありません。');
+    }
+
+    function renderAnswerHistoryModal(rows, student, loading, problemTypeStats, statsLoading) {
+      const sourceRows = rows || [];
+      const sourceStats = problemTypeStats || [];
+      const sourceStudent = student || state.answerHistoryStudent || {};
+      elements.answerHistoryTitle.textContent = (sourceStudent.name || '生徒') + ' の解答履歴';
+      elements.answerHistoryMeta.textContent = [
+        sourceStudent.courseName || '',
+        sourceStudent.number ? '出席番号 ' + sourceStudent.number : '',
+        '最近' + sourceRows.length + '件'
+      ].filter(Boolean).join(' / ');
+      elements.answerHistoryTrend.innerHTML = loading || statsLoading
+        ? '<span class="cell-sub">履歴と問題タイプ別傾向を読み込んでいます。</span>'
+        : renderProblemTypeTrend(sourceStats.length ? sourceStats : sourceRows);
+      renderProblemTypeStats(sourceStats, statsLoading);
+      if (loading) {
+        elements.answerHistoryBody.innerHTML = emptyRow(7, '解答履歴を読み込んでいます。');
+        return;
+      }
+      elements.answerHistoryBody.innerHTML = sourceRows.length ? sourceRows.map(function (row) {
+        const submitted = formatAnswerValue(row.submittedAnswer, row.unit);
+        const normalized = String(row.normalizedSubmittedAnswer || '').trim();
+        const normalizedSub = normalized && normalized !== String(row.submittedAnswer || '').trim()
+          ? '<span class="cell-sub">正規化: ' + escapeHtml(formatAnswerValue(normalized, row.unit)) + '</span>'
+          : '';
+        return '<tr class="' + (row.isCorrect ? '' : 'incorrect') + '">'
+          + '<td title="' + escapeAttr(row.timestamp || '') + '">' + escapeHtml(formatShortDateTime(row.timestamp)) + '</td>'
+          + '<td>' + escapeHtml(formatLevelLabel(row.level)) + '<span class="cell-sub">' + badge(row.isCorrect ? '正答' : '誤答', row.isCorrect ? 'ok' : 'warn') + '</span></td>'
+          + '<td class="wrap">' + safeServerHtmlOrEscapedText(row.questionHtml, row.questionText) + '</td>'
+          + '<td><span class="answer-text">' + escapeHtml(formatAnswerValue(row.expectedAnswer, row.unit)) + '</span></td>'
+          + '<td><span class="answer-text">' + escapeHtml(submitted) + '</span>' + normalizedSub + '</td>'
+          + '<td>' + escapeHtml(formatProblemTypeLabel(row.problemType)) + '</td>'
+          + '<td>' + escapeHtml(formatElapsedSeconds(row.elapsedMs)) + '</td>'
+          + '</tr>';
+      }).join('') : emptyRow(7, 'この生徒の解答履歴はまだありません。');
+    }
+
+    async function openAnswerHistory(rosterKey, student) {
+      const normalizedRosterKey = String(rosterKey || '').trim();
+      if (normalizedRosterKey === '') return;
+      state.answerHistoryStudent = student || {};
+      elements.answerHistoryModal.classList.add('open');
+      const cachedHistory = state.answerHistoryByRosterKey[normalizedRosterKey] || null;
+      const cachedStats = state.problemTypeStatsByRosterKey[normalizedRosterKey] || null;
+      if (cachedHistory && cachedStats) {
+        renderAnswerHistoryModal(cachedHistory, state.answerHistoryStudent, false, cachedStats, false);
+        return;
+      }
+      state.loadingHistoryRosterKey = normalizedRosterKey;
+      state.loadingProblemTypeStatsRosterKey = normalizedRosterKey;
+      renderAnswerHistoryModal(cachedHistory || [], state.answerHistoryStudent, !cachedHistory, cachedStats || [], !cachedStats);
+      try {
+        const historyPromise = cachedHistory
+          ? Promise.resolve(cachedHistory)
+          : runServer('getStudentAnswerHistory', [rosterKey, 20]);
+        const statsPromise = cachedStats
+          ? Promise.resolve(cachedStats)
+          : runServer('getStudentProblemTypeStats', [rosterKey]);
+        const results = await Promise.all([historyPromise, statsPromise]);
+        state.answerHistoryByRosterKey[normalizedRosterKey] = results[0] || [];
+        state.problemTypeStatsByRosterKey[normalizedRosterKey] = results[1] || [];
+        if (state.loadingHistoryRosterKey === normalizedRosterKey && elements.answerHistoryModal.classList.contains('open')) {
+          renderAnswerHistoryModal(state.answerHistoryByRosterKey[normalizedRosterKey], state.answerHistoryStudent, false, state.problemTypeStatsByRosterKey[normalizedRosterKey], false);
+        }
+      } catch (error) {
+        elements.answerHistoryTrend.innerHTML = '';
+        elements.answerProblemTypeStatsBody.innerHTML = emptyRow(8, error.message || String(error));
+        elements.answerHistoryBody.innerHTML = emptyRow(7, error.message || String(error));
+        setStatus(error.message || String(error), 'error');
+      } finally {
+        if (state.loadingHistoryRosterKey === normalizedRosterKey) {
+          state.loadingHistoryRosterKey = '';
+        }
+        if (state.loadingProblemTypeStatsRosterKey === normalizedRosterKey) {
+          state.loadingProblemTypeStatsRosterKey = '';
+        }
+      }
+    }
+
+    function activatePanel(panelId) {
+      state.activePanel = panelId || 'dashboardPanel';
       for (const panel of elements.panelScreens) {
         const active = panel.id === state.activePanel;
         panel.hidden = !active;
@@ -1118,12 +2147,23 @@
       for (const button of elements.flowButtons) {
         button.classList.toggle('active', button.dataset.panel === state.activePanel);
       }
-      applyFilters();
+    }
+
+    async function showPanel(panelId) {
+      activatePanel(panelId);
+      try {
+        await ensurePanelData(state.activePanel);
+        applyFilters();
+      } catch (error) {
+        setStatus(error.message || String(error), 'error');
+      }
     }
 
     function getStudentCountByCourse() {
+      const dashboard = getDashboard();
       const counts = new Map();
-      for (const row of state.dashboard.students || []) {
+      const rows = state.loaded.roster ? (dashboard.students || []) : (dashboard.progressRows || []);
+      for (const row of rows) {
         if (row.status === '退籍') continue;
         counts.set(row.courseId, (counts.get(row.courseId) || 0) + 1);
       }
@@ -1131,11 +2171,12 @@
     }
 
     function getTokenRowsWithMissing() {
-      const tokensByRoster = new Map((state.dashboard.tokens || []).map(function (row) {
+      const dashboard = getDashboard();
+      const tokensByRoster = new Map((dashboard.tokens || []).map(function (row) {
         return [row.rosterKey, row];
       }));
       const rows = [];
-      for (const student of state.dashboard.students || []) {
+      for (const student of dashboard.students || []) {
         if (student.status === '退籍') continue;
         rows.push(Object.assign({
           token: '',
@@ -1148,43 +2189,194 @@
       return rows;
     }
 
-    function renderMetrics() {
-      const courses = state.dashboard.courses || [];
-      const students = state.dashboard.students || [];
-      const tokens = state.dashboard.tokens || [];
-      const progressRows = state.dashboard.progressRows || [];
-      const preview = state.dashboard.distributionPreview || {};
-      const checked = courses.filter(function (row) { return row.checked; }).length;
-      const activeStudents = students.filter(function (row) { return row.status !== '退籍'; }).length;
-      const retired = students.length - activeStudents;
-      const activeTokens = tokens.filter(function (row) { return row.token && !row.revoked; }).length;
-      const revokedTokens = tokens.filter(function (row) { return row.revoked; }).length;
-      const risk = progressRows.filter(function (row) { return row.statusLabel === '低正答率'; }).length;
-      const notStarted = progressRows.filter(function (row) { return row.statusLabel === '未実施'; }).length;
+    function getSelectedDistributionCourse() {
+      const courseId = elements.distributionCourseSelect.value;
+      if (!courseId) return null;
+      return (getDashboard().courses || []).find(function (course) {
+        return String(course.courseId || '') === courseId;
+      }) || { courseId: courseId, name: courseId };
+    }
 
-      elements.courseCount.textContent = String(courses.length);
-      elements.checkedCourseCount.textContent = '同期対象 ' + checked;
-      elements.studentCount.textContent = String(activeStudents);
-      elements.retiredStudentCount.textContent = '退籍 ' + retired;
-      elements.tokenCount.textContent = String(activeTokens);
-      elements.revokedTokenCount.textContent = '無効 ' + revokedTokens;
-      elements.distributionTargetCount.textContent = String(preview.targetCount || 0);
-      elements.distributionFailedCount.textContent = '失敗 ' + (preview.failedTargetCount || 0);
-      elements.riskStudentCount.textContent = String(risk);
-      elements.notStartedCount.textContent = '未実施 ' + notStarted;
+    function getSelectedDistributionStudent() {
+      const rosterKey = elements.distributionStudentSelect.value;
+      if (!rosterKey) return null;
+      return getTokenRowsWithMissing().find(function (row) {
+        return String(row.rosterKey || '') === rosterKey;
+      }) || null;
+    }
+
+    function canUseForceRedistribute(mode) {
+      return mode === 'course' || mode === 'student';
+    }
+
+    function buildDistributionOptions() {
+      const mode = elements.distributionTargetModeSelect.value || 'pending';
+      if (mode === 'pending') {
+        return {};
+      }
+      if (mode === 'failed') {
+        return { retryFailedOnly: true };
+      }
+      if (mode === 'course') {
+        const courseId = elements.distributionCourseSelect.value;
+        if (!courseId) throw new Error('Classroom指定ではClassroomを選択してください。');
+        return {
+          courseIds: [courseId],
+          forceRedistribute: elements.forceRedistributeToggle.checked === true
+        };
+      }
+      if (mode === 'student') {
+        const rosterKey = elements.distributionStudentSelect.value;
+        if (!rosterKey) throw new Error('生徒指定では生徒を選択してください。');
+        return {
+          rosterKeys: [rosterKey],
+          forceRedistribute: elements.forceRedistributeToggle.checked === true
+        };
+      }
+      return {};
+    }
+
+    function formatDistributionTargetSummary(preview) {
+      const mode = elements.distributionTargetModeSelect.value || 'pending';
+      const forceText = elements.forceRedistributeToggle.checked && canUseForceRedistribute(mode) ? 'ON' : 'OFF';
+      let targetText = '対象: 同期対象Classroom全体';
+      if (mode === 'course') {
+        const course = getSelectedDistributionCourse();
+        targetText = '対象: Classroom ' + (course ? (course.name || course.courseId) : '未選択');
+      } else if (mode === 'student') {
+        const student = getSelectedDistributionStudent();
+        targetText = student
+          ? '対象: ' + (student.courseName || student.courseId || '-') + ' ' + (student.name || student.rosterKey)
+          : '対象: 生徒未選択';
+      } else if (mode === 'failed') {
+        targetText = '対象: 配付ログの失敗分';
+      }
+      if (preview) {
+        return targetText
+          + '\n配付待ち: ' + Number(preview.targetCount || 0) + '件'
+          + '\n失敗再送: ' + Number(preview.failedTargetCount || 0) + '件'
+          + '\n強制再配付: ' + forceText;
+      }
+      return targetText + '\n強制再配付: ' + forceText;
+    }
+
+    function renderDistributionTargetControls() {
+      const dashboard = getDashboard();
+      const mode = elements.distributionTargetModeSelect.value || 'pending';
+      const selectedCourse = elements.distributionCourseSelect.value;
+      const selectedStudent = elements.distributionStudentSelect.value || state.selectedDistributionRosterKey || '';
+      const courseOptions = ['<option value="">Classroomを選択</option>'].concat((dashboard.courses || []).filter(function (course) {
+        return course.checked !== false;
+      }).map(function (course) {
+        return '<option value="' + escapeAttr(course.courseId) + '">' + escapeHtml(course.name || course.courseId) + '</option>';
+      })).join('');
+      elements.distributionCourseSelect.innerHTML = courseOptions;
+      elements.distributionCourseSelect.value = selectedCourse || '';
+
+      const studentSearch = elements.distributionStudentSearchInput.value.trim().toLowerCase();
+      const allStudentRows = getTokenRowsWithMissing();
+      let studentRows = allStudentRows.filter(function (row) {
+        const haystack = [row.courseName, row.name, row.number, row.email, row.rosterKey].join(' ').toLowerCase();
+        return !studentSearch || haystack.indexOf(studentSearch) !== -1;
+      }).slice(0, 200);
+      const selectedStudentRow = selectedStudent ? allStudentRows.find(function (row) {
+        return String(row.rosterKey || '') === selectedStudent;
+      }) : null;
+      if (selectedStudentRow && !studentRows.some(function (row) {
+        return String(row.rosterKey || '') === selectedStudent;
+      })) {
+        studentRows = studentRows.concat([selectedStudentRow]);
+      }
+      elements.distributionStudentSelect.innerHTML = ['<option value="">生徒を選択</option>'].concat(studentRows.map(function (row) {
+        const label = [row.courseName || row.courseId, row.name || row.rosterKey, row.number ? '出席 ' + row.number : ''].filter(Boolean).join(' / ');
+        return '<option value="' + escapeAttr(row.rosterKey) + '">' + escapeHtml(label) + '</option>';
+      })).join('');
+      elements.distributionStudentSelect.value = selectedStudent || '';
+
+      elements.distributionCourseSelect.disabled = mode !== 'course';
+      elements.distributionStudentSearchInput.disabled = mode !== 'student';
+      elements.distributionStudentSelect.disabled = mode !== 'student';
+      elements.forceRedistributeToggle.disabled = !canUseForceRedistribute(mode);
+      if (!canUseForceRedistribute(mode)) {
+        elements.forceRedistributeToggle.checked = false;
+      }
+      const settings = dashboard.settings || {};
+      elements.distributionDryRunState.textContent = settings.dryRun ? 'DRY_RUN 有効: 本送信ボタン以外は投稿を作りません。' : '本送信モード: DRY_RUNボタンは一時的に dryRun: true で実行します。';
+      elements.distributionDryRunState.className = 'status-area ' + (settings.dryRun ? 'success' : 'error');
+      elements.distributionTargetSummary.textContent = formatDistributionTargetSummary(dashboard.distributionPreview || null);
+    }
+
+    function buildDistributionConfirmationMessage(method, baseOptions) {
+      const options = baseOptions || {};
+      const force = options.forceRedistribute === true;
+      const dryRunPrefix = method === 'dryRunStudentUrlDistribution' ? 'DRY_RUNで確認します。' : '';
+      let message = '';
+      if (options.retryFailedOnly === true || method === 'retryFailedStudentUrlDistributions') {
+        message = '配付ログで失敗した生徒だけを対象に、失敗分だけ再送します。';
+      } else if (Array.isArray(options.rosterKeys) && options.rosterKeys.length > 0) {
+        const student = getSelectedDistributionStudent();
+        message = student
+          ? (student.name || student.rosterKey) + ' さんに' + (force ? '強制再配付します。' : '送信します。')
+          : '選択した生徒に送信します。';
+      } else if (Array.isArray(options.courseIds) && options.courseIds.length > 0) {
+        const course = getSelectedDistributionCourse();
+        message = force
+          ? 'Classroom: ' + (course ? (course.name || course.courseId) : options.courseIds[0]) + ' の対象者に強制再配付します。'
+          : 'Classroom: ' + (course ? (course.name || course.courseId) : options.courseIds[0]) + ' の未配付者に送信します。';
+      } else {
+        message = '同期対象Classroom全体の未配付者に送信します。';
+      }
+      if (force) {
+        message += ' 過去に配付済みでも再送します。';
+      }
+      return [dryRunPrefix, message].filter(Boolean).join(' ');
+    }
+
+    async function selectStudentForRedistribution(rosterKey, message) {
+      await loadRosterData();
+      state.selectedDistributionRosterKey = rosterKey;
+      elements.distributionTargetModeSelect.value = 'student';
+      elements.distributionStudentSearchInput.value = '';
+      renderDistributionTargetControls();
+      elements.distributionStudentSelect.value = rosterKey;
+      elements.forceRedistributeToggle.checked = true;
+      renderDistributionTargetControls();
+      state.loaded.distribution = false;
+      state.dashboard = Object.assign({}, state.dashboard || {}, {
+        distributionPreview: null
+      });
+      await showPanel('distributionPanel');
+      setStatus(message || 'この生徒だけを再配付対象にしました。DRY_RUNまたは本送信を実行してください。', 'success');
+    }
+
+    function renderMetrics() {
+      const dashboard = getDashboard();
+      const metrics = dashboard.dashboardMetrics || {};
+      elements.answeredStudentCount.textContent = String(metrics.answeredCount || 0);
+      elements.dashboardNotStartedCount.textContent = String(metrics.notStartedCount || 0);
+      elements.totalAnswerCount.textContent = String(metrics.totalAnswers || 0);
+      elements.recent10AverageAccuracy.textContent = formatRate(metrics.recent10AverageAccuracy);
+      elements.beginnerAnswerCount.textContent = String(metrics.beginnerAnswers || 0);
+      elements.intermediateAnswerCount.textContent = String(metrics.intermediateAnswers || 0);
+      elements.advancedAnswerCount.textContent = String(metrics.advancedAnswers || 0);
+      elements.followUpStudentCount.textContent = String(metrics.followUpStudentCount || 0);
     }
 
     function renderSettings() {
-      const settings = state.dashboard.settings || {};
+      const dashboard = getDashboard();
+      const settings = dashboard.settings || {};
       elements.webAppUrlInput.value = settings.webAppUrl || '';
       elements.postTextTemplateInput.value = settings.postTextTemplate || '';
       elements.batchSizeInput.value = String(settings.batchSize || 30);
       elements.dryRunToggle.checked = settings.dryRun === true;
       elements.distributionLogToggle.checked = settings.enableDistributionLog !== false;
-      elements.adminTokenBadge.textContent = settings.adminTokenConfigured ? '管理者トークン設定済み' : '管理者トークン未設定';
-      elements.adminTokenBadge.className = 'badge ' + (settings.adminTokenConfigured ? 'ok' : 'danger');
-      elements.adminTokenStatus.textContent = settings.adminTokenConfigured ? '設定済み。変更時だけ新しい値を入力してください。' : '未設定です。保存してください。';
-      elements.adminTokenStatus.className = 'status-area ' + (settings.adminTokenConfigured ? 'success' : 'error');
+      elements.adaptiveProblemSelectionToggle.checked = settings.adaptiveProblemSelection !== false;
+      elements.beginnerAvogadroInput.value = String(settings.beginnerAvogadroConstant || 6.0e23);
+      elements.intermediateAvogadroInput.value = String(settings.intermediateAvogadroConstant || 6.0e23);
+      elements.advancedAvogadroInput.value = String(settings.advancedAvogadroConstant || 6.02e23);
+      elements.beginnerToleranceInput.value = String(settings.beginnerTolerance || 0.01);
+      elements.intermediateToleranceInput.value = String(settings.intermediateTolerance || 0.02);
+      elements.advancedToleranceInput.value = String(settings.advancedTolerance || 0.005);
       elements.settingsStatusBadge.textContent = settings.webAppUrl ? '設定済み' : 'WebアプリURL未設定';
       elements.settingsStatusBadge.className = 'badge ' + (settings.webAppUrl ? 'ok' : 'danger');
       const modeText = settings.dryRun ? 'DRY_RUN 有効' : '本送信モード';
@@ -1196,7 +2388,8 @@
     }
 
     function renderFilterOptions() {
-      const courses = state.dashboard.courses || [];
+      const dashboard = getDashboard();
+      const courses = dashboard.courses || [];
       const selectedStudent = elements.studentCourseFilter.value;
       const selectedSummary = elements.summaryCourseFilter.value;
       const options = ['<option value="all">Classroom: すべて</option>'].concat(courses.map(function (course) {
@@ -1206,14 +2399,28 @@
       elements.summaryCourseFilter.innerHTML = options;
       elements.studentCourseFilter.value = selectedStudent || 'all';
       elements.summaryCourseFilter.value = selectedSummary || 'all';
+      renderDistributionTargetControls();
     }
 
     function renderCourses() {
+      const dashboard = getDashboard();
+      if (state.loading.roster) {
+        elements.courseStatusBadge.textContent = '読み込み中';
+        elements.courseStatusBadge.className = 'badge warn';
+        elements.courseBody.innerHTML = emptyRow(4, 'Classroom一覧・名簿・トークン詳細を読み込んでいます。');
+        return;
+      }
+      if (!state.loaded.roster && state.activePanel === 'classroomPanel') {
+        elements.courseStatusBadge.textContent = '未読込';
+        elements.courseStatusBadge.className = 'badge neutral';
+        elements.courseBody.innerHTML = emptyRow(4, 'Classroomタブを開くと一覧を読み込みます。');
+        return;
+      }
       const counts = getStudentCountByCourse();
       const search = elements.courseSearchInput.value.trim().toLowerCase();
       const checkedFilter = elements.courseCheckedFilter.value;
       const stateFilter = elements.courseStateFilter.value;
-      const rows = (state.dashboard.courses || []).filter(function (row) {
+      const rows = (dashboard.courses || []).filter(function (row) {
         const haystack = [row.name, row.section, row.courseId, row.courseState].join(' ').toLowerCase();
         if (search && haystack.indexOf(search) === -1) return false;
         if (checkedFilter === 'checked' && !row.checked) return false;
@@ -1234,10 +2441,23 @@
     }
 
     function renderStudents() {
+      const dashboard = getDashboard();
+      if (state.loading.roster) {
+        elements.studentStatusBadge.textContent = '読み込み中';
+        elements.studentStatusBadge.className = 'badge warn';
+        elements.studentBody.innerHTML = emptyRow(3, '生徒名簿を読み込んでいます。');
+        return;
+      }
+      if (!state.loaded.roster) {
+        elements.studentStatusBadge.textContent = '未読込';
+        elements.studentStatusBadge.className = 'badge neutral';
+        elements.studentBody.innerHTML = emptyRow(3, '名簿タブを開くと生徒名簿を読み込みます。');
+        return;
+      }
       const search = elements.studentSearchInput.value.trim().toLowerCase();
       const courseId = elements.studentCourseFilter.value;
       const status = elements.studentStatusFilter.value;
-      const rows = (state.dashboard.students || []).filter(function (row) {
+      const rows = (dashboard.students || []).filter(function (row) {
         const haystack = [row.courseName, row.name, row.email, row.number].join(' ').toLowerCase();
         if (search && haystack.indexOf(search) === -1) return false;
         if (courseId !== 'all' && row.courseId !== courseId) return false;
@@ -1257,6 +2477,19 @@
     }
 
     function renderTokens() {
+      const dashboard = getDashboard();
+      if (state.loading.roster) {
+        elements.tokenStatusBadge.textContent = '読み込み中';
+        elements.tokenStatusBadge.className = 'badge warn';
+        elements.tokenBody.innerHTML = emptyRow(3, 'トークン詳細を読み込んでいます。');
+        return;
+      }
+      if (!state.loaded.roster) {
+        elements.tokenStatusBadge.textContent = '未読込';
+        elements.tokenStatusBadge.className = 'badge neutral';
+        elements.tokenBody.innerHTML = emptyRow(3, 'トークンタブを開くと詳細を読み込みます。');
+        return;
+      }
       const search = elements.tokenSearchInput.value.trim().toLowerCase();
       const stateFilter = elements.tokenStateFilter.value;
       const courseFilter = elements.tokenCourseFilter.value.trim().toLowerCase();
@@ -1269,33 +2502,58 @@
         if (stateFilter !== 'all' && tokenState !== stateFilter) return false;
         return true;
       });
-      const active = (state.dashboard.tokens || []).filter(function (row) { return row.token && !row.revoked; }).length;
+      const active = (dashboard.tokens || []).filter(function (row) { return row.token && !row.revoked; }).length;
       elements.tokenStatusBadge.textContent = active + '件有効';
       elements.tokenStatusBadge.className = 'badge ' + (active > 0 ? 'ok' : 'neutral');
       elements.tokenBody.innerHTML = rows.length ? rows.map(function (row) {
         const hasToken = String(row.token || '') !== '';
         const tokenLabel = !hasToken ? '未発行' : row.revoked ? '無効' : '有効';
-        const urlButton = hasToken ? '<button class="btn ghost token-action" data-action="url" data-url="' + escapeAttr(row.studentUrl) + '" type="button">URL確認</button>' : '';
-        const reissueButton = hasToken ? '<button class="btn token-action" data-action="reissue" data-roster-key="' + escapeAttr(row.rosterKey) + '" type="button">再発行</button>' : '';
-        const revokeButton = hasToken && !row.revoked ? '<button class="btn danger token-action" data-action="revoke" data-roster-key="' + escapeAttr(row.rosterKey) + '" type="button">無効化</button>' : '';
+        const urlButton = hasToken ? '<button class="btn ghost token-action" role="menuitem" data-action="url" data-url="' + escapeAttr(row.studentUrl) + '" type="button">URL表示</button>' : '';
+        const copyUrlButton = hasToken ? '<button class="btn ghost token-action" data-action="copyUrl" data-url="' + escapeAttr(row.studentUrl) + '" type="button">URLコピー</button>' : '';
+        const teacherPreviewButton = hasToken ? '<button class="btn ghost token-action" data-action="teacherPreview" data-token="' + escapeAttr(row.token) + '" type="button">教師プレビュー</button>' : '';
+        const reissueButton = hasToken ? '<button class="btn token-action" role="menuitem" data-action="reissue" data-roster-key="' + escapeAttr(row.rosterKey) + '" type="button">再発行</button>' : '';
+        const revokeButton = hasToken && !row.revoked ? '<button class="btn danger token-action" role="menuitem" data-action="revoke" data-roster-key="' + escapeAttr(row.rosterKey) + '" type="button">無効化</button>' : '';
+        const redistributeButton = hasToken && !row.revoked ? '<button class="btn token-action" role="menuitem" data-action="redistributeStudent" data-roster-key="' + escapeAttr(row.rosterKey) + '" type="button">この生徒に再配付</button>' : '';
+        const primaryActions = teacherPreviewButton + copyUrlButton;
+        const menuActions = urlButton + reissueButton + revokeButton + redistributeButton;
+        const moreMenuButton = menuActions
+          ? '<span class="token-more-wrapper"><button class="btn ghost token-more-button" type="button" aria-expanded="false" aria-haspopup="menu">その他 ▾</button><span class="token-action-menu" role="menu" hidden>' + menuActions + '</span></span>'
+          : '';
         return '<tr>'
           + '<td><span class="cell-main">' + escapeHtml(row.name) + '</span><span class="cell-sub">' + escapeHtml(row.courseName) + ' / 出席 ' + escapeHtml(row.number || '-') + '</span></td>'
-          + '<td class="wrap"><span title="' + escapeAttr(row.token) + '">' + escapeHtml(hasToken ? shortToken(row.token) : '未発行') + '</span><span class="cell-sub">' + escapeHtml(row.studentUrl || '') + '</span></td>'
           + '<td>' + badge(tokenLabel) + '</td>'
-          + '<td><div class="actions-cell">' + urlButton + reissueButton + revokeButton + '</div></td>'
+          + '<td><div class="actions-cell">' + primaryActions + moreMenuButton + '</div></td>'
           + '</tr>';
-      }).join('') : emptyRow(4, '条件に一致するトークンはありません。');
+      }).join('') : emptyRow(3, '条件に一致するトークンはありません。');
     }
 
     function renderDistribution() {
-      const preview = state.dashboard.distributionPreview || {};
+      const dashboard = getDashboard();
+      renderDistributionTargetControls();
+      if (state.loading.distribution) {
+        elements.distributionProgressText.textContent = '配付プレビューと最新配付ログを読み込んでいます。';
+        elements.distributionProgressFill.style.width = '0%';
+        elements.distributionLogBody.innerHTML = emptyRow(4, '配付ログを読み込んでいます。');
+        return;
+      }
+      const preview = dashboard.distributionPreview || null;
+      if (!preview) {
+        elements.distributionProgressText.textContent = '配付対象確認を押してください。配付待ち件数と失敗再送件数は必要になったときだけ読み込みます。';
+        elements.distributionProgressFill.style.width = '0%';
+        elements.distributionLogBody.innerHTML = emptyRow(4, 'URL配付パネルを開くか配付対象確認を押すと最新50件を読み込みます。');
+        elements.distributionTargetCount.textContent = '配付待ち 未確認';
+        elements.distributionFailedCount.textContent = String((dashboard.distributionOverview || {}).failedCount || 0);
+        return;
+      }
       const processed = state.lastDistributionResult ? Number(state.lastDistributionResult.processed || 0) : 0;
       const batchSize = Number(preview.batchSize || elements.batchSizeInput.value || 30);
       const percent = batchSize > 0 ? Math.min(100, Math.round(processed / batchSize * 100)) : 0;
       const failed = Number(preview.failedTargetCount || 0);
       elements.distributionProgressText.textContent = '配付待ち ' + (preview.targetCount || 0) + '件 / 失敗再送 ' + failed + '件 / バッチサイズ ' + batchSize + (state.lastDistributionResult ? ' / 直近処理 ' + processed + '件' : '');
       elements.distributionProgressFill.style.width = percent + '%';
-      const logs = state.dashboard.distributionLogs || [];
+      elements.distributionTargetCount.textContent = '配付待ち ' + (preview.targetCount || 0);
+      elements.distributionFailedCount.textContent = String(failed);
+      const logs = dashboard.distributionLogs || [];
       elements.distributionLogBody.innerHTML = logs.length ? logs.map(function (row) {
         return '<tr>'
           + '<td><span class="cell-main">' + escapeHtml(row.timestamp) + '</span><span class="cell-sub">' + escapeHtml(row.runId) + '</span></td>'
@@ -1307,113 +2565,334 @@
     }
 
     function renderSummary() {
+      const dashboard = getDashboard();
       const search = elements.summarySearchInput.value.trim().toLowerCase();
       const status = elements.summaryStatusFilter.value;
       const courseId = elements.summaryCourseFilter.value;
-      const rows = (state.dashboard.progressRows || []).filter(function (row) {
+      const sortMode = elements.dashboardSortFilter.value;
+      const notStartedOnly = elements.summaryNotStartedOnlyToggle.checked;
+      const followOnly = elements.summaryFollowOnlyToggle.checked;
+      const rows = (dashboard.progressRows || []).filter(function (row) {
         const haystack = [row.courseName, row.name, row.number].join(' ').toLowerCase();
         if (search && haystack.indexOf(search) === -1) return false;
-        if (status !== 'all' && row.statusLabel !== status) return false;
+        if (status !== 'all' && getUnifiedStatusLabels(row).indexOf(status) === -1 && row.statusLabel !== status) return false;
         if (courseId !== 'all' && row.courseId !== courseId) return false;
+        if (notStartedOnly && Number(row.totalAttempts || 0) > 0) return false;
+        if (followOnly && row.followUp !== true) return false;
         return true;
+      }).sort(function (a, b) {
+        if (sortMode === 'recentAccuracyAsc') {
+          return Number(a.recent10Accuracy || 0) - Number(b.recent10Accuracy || 0);
+        }
+        if (sortMode === 'attemptsAsc') {
+          return Number(a.totalAttempts || 0) - Number(b.totalAttempts || 0);
+        }
+        if (sortMode === 'lastAnsweredAsc') {
+          return String(a.lastAnsweredAt || '').localeCompare(String(b.lastAnsweredAt || ''));
+        }
+        return 0;
       });
       elements.summaryStatusBadge.textContent = rows.length + '件表示';
       elements.summaryStatusBadge.className = 'badge ' + (rows.length > 0 ? 'ok' : 'neutral');
       elements.summaryBody.innerHTML = rows.length ? rows.map(function (row) {
-        const recent = row.recent10Correct + '/' + row.recent10Attempts + ' (' + formatRate(row.recent10Accuracy) + ')';
-        const levels = '基礎 ' + row.beginnerAttempts + ' / 標準 ' + row.intermediateAttempts + ' / 発展 ' + row.advancedAttempts;
+        const recentAttempts = Number(row.recent10Attempts || 0);
+        const recentCorrect = Number(row.recent10Correct || 0);
+        const recentSub = recentAttempts > 0 ? '直近 ' + recentCorrect + '/' + recentAttempts : '未計測';
+        const numberNote = row.number ? '<span class="cell-sub">出席番号: ' + escapeHtml(row.number) + '</span>' : '';
+        const lastAnsweredTitle = row.lastAnsweredAt || '';
         return '<tr>'
-          + '<td><span class="cell-main">' + escapeHtml(row.name) + '</span><span class="cell-sub">' + escapeHtml(row.courseName) + ' / 出席 ' + escapeHtml(row.number || '-') + '</span></td>'
-          + '<td>' + escapeHtml(row.totalAttempts) + '</td>'
-          + '<td><span class="cell-main">' + formatRate(row.totalAccuracy) + '</span><span class="cell-sub">直近10問 ' + escapeHtml(recent) + '</span></td>'
-          + '<td>' + escapeHtml(levels) + '</td>'
-          + '<td>' + escapeHtml(row.lastAnsweredAt || '未実施') + '</td>'
-          + '<td>' + badge(row.statusLabel) + '</td>'
+          + '<td title="' + escapeAttr(row.courseId || '') + '"><span class="cell-main">' + escapeHtml(row.courseName || '-') + '</span></td>'
+          + '<td><span class="cell-main">' + escapeHtml(row.name || '-') + '</span>' + numberNote + '</td>'
+          + '<td>' + formatUnifiedStatusCell(row) + '</td>'
+          + '<td><span class="cell-main">' + escapeHtml(Number(row.totalAttempts || 0)) + '問</span></td>'
+          + '<td>' + formatLevelCell(row) + '</td>'
+          + '<td><span class="cell-main">' + escapeHtml(formatAccuracyOrDash(row.beginnerAccuracy, row.beginnerAttempts)) + '</span></td>'
+          + '<td><span class="cell-main">' + escapeHtml(formatAccuracyOrDash(row.intermediateAccuracy, row.intermediateAttempts)) + '</span></td>'
+          + '<td><span class="cell-main">' + escapeHtml(formatAccuracyOrDash(row.advancedAccuracy, row.advancedAttempts)) + '</span></td>'
+          + '<td><span class="cell-main">' + escapeHtml(formatAccuracyOrDash(row.recent10Accuracy, row.recent10Attempts)) + '</span><span class="cell-sub">' + escapeHtml(recentSub) + '</span></td>'
+          + '<td title="速度は参考値です。"><span class="cell-main">' + escapeHtml(formatElapsedSeconds(getCurrentAverageElapsedMs(row))) + '</span></td>'
+          + '<td title="' + escapeAttr(lastAnsweredTitle) + '">' + escapeHtml(formatShortDateTime(row.lastAnsweredAt)) + '</td>'
+          + '<td><button class="btn ghost history-action" data-action="history" data-roster-key="' + escapeAttr(row.rosterKey) + '" type="button">履歴</button></td>'
           + '</tr>';
-      }).join('') : emptyRow(6, '条件に一致する集計行はありません。');
+      }).join('') : emptyRow(12, '条件に一致する集計行はありません。');
     }
 
     function renderLogs() {
-      const links = state.dashboard.sheetLinks || {};
+      const dashboard = getDashboard();
+      const links = dashboard.sheetLinks || {};
       const linkNames = ['解答ログ', '配付ログ', '実行ログ'];
       elements.sheetLinks.innerHTML = linkNames.map(function (name) {
         return links[name] ? '<a class="btn" target="_blank" href="' + escapeAttr(links[name]) + '">' + escapeHtml(name) + 'を開く</a>' : '';
       }).join('');
-      const answerLogs = state.dashboard.answerLogs || [];
+      if (state.loading.logs) {
+        elements.answerLogBody.innerHTML = emptyRow(7, '解答ログの最新50件を読み込んでいます。');
+        elements.runLogBody.innerHTML = emptyRow(6, '実行ログの最新50件を読み込んでいます。');
+        return;
+      }
+      if (!state.loaded.logs) {
+        elements.answerLogBody.innerHTML = emptyRow(7, 'ログタブを開くと最新50件を読み込みます。');
+        elements.runLogBody.innerHTML = emptyRow(6, 'ログタブを開くと最新50件を読み込みます。');
+        return;
+      }
+      const answerLogs = dashboard.answerLogs || [];
       elements.answerLogBody.innerHTML = answerLogs.length ? answerLogs.map(function (row) {
-        return '<tr><td>' + escapeHtml(row.timestamp) + '</td><td>' + escapeHtml(row.name) + '</td><td>' + escapeHtml(row.level) + '</td><td>' + badge(row.isCorrect ? '正答' : '誤答', row.isCorrect ? 'ok' : 'warn') + '</td></tr>';
-      }).join('') : emptyRow(4, '解答ログはまだありません。');
-      const runLogs = state.dashboard.runLogs || [];
+        return '<tr><td>' + escapeHtml(row.timestamp) + '</td><td>' + escapeHtml(row.name) + '</td><td class="wrap">' + safeServerHtmlOrEscapedText(row.questionHtml, row.questionText) + '</td><td><span class="answer-text">' + escapeHtml(formatAnswerValue(row.expectedAnswer, row.unit)) + '</span></td><td><span class="answer-text">' + escapeHtml(formatAnswerValue(row.submittedAnswer, row.unit)) + '</span></td><td>' + escapeHtml(formatLevelLabel(row.level)) + '</td><td>' + badge(row.isCorrect ? '正答' : '誤答', row.isCorrect ? 'ok' : 'warn') + '</td></tr>';
+      }).join('') : emptyRow(7, '解答ログはまだありません。');
+      const runLogs = dashboard.runLogs || [];
       elements.runLogBody.innerHTML = runLogs.length ? runLogs.map(function (row) {
         return '<tr><td>' + escapeHtml(row.operation) + '</td><td>' + escapeHtml(row.startedAt) + '</td><td>' + escapeHtml(row.processedCount) + '</td><td>' + escapeHtml(row.successCount) + '</td><td>' + escapeHtml(row.errorCount) + '</td><td>' + escapeHtml(row.nextAction) + '</td></tr>';
       }).join('') : emptyRow(6, '実行ログはまだありません。');
     }
 
     function render(statePayload) {
-      state.dashboard = statePayload;
-      elements.versionLabel.textContent = statePayload.appName + ' v' + statePayload.appVersion + ' / schema ' + statePayload.schemaVersion;
+      const dashboard = mergeDashboard(statePayload);
+      if (dashboard.appName) {
+        elements.versionLabel.textContent = dashboard.appName + ' v' + dashboard.appVersion + ' / schema ' + dashboard.schemaVersion;
+      }
+      activatePanel(state.activePanel);
       renderSettings();
       renderMetrics();
       renderFilterOptions();
-      applyFilters();
+      renderActivePanel();
       renderDistribution();
       renderLogs();
-      showPanel(state.activePanel);
+    }
+
+    function renderActivePanel() {
+      if (!state.dashboard) {
+        disableActionButtons(state.busy);
+        return;
+      }
+      if (state.activePanel === 'classroomPanel') {
+        renderCourses();
+      } else if (state.activePanel === 'studentRosterPanel') {
+        renderStudents();
+      } else if (state.activePanel === 'tokenPanel') {
+        renderTokens();
+      } else if (state.activePanel === 'distributionPanel') {
+        renderDistribution();
+      } else if (state.activePanel === 'logsPanel') {
+        renderLogs();
+      } else if (state.activePanel === 'dashboardPanel') {
+        renderSummary();
+      }
+      disableActionButtons(state.busy);
     }
 
     function applyFilters() {
-      if (!state.dashboard) return;
+      if (!state.dashboard) {
+        disableActionButtons(state.busy);
+        return;
+      }
+      renderActivePanel();
+    }
+
+    async function loadRosterData(options) {
+      const force = options && options.force === true;
+      if (state.loadingPromises.roster) return state.loadingPromises.roster;
+      if (state.loaded.roster && !force) return state.dashboard;
+      state.loading.roster = true;
+      setStatus('Classroom一覧・生徒名簿・トークン詳細を読み込み中...');
       renderCourses();
       renderStudents();
       renderTokens();
-      renderSummary();
+      state.loadingPromises.roster = (async function () {
+        try {
+          const payload = await runServer('getAdminRosterData');
+          state.loaded.roster = true;
+          render(payload);
+          setStatus('Classroom一覧・生徒名簿・トークン詳細を読み込みました。', 'success');
+          return state.dashboard;
+        } catch (error) {
+          setStatus(error.message || String(error), 'error');
+          throw error;
+        } finally {
+          state.loading.roster = false;
+          state.loadingPromises.roster = null;
+          applyFilters();
+        }
+      })();
+      return state.loadingPromises.roster;
+    }
+
+    async function loadLogData(options) {
+      const force = options && options.force === true;
+      if (state.loadingPromises.logs) return state.loadingPromises.logs;
+      if (state.loaded.logs && !force) return state.dashboard;
+      state.loading.logs = true;
+      setStatus('ログの最新50件を読み込み中...');
+      renderLogs();
+      state.loadingPromises.logs = (async function () {
+        try {
+          const payload = await runServer('getAdminLogData');
+          state.loaded.logs = true;
+          render(payload);
+          setStatus('ログの最新50件を読み込みました。', 'success');
+          return state.dashboard;
+        } catch (error) {
+          setStatus(error.message || String(error), 'error');
+          throw error;
+        } finally {
+          state.loading.logs = false;
+          state.loadingPromises.logs = null;
+          renderLogs();
+        }
+      })();
+      return state.loadingPromises.logs;
+    }
+
+    async function loadDistributionPreviewData(options) {
+      const force = options && options.force === true;
+      if (state.loadingPromises.distribution) return state.loadingPromises.distribution;
+      if (state.loaded.distribution && !force) return state.dashboard;
+      try {
+        const previewOptions = buildDistributionOptions();
+        state.loading.distribution = true;
+        setStatus(getActionRunningMessage('previewDistributionTargets', '配付対象確認'));
+        renderDistribution();
+        state.loadingPromises.distribution = (async function () {
+          try {
+            const payload = await runServer('getAdminDistributionPreviewData', [previewOptions]);
+            state.loaded.distribution = true;
+            render(payload);
+            setStatus(formatActionResultMessage('配付対象確認', payload.distributionPreview || {}), 'success');
+            return state.dashboard;
+          } catch (error) {
+            setStatus(error.message || String(error), 'error');
+            throw error;
+          } finally {
+            state.loading.distribution = false;
+            state.loadingPromises.distribution = null;
+            renderDistribution();
+          }
+        })();
+        return state.loadingPromises.distribution;
+      } catch (error) {
+        setStatus(error.message || String(error), 'error');
+        throw error;
+      }
+    }
+
+    async function ensurePanelData(panelId) {
+      // 重い詳細データは必要時だけ読み込み、初期表示のダッシュボードを軽く保つ。
+      if (panelId === 'logsPanel') {
+        await loadLogData();
+      }
+      if (panelId === 'distributionPanel') {
+        await loadRosterData();
+        await loadDistributionPreviewData();
+      }
+      if (panelId === 'classroomPanel' || panelId === 'studentRosterPanel' || panelId === 'tokenPanel') {
+        await loadRosterData();
+      }
+    }
+
+    function invalidateAfterAction(method) {
+      if (method === 'refreshClassroomList' || method === 'saveCourseSyncSelection' || method === 'refreshStudentsForCheckedCourses' || method === 'issueTokensForActiveStudents' || method === 'reissueStudentToken' || method === 'revokeStudentToken') {
+        state.loaded.roster = false;
+      }
+      if (method === 'dryRunStudentUrlDistribution' || method === 'distributeStudentUrlsForCheckedCourses' || method === 'retryFailedStudentUrlDistributions' || method === 'issueTokensForActiveStudents' || method === 'reissueStudentToken' || method === 'revokeStudentToken') {
+        state.loaded.distribution = false;
+        state.dashboard = Object.assign({}, state.dashboard || {}, {
+          distributionPreview: null,
+          distributionLogs: []
+        });
+      }
+      if (method === 'rebuildAggregateCache' || method === 'refreshClassroomList' || method === 'saveCourseSyncSelection' || method === 'refreshStudentsForCheckedCourses' || method === 'issueTokensForActiveStudents' || method === 'reissueStudentToken' || method === 'revokeStudentToken' || method === 'dryRunStudentUrlDistribution' || method === 'distributeStudentUrlsForCheckedCourses' || method === 'retryFailedStudentUrlDistributions') {
+        state.loaded.logs = false;
+      }
+      if (method === 'rebuildAggregateCache') {
+        state.problemTypeStatsByRosterKey = {};
+      }
+    }
+
+    async function refreshOverview() {
+      const overview = await runServer('getAdminDashboardOverview');
+      state.loaded.overview = true;
+      render(overview);
+      return overview;
+    }
+
+    async function refreshAfterAction(method) {
+      invalidateAfterAction(method);
+      await refreshOverview();
+      if (!state.loaded.roster && (state.activePanel === 'classroomPanel' || state.activePanel === 'studentRosterPanel' || state.activePanel === 'tokenPanel')) {
+        await loadRosterData({ force: true });
+      }
+      if (!state.loaded.distribution && state.activePanel === 'distributionPanel') {
+        await loadDistributionPreviewData({ force: true });
+      }
+      if (!state.loaded.logs && state.activePanel === 'logsPanel') {
+        await loadLogData({ force: true });
+      }
     }
 
     async function load() {
       try {
-        setStatus('読み込み中...');
-        render(await runServer('getAdminDashboardState'));
-        setStatus('読み込みました。', 'success');
+        setStatus('ダッシュボード概要を読み込み中...');
+        state.loading.overview = true;
+        // 初期表示は概要だけを取得し、ログや配付詳細はタブ表示時に遅延ロードする。
+        render(await runServer('getAdminDashboardOverview'));
+        state.loaded.overview = true;
+        setStatus('ダッシュボード概要を読み込みました。ログ・配付プレビュー・詳細テーブルは必要時に読み込みます。', 'success');
       } catch (error) {
         setStatus(error.message || String(error), 'error');
+      } finally {
+        state.loading.overview = false;
       }
     }
 
     async function runAction(method, label, args) {
-      try {
-        state.busy = true;
-        setStatus(label + 'を実行中...');
-        const result = await callAdminAction(method, args || []);
-        if (method === 'dryRunStudentUrlDistribution' || method === 'distributeStudentUrlsForCheckedCourses' || method === 'retryFailedStudentUrlDistributions') {
-          state.lastDistributionResult = result;
+      return withBusy(label, async function () {
+        try {
+          const result = await callAdminAction(method, args || []);
+          if (method === 'dryRunStudentUrlDistribution' || method === 'distributeStudentUrlsForCheckedCourses' || method === 'retryFailedStudentUrlDistributions') {
+            state.lastDistributionResult = result;
+          }
+          await refreshAfterAction(method);
+          setStatus(formatActionResultMessage(label, result), 'success');
+          return result;
+        } catch (error) {
+          setStatus(error.message || String(error), 'error');
+          throw error;
         }
-        await load();
-        setStatus(label + 'が完了しました。', 'success');
-        return result;
-      } catch (error) {
-        setStatus(error.message || String(error), 'error');
-        throw error;
-      } finally {
-        state.busy = false;
-      }
+      }, getActionRunningMessage(method, label));
     }
 
     async function saveSettings() {
-      const payload = {
-        webAppUrl: elements.webAppUrlInput.value,
-        adminToken: elements.adminTokenInput.value,
-        postTextTemplate: elements.postTextTemplateInput.value,
-        dryRun: elements.dryRunToggle.checked,
-        batchSize: elements.batchSizeInput.value,
-        enableDistributionLog: elements.distributionLogToggle.checked
-      };
-      const result = await runServer('saveAdminSettings', [payload]);
-      if (result && result.authToken) {
-        state.authToken = result.authToken;
-      }
-      elements.adminTokenInput.value = '';
-      await load();
-      setStatus('初期設定を保存しました。', 'success');
+      return withBusy('初期設定保存', async function () {
+        try {
+          const payload = {
+            webAppUrl: elements.webAppUrlInput.value,
+            postTextTemplate: elements.postTextTemplateInput.value,
+            dryRun: elements.dryRunToggle.checked,
+            batchSize: elements.batchSizeInput.value,
+            enableDistributionLog: elements.distributionLogToggle.checked,
+            adaptiveProblemSelection: elements.adaptiveProblemSelectionToggle.checked,
+            beginnerAvogadroConstant: elements.beginnerAvogadroInput.value,
+            intermediateAvogadroConstant: elements.intermediateAvogadroInput.value,
+            advancedAvogadroConstant: elements.advancedAvogadroInput.value,
+            beginnerTolerance: elements.beginnerToleranceInput.value,
+            intermediateTolerance: elements.intermediateToleranceInput.value,
+            advancedTolerance: elements.advancedToleranceInput.value
+          };
+          const result = await runServer('saveAdminSettings', [payload]);
+          if (result && result.authToken) {
+            state.authToken = result.authToken;
+          }
+          state.loaded.distribution = false;
+          state.dashboard = Object.assign({}, state.dashboard || {}, { distributionPreview: null });
+          await refreshOverview();
+          if (state.activePanel === 'distributionPanel') {
+            await loadDistributionPreviewData({ force: true });
+          }
+          setStatus('初期設定を保存しました。', 'success');
+          return result;
+        } catch (error) {
+          setStatus(error.message || String(error), 'error');
+          throw error;
+        }
+      }, getActionRunningMessage('saveAdminSettings', '初期設定保存'));
     }
 
     async function saveCourseSelection() {
@@ -1424,36 +2903,75 @@
     }
 
     async function previewDistribution() {
-      try {
-        setStatus('配付対象を確認中...');
-        const preview = await runServer('getDistributionTargetsPreview', [{}]);
-        state.dashboard.distributionPreview = preview;
-        renderMetrics();
-        renderDistribution();
-        setStatus('配付対象を確認しました。', 'success');
-      } catch (error) {
-        setStatus(error.message || String(error), 'error');
-      }
+      return withBusy('配付対象確認', async function () {
+        state.loaded.distribution = false;
+        await loadDistributionPreviewData({ force: true });
+        return (getDashboard().distributionPreview || null);
+      }, getActionRunningMessage('previewDistributionTargets', '配付対象確認'));
     }
 
     async function runDangerousDistribution(method, label, message) {
-      const ok = await showConfirm({
-        title: label,
-        message,
-        confirmLabel: label,
-        danger: method !== 'dryRunStudentUrlDistribution'
+      if (state.busy) return null;
+      try {
+        const baseOptions = buildDistributionOptions();
+        const options = Object.assign({}, baseOptions, { dryRun: method === 'dryRunStudentUrlDistribution' });
+        const ok = await showConfirm({
+          title: label,
+          message: message || buildDistributionConfirmationMessage(method, baseOptions),
+          confirmLabel: label,
+          danger: method !== 'dryRunStudentUrlDistribution'
+        });
+        if (!ok) return null;
+        elements.confirmOkButton.disabled = true;
+        return runAction(method, label, [options]);
+      } catch (error) {
+        setStatus(error.message || String(error), 'error');
+        return null;
+      }
+    }
+
+    async function retryFailedDistribution() {
+      try {
+        elements.distributionTargetModeSelect.value = 'failed';
+        elements.forceRedistributeToggle.checked = false;
+        renderDistributionTargetControls();
+        const baseOptions = buildDistributionOptions();
+        const options = Object.assign({}, baseOptions, { retryFailedOnly: true, forceRedistribute: false });
+        const ok = await showConfirm({
+          title: '失敗分再送',
+          message: buildDistributionConfirmationMessage('retryFailedStudentUrlDistributions', options),
+          confirmLabel: '失敗分再送',
+          danger: true
+        });
+        if (!ok) return null;
+        return runAction('retryFailedStudentUrlDistributions', '失敗分再送', [options]);
+      } catch (error) {
+        setStatus(error.message || String(error), 'error');
+        return null;
+      }
+    }
+
+    function handleDistributionTargetChange() {
+      state.selectedDistributionRosterKey = elements.distributionStudentSelect.value || '';
+      state.loaded.distribution = false;
+      state.dashboard = Object.assign({}, state.dashboard || {}, {
+        distributionPreview: null
       });
-      if (!ok) return;
-      await runAction(method, label, [{}]);
+      renderDistributionTargetControls();
+      renderDistribution();
     }
 
     elements.confirmCancelButton.addEventListener('click', function () { closeConfirm(false); });
-    elements.confirmOkButton.addEventListener('click', function () { closeConfirm(true); });
+    elements.confirmOkButton.addEventListener('click', function () {
+      if (state.busy) return;
+      elements.confirmOkButton.disabled = true;
+      closeConfirm(true);
+    });
     elements.confirmModal.addEventListener('click', function (event) {
       if (event.target === elements.confirmModal) closeConfirm(false);
     });
 
-    elements.refreshButton.addEventListener('click', load);
+    elements.refreshButton.addEventListener('click', function () { withBusy('更新', load, getActionRunningMessage('refreshOverview', '更新')); });
     for (const button of elements.flowButtons) {
       button.addEventListener('click', function () {
         showPanel(button.dataset.panel);
@@ -1465,9 +2983,9 @@
     elements.refreshStudentsButton.addEventListener('click', function () { runAction('refreshStudentsForCheckedCourses', '生徒名簿取得'); });
     elements.issueTokensButton.addEventListener('click', function () { runAction('issueTokensForActiveStudents', 'トークン発行'); });
     elements.previewDistributionButton.addEventListener('click', previewDistribution);
-    elements.dryRunButton.addEventListener('click', function () { runDangerousDistribution('dryRunStudentUrlDistribution', 'DRY_RUN', 'Classroom投稿は作成せず、配付ログだけ記録します。'); });
-    elements.distributeButton.addEventListener('click', function () { runDangerousDistribution('distributeStudentUrlsForCheckedCourses', 'Classroomお知らせ本送信', '同期対象Classroomの配付待ち生徒へ個別URLを本送信します。送信済み生徒は除外されます。'); });
-    elements.retryFailedButton.addEventListener('click', function () { runDangerousDistribution('retryFailedStudentUrlDistributions', '失敗分再送', '配付ログでERRORになっている生徒だけ再送します。'); });
+    elements.dryRunButton.addEventListener('click', function () { runDangerousDistribution('dryRunStudentUrlDistribution', 'DRY_RUN'); });
+    elements.distributeButton.addEventListener('click', function () { runDangerousDistribution('distributeStudentUrlsForCheckedCourses', 'Classroomお知らせ本送信'); });
+    elements.retryFailedButton.addEventListener('click', retryFailedDistribution);
     elements.aggregateButton.addEventListener('click', function () { runAction('rebuildAggregateCache', '集計更新'); });
 
     for (const element of [
@@ -1477,28 +2995,72 @@
       elements.studentSearchInput,
       elements.studentCourseFilter,
       elements.studentStatusFilter,
+      elements.distributionTargetModeSelect,
+      elements.distributionCourseSelect,
+      elements.distributionStudentSearchInput,
+      elements.distributionStudentSelect,
+      elements.forceRedistributeToggle,
       elements.tokenSearchInput,
       elements.tokenStateFilter,
       elements.tokenCourseFilter,
       elements.summarySearchInput,
       elements.summaryStatusFilter,
-      elements.summaryCourseFilter
+      elements.summaryCourseFilter,
+      elements.dashboardSortFilter,
+      elements.summaryNotStartedOnlyToggle,
+      elements.summaryFollowOnlyToggle
     ]) {
       element.addEventListener('input', applyFilters);
       element.addEventListener('change', applyFilters);
     }
 
+    for (const element of [
+      elements.distributionTargetModeSelect,
+      elements.distributionCourseSelect,
+      elements.distributionStudentSearchInput,
+      elements.distributionStudentSelect,
+      elements.forceRedistributeToggle
+    ]) {
+      element.addEventListener('input', handleDistributionTargetChange);
+      element.addEventListener('change', handleDistributionTargetChange);
+    }
+
     elements.tokenBody.addEventListener('click', async function (event) {
+      const moreButton = event.target.closest('.token-more-button');
+      if (moreButton) {
+        event.stopPropagation();
+        if (state.busy) return;
+        toggleTokenActionMenu(moreButton);
+        return;
+      }
       const button = event.target.closest('.token-action');
       if (!button) return;
+      closeTokenActionMenus();
+      if (state.busy) return;
       const action = button.dataset.action;
       if (action === 'url') {
-        await showConfirm({
-          title: '生徒URL確認',
-          message: button.dataset.url || 'URLがありません。',
-          confirmLabel: '閉じる',
-          danger: false
-        });
+        await showStudentUrlDialog(button.dataset.url || '');
+        return;
+      }
+      if (action === 'copyUrl') {
+        try {
+          await copyTextToClipboard(button.dataset.url || '');
+          setStatus('生徒URLをコピーしました。', 'success');
+        } catch (error) {
+          setStatus('自動コピーに失敗しました。URL表示から手動コピーしてください。', 'error');
+          await showStudentUrlDialog(button.dataset.url || '');
+        }
+        return;
+      }
+      if (action === 'teacherPreview') {
+        try {
+          setStatus('教師プレビューURLを作成しています...');
+          const previewUrl = await runServer('buildTeacherStudentPreviewUrl', [button.dataset.token || '']);
+          window.open(previewUrl, '_blank', 'noopener');
+          setStatus('教師プレビューを新しいタブで開きました。', 'success');
+        } catch (error) {
+          setStatus(error.message || String(error), 'error');
+        }
         return;
       }
       if (action === 'reissue') {
@@ -1506,9 +3068,12 @@
           title: 'トークン再発行',
           message: 'この生徒の既存URLは差し替わります。Classroomへ再配付が必要です。',
           confirmLabel: '再発行',
-          danger: true
+          danger: false
         });
-        if (ok) await runAction('reissueStudentToken', 'トークン再発行', [button.dataset.rosterKey, {}]);
+        if (ok) {
+          await runAction('reissueStudentToken', 'トークン再発行', [button.dataset.rosterKey, {}]);
+          await selectStudentForRedistribution(button.dataset.rosterKey, 'トークンを再発行しました。この生徒だけを再配付対象にしました。DRY_RUNまたは本送信を実行してください。');
+        }
       }
       if (action === 'revoke') {
         const ok = await showConfirm({
@@ -1518,6 +3083,39 @@
           danger: true
         });
         if (ok) await runAction('revokeStudentToken', 'トークン無効化', [button.dataset.rosterKey]);
+      }
+      if (action === 'redistributeStudent') {
+        await selectStudentForRedistribution(button.dataset.rosterKey, 'この生徒だけを再配付対象にしました。DRY_RUNまたは本送信を実行してください。');
+      }
+    });
+
+    document.addEventListener('click', function (event) {
+      if (event.target.closest('.token-more-wrapper')) return;
+      closeTokenActionMenus();
+    });
+
+    document.addEventListener('keydown', function (event) {
+      if (event.key === 'Escape') {
+        closeTokenActionMenus();
+      }
+    });
+
+    window.addEventListener('resize', closeTokenActionMenus);
+
+    elements.summaryBody.addEventListener('click', async function (event) {
+      const button = event.target.closest('.history-action');
+      if (!button) return;
+      const rosterKey = button.dataset.rosterKey || '';
+      const row = (getDashboard().progressRows || []).find(function (item) {
+        return String(item.rosterKey || '') === rosterKey;
+      }) || {};
+      await openAnswerHistory(rosterKey, row);
+    });
+
+    elements.answerHistoryCloseButton.addEventListener('click', closeAnswerHistory);
+    elements.answerHistoryModal.addEventListener('click', function (event) {
+      if (event.target === elements.answerHistoryModal) {
+        closeAnswerHistory();
       }
     });
 

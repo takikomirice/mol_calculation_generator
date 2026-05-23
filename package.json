@@ -1,0 +1,14 @@
+{
+  "name": "mol-calculation-generator",
+  "version": "1.0.0",
+  "description": "Google Apps Script classroom-linked mole calculation practice app.",
+  "private": true,
+  "scripts": {
+    "postinstall": "playwright install chromium",
+    "test": "node --test",
+    "test:playwright": "node --test tests/playwright-smoke.test.mjs"
+  },
+  "devDependencies": {
+    "playwright": "1.60.0"
+  }
+}
