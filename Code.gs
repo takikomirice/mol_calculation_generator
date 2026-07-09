@@ -1,18 +1,32 @@
 // もるくえ！ - Google Apps Script / V8 / HTMLService
 
 const MOL_DRILL_APP_NAME = 'もるくえ！';
-const MOL_DRILL_ADMIN_APP_NAME = 'もるくえ！ 管理ダッシュボード';
 const MOL_DRILL_FORMAL_DESCRIPTION = 'Classroom連携型モル計算練習アプリ';
-const MOL_DRILL_APP_VERSION = '1.0.0';
-const MOL_DRILL_EXPECTED_SCHEMA_VERSION = '17';
+const MOL_DRILL_APP_VERSION = '2.0.0';
 const MOL_DRILL_DEFAULT_CLASSROOM_SEND_BATCH_SIZE = 40;
-const MOL_DRILL_ADMIN_LOG_LIMIT = 50;
 const MOL_DRILL_ADMIN_TOKEN_SETTING_KEY = 'ADMIN_TOKEN';
 const MOL_DRILL_ADMIN_TOKEN_PROPERTY_KEY = 'MOL_DRILL_ADMIN_TOKEN';
-const MOL_DRILL_DEFAULT_POST_TEXT_TEMPLATE = 'もるくえ！(モル計算ドリル)の入場URLです。\n\n{{氏名}} さん専用URL:\n{{studentUrl}}\n\nこのURLは本人専用です。他の人に共有しないでください。\n※「10の23乗」は「10^23」と入力してください。';
+const MOL_DRILL_AUTO_REBUILD_CACHE_ENABLED_SETTING_KEY = 'AUTO_REBUILD_CACHE_ENABLED';
+const MOL_DRILL_AUTO_REBUILD_CACHE_INTERVAL_MINUTES_SETTING_KEY = 'AUTO_REBUILD_CACHE_INTERVAL_MINUTES';
+const MOL_DRILL_AUTO_REBUILD_TRIGGER_HANDLER = 'rebuildAggregateAndMonitorCacheForTrigger';
+const MOL_DRILL_AUTO_REBUILD_ALLOWED_INTERVAL_MINUTES = [1, 5, 10, 15, 30, 60];
+const MOL_DRILL_TOKEN_ROW_CACHE_TTL_SECONDS = 120;
+const MOL_DRILL_MONITOR_DASHBOARD_CACHE_KEY = 'dashboard';
+const MOL_DRILL_MONITOR_SNAPSHOT_VERSION = 1;
+const MOL_DRILL_DEFAULT_POST_TEXT_TEMPLATE = 'もるくえ！(モル計算ドリル)の入場URLです。\n\n{{氏名}} さん専用URL:\n{{studentUrl}}\n\nこのURLは本人専用です。他の人に共有しないでください。\n※大きい数は「6.0×10^23」または「6.0x10^23」の形で入力できます。';
 const MOL_DRILL_ADMIN_ACTION_LOCK_WAIT_MS = 1000;
 const MOL_DRILL_ADMIN_ACTION_LOCK_ERROR_MESSAGE = '別の処理が実行中です。少し待ってから再実行してください。';
 const MOL_DRILL_TEACHER_PREVIEW_NONCE_TTL_SECONDS = 60 * 10;
+const MOL_DRILL_TEACHER_TEST_STUDENT = {
+  courseId: '__TEST__',
+  courseName: 'テスト用',
+  rosterKey: '__TEST__::test-student',
+  studentId: 'test-student',
+  number: 'TEST',
+  name: 'テスト生徒',
+  email: '',
+  note: '先生用テストプレイ。Classroomには配付しない。'
+};
 const MOL_DRILL_LEVEL_SETTING_DEFAULTS = {
   beginner: {
     avogadroConstantKey: 'BEGINNER_AVOGADRO_CONSTANT',
@@ -33,12 +47,31 @@ const MOL_DRILL_LEVEL_SETTING_DEFAULTS = {
     tolerance: 0.005
   }
 };
+const MOL_DRILL_SETTING_DESCRIPTIONS = {
+  WEB_APP_URL: 'Webアプリの元URL。生徒用URL、WebモニターURL、テスト生徒用URLの元になります。WebアプリをデプロイしたURLを入力してください。',
+  MONITOR_URL: 'Webモニターを開く先生用URL。WEB_APP_URL から自動生成します。生徒には共有しないでください。',
+  TEST_STUDENT_URL: '先生が生徒画面をテストプレイするためのURL。自動生成します。Classroomには配付しないでください。',
+  ADMIN_TOKEN: '管理ダッシュボード内部認証用トークン。通常は自動管理します。直接編集しないでください。',
+  POST_TEXT_TEMPLATE: 'Classroomに投稿する本文テンプレート。必ず {{studentUrl}} を含めてください。{{項目名}} の形で、生徒ごとの情報を差し込めます。デフォルトの値を参考に適宜変更してください。主な差し込み項目: {{氏名}}, {{出席番号}}, {{Classroom名}}, {{studentUrl}}',
+  CLASSROOM_SEND_BATCH_SIZE: 'Classroom URL配付の1回あたり最大件数。通常は 40。大人数で失敗する場合は小さくします。',
+  DRY_RUN: 'true の場合、Classroom投稿を作成せず配付ログだけ記録します。本送信前の確認では true、本送信時は false にします。',
+  ENABLE_DISTRIBUTION_LOG: 'true の場合、Classroom配付結果を配付ログへ記録します。通常は true 推奨です。',
+  ENABLE_ADAPTIVE_PROBLEM_SELECTION: 'true の場合、生徒ごとの問題タイプ別キャッシュを使い、未実施・苦手な問題タイプを少し優先します。通常は true 推奨です。',
+  AUTO_REBUILD_CACHE_ENABLED: '自動更新で集計キャッシュ・問題タイプ別キャッシュ・モニターキャッシュを定期更新するかどうか。授業中モニター反映を定期的に更新したい場合だけ true にします。通常はメニューから有効化・停止します。',
+  AUTO_REBUILD_CACHE_INTERVAL_MINUTES: '自動更新の間隔。1, 5, 10, 15, 30, 60 など。短すぎると Apps Script の実行回数が増えるため、授業中は5分程度を推奨します。',
+  BEGINNER_AVOGADRO_CONSTANT: '初級レベルの問題生成と採点に使うアボガドロ定数。例: 6.0×10^23 または 6.0x10^23',
+  INTERMEDIATE_AVOGADRO_CONSTANT: '中級レベルの問題生成と採点に使うアボガドロ定数。例: 6.0×10^23 または 6.0x10^23',
+  ADVANCED_AVOGADRO_CONSTANT: '上級レベルの問題生成と採点に使うアボガドロ定数。例: 6.02×10^23 または 6.02x10^23',
+  BEGINNER_TOLERANCE: '初級レベルの数値解答に使う相対許容誤差。例: 0.01',
+  INTERMEDIATE_TOLERANCE: '中級レベルの数値解答に使う相対許容誤差。例: 0.02',
+  ADVANCED_TOLERANCE: '上級レベルの数値解答に使う相対許容誤差。例: 0.005'
+};
 
 const MOL_DRILL_SHEETS = [
   {
     name: '設定',
     headers: ['キー', '値', '説明', '更新日時'],
-    description: 'WebアプリURL、スキーマ、動作設定を保持します。',
+    description: 'WebアプリURLや動作設定を保持します。',
     columnWidths: [
       { header: 'キー', width: 220 },
       { header: '値', width: 420 },
@@ -77,9 +110,8 @@ const MOL_DRILL_SHEETS = [
   },
   {
     name: 'トークン管理',
-    headers: ['token', 'courseId', 'courseName', 'rosterKey', 'studentId', '出席番号', '氏名', 'メール', 'studentUrl', 'issuedAt', 'lastAccessedAt', 'revoked', 'note'],
+    headers: ['token', 'courseId', 'courseName', 'rosterKey', 'studentId', '出席番号', '氏名', 'メール', 'studentUrl', 'issuedAt', 'lastAccessedAt', 'revoked', '投稿削除', 'note'],
     description: '生徒用WebアプリURLの個別トークンを管理します。',
-    checkboxHeaders: ['revoked'],
     columnWidths: [
       { header: 'token', width: 260 },
       { header: 'courseId', width: 180 },
@@ -93,6 +125,7 @@ const MOL_DRILL_SHEETS = [
       { header: 'issuedAt', width: 180 },
       { header: 'lastAccessedAt', width: 180 },
       { header: 'revoked', width: 90 },
+      { header: '投稿削除', width: 100 },
       { header: 'note', width: 260 }
     ]
   },
@@ -304,6 +337,17 @@ const MOL_DRILL_SHEETS = [
     ]
   },
   {
+    name: 'モニターキャッシュ',
+    headers: ['key', 'json', 'updatedAt', 'note'],
+    description: 'Webモニター表示用の自動生成JSONキャッシュです。直接編集しないでください。',
+    columnWidths: [
+      { header: 'key', width: 160 },
+      { header: 'json', width: 700 },
+      { header: 'updatedAt', width: 180 },
+      { header: 'note', width: 260 }
+    ]
+  },
+  {
     name: '実行ログ',
     headers: ['runId', 'operation', 'startedAt', 'finishedAt', 'processedCount', 'successCount', 'errorCount', 'skippedCount', 'nextAction'],
     description: 'トークン発行、Classroom配付、集計更新などの実行単位ログです。',
@@ -322,20 +366,23 @@ const MOL_DRILL_SHEETS = [
 ];
 
 const MOL_DRILL_DEFAULT_SETTINGS = [
-  { key: 'schemaVersion', value: MOL_DRILL_EXPECTED_SCHEMA_VERSION, description: '管理シート構造のスキーマバージョン' },
-  { key: 'WEB_APP_URL', value: '', description: '生徒用WebアプリURL。生徒URLは WEB_APP_URL + ?t=TOKEN で作成します。' },
-  { key: MOL_DRILL_ADMIN_TOKEN_SETTING_KEY, value: '', description: '管理ダッシュボード内部認証用トークン。通常は自動管理します。' },
-  { key: 'POST_TEXT_TEMPLATE', value: MOL_DRILL_DEFAULT_POST_TEXT_TEMPLATE, description: 'Classroom個別お知らせ本文テンプレート' },
-  { key: 'CLASSROOM_SEND_BATCH_SIZE', value: String(MOL_DRILL_DEFAULT_CLASSROOM_SEND_BATCH_SIZE), description: 'Classroom URL配付の1回あたり最大件数' },
-  { key: 'DRY_RUN', value: 'false', description: 'true の場合、Classroom投稿を作成せず配付ログだけ記録します。' },
-  { key: 'ENABLE_DISTRIBUTION_LOG', value: 'true', description: 'true の場合、配付結果を配付ログへ記録します。' },
-  { key: 'ENABLE_ADAPTIVE_PROBLEM_SELECTION', value: 'true', description: 'true の場合、生徒ごとの問題タイプ別キャッシュを使って出題タイプを調整します。' },
-  { key: 'BEGINNER_AVOGADRO_CONSTANT', value: '6.0e23', description: '初級レベルの問題生成と採点に使うアボガドロ定数' },
-  { key: 'INTERMEDIATE_AVOGADRO_CONSTANT', value: '6.0e23', description: '中級レベルの問題生成と採点に使うアボガドロ定数' },
-  { key: 'ADVANCED_AVOGADRO_CONSTANT', value: '6.02e23', description: '上級レベルの問題生成と採点に使うアボガドロ定数' },
-  { key: 'BEGINNER_TOLERANCE', value: '0.01', description: '初級レベルの数値解答に使う相対許容誤差' },
-  { key: 'INTERMEDIATE_TOLERANCE', value: '0.02', description: '中級レベルの数値解答に使う相対許容誤差' },
-  { key: 'ADVANCED_TOLERANCE', value: '0.005', description: '上級レベルの数値解答に使う相対許容誤差' }
+  { key: 'WEB_APP_URL', value: '', description: MOL_DRILL_SETTING_DESCRIPTIONS.WEB_APP_URL },
+  { key: 'MONITOR_URL', value: '', description: MOL_DRILL_SETTING_DESCRIPTIONS.MONITOR_URL },
+  { key: 'TEST_STUDENT_URL', value: '', description: MOL_DRILL_SETTING_DESCRIPTIONS.TEST_STUDENT_URL },
+  { key: MOL_DRILL_ADMIN_TOKEN_SETTING_KEY, value: '', description: MOL_DRILL_SETTING_DESCRIPTIONS.ADMIN_TOKEN },
+  { key: 'POST_TEXT_TEMPLATE', value: MOL_DRILL_DEFAULT_POST_TEXT_TEMPLATE, description: MOL_DRILL_SETTING_DESCRIPTIONS.POST_TEXT_TEMPLATE },
+  { key: 'CLASSROOM_SEND_BATCH_SIZE', value: String(MOL_DRILL_DEFAULT_CLASSROOM_SEND_BATCH_SIZE), description: MOL_DRILL_SETTING_DESCRIPTIONS.CLASSROOM_SEND_BATCH_SIZE },
+  { key: 'DRY_RUN', value: 'false', description: MOL_DRILL_SETTING_DESCRIPTIONS.DRY_RUN },
+  { key: 'ENABLE_DISTRIBUTION_LOG', value: 'true', description: MOL_DRILL_SETTING_DESCRIPTIONS.ENABLE_DISTRIBUTION_LOG },
+  { key: 'ENABLE_ADAPTIVE_PROBLEM_SELECTION', value: 'true', description: MOL_DRILL_SETTING_DESCRIPTIONS.ENABLE_ADAPTIVE_PROBLEM_SELECTION },
+  { key: MOL_DRILL_AUTO_REBUILD_CACHE_ENABLED_SETTING_KEY, value: 'false', description: MOL_DRILL_SETTING_DESCRIPTIONS.AUTO_REBUILD_CACHE_ENABLED },
+  { key: MOL_DRILL_AUTO_REBUILD_CACHE_INTERVAL_MINUTES_SETTING_KEY, value: '5', description: MOL_DRILL_SETTING_DESCRIPTIONS.AUTO_REBUILD_CACHE_INTERVAL_MINUTES },
+  { key: 'BEGINNER_AVOGADRO_CONSTANT', value: '6.0e23', description: MOL_DRILL_SETTING_DESCRIPTIONS.BEGINNER_AVOGADRO_CONSTANT },
+  { key: 'INTERMEDIATE_AVOGADRO_CONSTANT', value: '6.0e23', description: MOL_DRILL_SETTING_DESCRIPTIONS.INTERMEDIATE_AVOGADRO_CONSTANT },
+  { key: 'ADVANCED_AVOGADRO_CONSTANT', value: '6.02e23', description: MOL_DRILL_SETTING_DESCRIPTIONS.ADVANCED_AVOGADRO_CONSTANT },
+  { key: 'BEGINNER_TOLERANCE', value: '0.01', description: MOL_DRILL_SETTING_DESCRIPTIONS.BEGINNER_TOLERANCE },
+  { key: 'INTERMEDIATE_TOLERANCE', value: '0.02', description: MOL_DRILL_SETTING_DESCRIPTIONS.INTERMEDIATE_TOLERANCE },
+  { key: 'ADVANCED_TOLERANCE', value: '0.005', description: MOL_DRILL_SETTING_DESCRIPTIONS.ADVANCED_TOLERANCE }
 ];
 
 class LoggerService {
@@ -357,6 +404,39 @@ class LoggerService {
       // Apps Script console can be unavailable in local tests.
     }
   }
+}
+
+function parseBooleanSettingWithDefault_(value, fallback) {
+  if (value === true) {
+    return true;
+  }
+  if (value === false) {
+    return false;
+  }
+  const normalized = String(value == null ? '' : value).trim().toLowerCase();
+  if (['true', '1', 'yes', 'y', 'on', 'はい', '有効', 'オン', 'する'].includes(normalized)) {
+    return true;
+  }
+  if (['false', '0', 'no', 'n', 'off', 'いいえ', '無効', 'オフ', 'しない'].includes(normalized)) {
+    return false;
+  }
+  return fallback === true;
+}
+
+function isAutoRebuildCacheEnabled_() {
+  try {
+    return parseBooleanSettingWithDefault_(SheetRepository.getSettingValue(MOL_DRILL_AUTO_REBUILD_CACHE_ENABLED_SETTING_KEY), false);
+  } catch (_ignored) {
+    return false;
+  }
+}
+
+function normalizeAutoRebuildCacheIntervalMinutes_(value) {
+  const numeric = Number(String(value == null ? '' : value).trim());
+  if (Number.isFinite(numeric) && MOL_DRILL_AUTO_REBUILD_ALLOWED_INTERVAL_MINUTES.includes(numeric)) {
+    return numeric;
+  }
+  return 5;
 }
 
 class AdminService {
@@ -675,59 +755,38 @@ class AdminService {
     return null;
   }
 
-  static getAdminSettings(authToken) {
-    this.assertAdminAccess(authToken);
-    return this.readAdminSettings_();
-  }
-
-  static saveAdminSettings(authToken, payload) {
-    this.assertAdminAccess(authToken);
-    const settings = this.normalizeSettingsPayload(payload);
-    const rows = [
-      { key: 'WEB_APP_URL', value: settings.webAppUrl, description: '生徒用WebアプリURL。生徒URLは WEB_APP_URL + ?t=TOKEN で作成します。' },
-      { key: 'POST_TEXT_TEMPLATE', value: settings.postTextTemplate, description: 'Classroom個別お知らせ本文テンプレート' },
-      { key: 'CLASSROOM_SEND_BATCH_SIZE', value: String(settings.batchSize), description: 'Classroom URL配付の1回あたり最大件数' },
-      { key: 'DRY_RUN', value: String(settings.dryRun), description: 'true の場合、Classroom投稿を作成せず配付ログだけ記録します。' },
-      { key: 'ENABLE_DISTRIBUTION_LOG', value: String(settings.enableDistributionLog), description: 'true の場合、配付結果を配付ログへ記録します。' },
-      { key: 'ENABLE_ADAPTIVE_PROBLEM_SELECTION', value: String(settings.adaptiveProblemSelection), description: 'true の場合、生徒ごとの問題タイプ別キャッシュを使って出題タイプを調整します。' },
-      { key: 'BEGINNER_AVOGADRO_CONSTANT', value: String(settings.beginnerAvogadroConstant), description: '初級レベルの問題生成と採点に使うアボガドロ定数' },
-      { key: 'INTERMEDIATE_AVOGADRO_CONSTANT', value: String(settings.intermediateAvogadroConstant), description: '中級レベルの問題生成と採点に使うアボガドロ定数' },
-      { key: 'ADVANCED_AVOGADRO_CONSTANT', value: String(settings.advancedAvogadroConstant), description: '上級レベルの問題生成と採点に使うアボガドロ定数' },
-      { key: 'BEGINNER_TOLERANCE', value: String(settings.beginnerTolerance), description: '初級レベルの数値解答に使う相対許容誤差' },
-      { key: 'INTERMEDIATE_TOLERANCE', value: String(settings.intermediateTolerance), description: '中級レベルの数値解答に使う相対許容誤差' },
-      { key: 'ADVANCED_TOLERANCE', value: String(settings.advancedTolerance), description: '上級レベルの数値解答に使う相対許容誤差' }
-    ];
-    SheetRepository.setSettingValues_(rows);
-    let nextAuthToken = String(authToken || '').trim();
-    if (settings.adminToken !== '') {
-      nextAuthToken = this.setAdminToken(settings.adminToken);
-    }
+  static saveSettingsFromMenu(payload) {
+    SheetRepository.assertManagementSheetsReady();
+    const current = this.readAdminSettings_();
+    const settings = this.normalizeSettingsPayload({
+      ...current,
+      ...(payload || {})
+    });
+    this.writeAdminSettingRows_(settings);
     return {
-      settings: this.readAdminSettings_(),
-      authToken: nextAuthToken
+      settings: this.readAdminSettings_()
     };
   }
 
-  static saveCourseSyncSelection(authToken, selectedCourseIds) {
-    this.assertAdminAccess(authToken);
-    return this.withAdminActionLock('saveCourseSyncSelection', () => SheetRepository.setCourseSyncSelection(selectedCourseIds || []));
+  static writeAdminSettingRows_(settings) {
+    SheetRepository.setSettingValues_(this.buildAdminSettingRows_(settings));
   }
 
-  static getSheetLinks() {
-    try {
-      const spreadsheet = SpreadsheetApp.getActiveSpreadsheet();
-      const baseUrl = spreadsheet.getUrl();
-      const links = {};
-      for (const definition of MOL_DRILL_SHEETS) {
-        const sheet = spreadsheet.getSheetByName(definition.name);
-        if (sheet) {
-          links[definition.name] = `${baseUrl}#gid=${sheet.getSheetId()}`;
-        }
-      }
-      return links;
-    } catch (_ignored) {
-      return {};
-    }
+  static buildAdminSettingRows_(settings) {
+    return [
+      { key: 'WEB_APP_URL', value: settings.webAppUrl, description: MOL_DRILL_SETTING_DESCRIPTIONS.WEB_APP_URL },
+      { key: 'POST_TEXT_TEMPLATE', value: settings.postTextTemplate, description: MOL_DRILL_SETTING_DESCRIPTIONS.POST_TEXT_TEMPLATE },
+      { key: 'CLASSROOM_SEND_BATCH_SIZE', value: String(settings.batchSize), description: MOL_DRILL_SETTING_DESCRIPTIONS.CLASSROOM_SEND_BATCH_SIZE },
+      { key: 'DRY_RUN', value: String(settings.dryRun), description: MOL_DRILL_SETTING_DESCRIPTIONS.DRY_RUN },
+      { key: 'ENABLE_DISTRIBUTION_LOG', value: String(settings.enableDistributionLog), description: MOL_DRILL_SETTING_DESCRIPTIONS.ENABLE_DISTRIBUTION_LOG },
+      { key: 'ENABLE_ADAPTIVE_PROBLEM_SELECTION', value: String(settings.adaptiveProblemSelection), description: MOL_DRILL_SETTING_DESCRIPTIONS.ENABLE_ADAPTIVE_PROBLEM_SELECTION },
+      { key: 'BEGINNER_AVOGADRO_CONSTANT', value: String(settings.beginnerAvogadroConstant), description: MOL_DRILL_SETTING_DESCRIPTIONS.BEGINNER_AVOGADRO_CONSTANT },
+      { key: 'INTERMEDIATE_AVOGADRO_CONSTANT', value: String(settings.intermediateAvogadroConstant), description: MOL_DRILL_SETTING_DESCRIPTIONS.INTERMEDIATE_AVOGADRO_CONSTANT },
+      { key: 'ADVANCED_AVOGADRO_CONSTANT', value: String(settings.advancedAvogadroConstant), description: MOL_DRILL_SETTING_DESCRIPTIONS.ADVANCED_AVOGADRO_CONSTANT },
+      { key: 'BEGINNER_TOLERANCE', value: String(settings.beginnerTolerance), description: MOL_DRILL_SETTING_DESCRIPTIONS.BEGINNER_TOLERANCE },
+      { key: 'INTERMEDIATE_TOLERANCE', value: String(settings.intermediateTolerance), description: MOL_DRILL_SETTING_DESCRIPTIONS.INTERMEDIATE_TOLERANCE },
+      { key: 'ADVANCED_TOLERANCE', value: String(settings.advancedTolerance), description: MOL_DRILL_SETTING_DESCRIPTIONS.ADVANCED_TOLERANCE }
+    ];
   }
 
   static readAdminSettings_() {
@@ -762,7 +821,9 @@ class AdminService {
   }
 
   static normalizePositiveNumber_(value, fallback) {
-    const numeric = Number(value);
+    const numeric = typeof MolProblemService !== 'undefined'
+      ? MolProblemService.normalizeNumericInput(value)
+      : Number(value);
     if (Number.isFinite(numeric) && numeric > 0) {
       return numeric;
     }
@@ -817,10 +878,6 @@ class SheetRepository {
     }));
   }
 
-  static getExpectedSchemaVersion() {
-    return MOL_DRILL_EXPECTED_SCHEMA_VERSION;
-  }
-
   static getDefaultSettingsForTest() {
     return MOL_DRILL_DEFAULT_SETTINGS.map((setting) => ({ ...setting }));
   }
@@ -828,7 +885,7 @@ class SheetRepository {
   static resetExecutionCaches_() {
     this.managedSheetCache_ = {};
     this.headerColumnMapCache_ = {};
-    this.managementSchemaStatusCache_ = null;
+    this.managementSheetStatusCache_ = null;
   }
 
   static getManagedSheetCache_() {
@@ -858,18 +915,15 @@ class SheetRepository {
 
   static ensureSheets() {
     this.resetExecutionCaches_();
-    this.assertNoLegacySchemaBeforeSetup_();
     const spreadsheet = SpreadsheetApp.getActiveSpreadsheet();
     for (const definition of MOL_DRILL_SHEETS) {
       const sheet = this.ensureSheet_(spreadsheet, definition);
       this.initializeSheet_(sheet, definition);
     }
-    this.setSettingValue('schemaVersion', MOL_DRILL_EXPECTED_SCHEMA_VERSION, '管理シート構造のスキーマバージョン');
     AdminService.getOrCreateAdminToken();
     this.resetExecutionCaches_();
     return {
       ok: true,
-      schemaVersion: MOL_DRILL_EXPECTED_SCHEMA_VERSION,
       message: 'もるくえ！の管理シートを作成・補修しました。'
     };
   }
@@ -882,17 +936,15 @@ class SheetRepository {
       this.clearSheetForReinitialization_(sheet);
       this.initializeSheet_(sheet, definition);
     }
-    this.setSettingValue('schemaVersion', MOL_DRILL_EXPECTED_SCHEMA_VERSION, '管理シート構造のスキーマバージョン');
     AdminService.getOrCreateAdminToken();
     this.resetExecutionCaches_();
     return {
       ok: true,
-      schemaVersion: MOL_DRILL_EXPECTED_SCHEMA_VERSION,
       message: '管理シートを全初期化しました。'
     };
   }
 
-  static getSchemaStatus() {
+  static getManagementSheetStatus() {
     const spreadsheet = SpreadsheetApp.getActiveSpreadsheet();
     const missingSheets = [];
     const missingHeadersBySheet = [];
@@ -917,26 +969,30 @@ class SheetRepository {
         unexpectedHeadersBySheet.push({ sheetName: definition.name, headers: unexpectedHeaders });
       }
     }
-    const schemaVersion = this.getSettingValue_('schemaVersion');
-    const versionOk = schemaVersion === MOL_DRILL_EXPECTED_SCHEMA_VERSION;
     return {
-      ok: missingSheets.length === 0 && missingHeadersBySheet.length === 0 && unexpectedHeadersBySheet.length === 0 && versionOk,
-      expectedSchemaVersion: MOL_DRILL_EXPECTED_SCHEMA_VERSION,
-      schemaVersion,
+      ok: missingSheets.length === 0 && missingHeadersBySheet.length === 0,
       missingSheets,
       missingHeadersBySheet,
       unexpectedHeadersBySheet
     };
   }
 
-  static assertManagementSchemaReady() {
-    if (!this.managementSchemaStatusCache_) {
-      this.managementSchemaStatusCache_ = this.getSchemaStatus();
+  static getSchemaStatus() {
+    return this.getManagementSheetStatus();
+  }
+
+  static assertManagementSheetsReady() {
+    if (!this.managementSheetStatusCache_) {
+      this.managementSheetStatusCache_ = this.getManagementSheetStatus();
     }
-    const status = this.managementSchemaStatusCache_;
+    const status = this.managementSheetStatusCache_;
     if (!status.ok) {
-      throw new Error(this.formatSchemaStatusMessage_(status));
+      throw new Error(this.formatManagementSheetStatusMessage_(status));
     }
+  }
+
+  static assertManagementSchemaReady() {
+    return this.assertManagementSheetsReady();
   }
 
   static writeCourseListToSheet(courses) {
@@ -1065,7 +1121,9 @@ class SheetRepository {
         studentUrl: this.toString_(row[headerMap.studentUrl - 1]),
         issuedAt: this.toString_(row[headerMap.issuedAt - 1]),
         lastAccessedAt: headerMap.lastAccessedAt ? this.toString_(row[headerMap.lastAccessedAt - 1]) : '',
-        revoked: row[headerMap.revoked - 1] === true || this.toString_(row[headerMap.revoked - 1]).toLowerCase() === 'true',
+        revoked: this.isFlagEnabled_(headerMap.revoked ? row[headerMap.revoked - 1] : ''),
+        postDeletionRequested: this.isRequestFlag_(headerMap['投稿削除'] ? row[headerMap['投稿削除'] - 1] : ''),
+        postDeletionStatus: this.normalizePostDeletionStatus_(headerMap['投稿削除'] ? row[headerMap['投稿削除'] - 1] : ''),
         note: this.toString_(row[headerMap.note - 1])
       }))
       .filter((row) => row.token !== '' || row.rosterKey !== '');
@@ -1073,6 +1131,11 @@ class SheetRepository {
 
   static tokenObjectToRow_(row) {
     const source = row || {};
+    const postDeletionRequestSource = source.postDeletionRequested != null
+      ? source.postDeletionRequested
+      : (source.deletePostRequested != null ? source.deletePostRequested : source['投稿削除']);
+    const postDeletionStatusSource = source.postDeletionStatus != null ? source.postDeletionStatus : source['投稿削除'];
+    const postDeletionRequested = this.isRequestFlag_(postDeletionRequestSource);
     return {
       token: this.toString_(source.token),
       courseId: this.toString_(source.courseId),
@@ -1085,7 +1148,9 @@ class SheetRepository {
       studentUrl: this.toString_(source.studentUrl),
       issuedAt: this.toString_(source.issuedAt),
       lastAccessedAt: this.toString_(source.lastAccessedAt),
-      revoked: source.revoked === true || this.toString_(source.revoked).toLowerCase() === 'true',
+      revoked: this.isFlagEnabled_(source.revoked),
+      postDeletionRequested,
+      postDeletionStatus: postDeletionRequested ? '' : this.normalizePostDeletionStatus_(postDeletionStatusSource),
       note: this.toString_(source.note)
     };
   }
@@ -1093,21 +1158,22 @@ class SheetRepository {
   static writeTokenRows(rows) {
     const sheet = this.getManagedSheet_('トークン管理');
     const headerMap = this.getHeaderColumnMap_(sheet);
-    const values = rows.map((row) => [
-      row.token,
-      row.courseId,
-      row.courseName,
-      row.rosterKey,
-      row.studentId,
-      row.number,
-      row.name,
-      row.email,
-      row.studentUrl,
-      row.issuedAt,
-      row.lastAccessedAt || '',
-      row.revoked === true,
-      row.note || ''
-    ]);
+    const values = rows.map((row) => ({
+      token: row.token,
+      courseId: row.courseId,
+      courseName: row.courseName,
+      rosterKey: row.rosterKey,
+      studentId: row.studentId,
+      '出席番号': row.number,
+      '氏名': row.name,
+      'メール': row.email,
+      studentUrl: row.studentUrl,
+      issuedAt: row.issuedAt,
+      lastAccessedAt: row.lastAccessedAt || '',
+      revoked: this.formatCompletedFlagValue_(this.isFlagEnabled_(row.revoked)),
+      '投稿削除': this.formatPostDeletionValue_(row),
+      note: row.note || ''
+    }));
     this.writeRowsByHeaders_(sheet, headerMap, this.getSheetDefinition_('トークン管理').headers, values);
   }
 
@@ -1139,15 +1205,16 @@ class SheetRepository {
       return null;
     }
     // token検証は生徒アクセスごとに走るため、全行読み込みを避けてtoken列だけを検索する。
-    const rowIndex = this.findRowIndexByHeaderValue_('トークン管理', 'token', normalizedToken, { matchCase: true });
+    const sheet = this.getStudentRuntimeSheet_('トークン管理');
+    const rowIndex = this.findRowIndexByHeaderValueInSheet_(sheet, 'token', normalizedToken, { matchCase: true });
     if (!rowIndex) {
       return null;
     }
-    return this.tokenObjectToRow_(this.readObjectAtRow_('トークン管理', rowIndex) || {});
+    return this.tokenObjectToRow_(this.readObjectAtRowFromSheet_(sheet, rowIndex) || {});
   }
 
   static appendAnswerLog(entry) {
-    const sheet = this.getManagedSheet_('解答ログ');
+    const sheet = this.getStudentRuntimeSheet_('解答ログ');
     const headerMap = this.getHeaderColumnMap_(sheet);
     const row = this.createBlankRow_(sheet);
     const values = {
@@ -1190,7 +1257,8 @@ class SheetRepository {
     if (normalizedRosterKey === '' || normalizedAttemptId === '') {
       return null;
     }
-    const rows = this.findObjectsByHeaderValue_('解答ログ', 'attemptId', normalizedAttemptId, { matchCase: true });
+    const sheet = this.getStudentRuntimeSheet_('解答ログ');
+    const rows = this.findObjectsByHeaderValueInSheet_(sheet, 'attemptId', normalizedAttemptId, { matchCase: true });
     for (const row of rows) {
       const answerLog = this.answerLogObjectToRow_(row);
       if (answerLog.rosterKey === normalizedRosterKey) {
@@ -1697,6 +1765,52 @@ class SheetRepository {
     };
   }
 
+  static readMonitorCacheRow(key) {
+    const normalizedKey = this.toString_(key);
+    if (normalizedKey === '') {
+      return null;
+    }
+    const rowIndex = this.findRowIndexByHeaderValue_('モニターキャッシュ', 'key', normalizedKey, { matchCase: true });
+    if (!rowIndex) {
+      return null;
+    }
+    return this.monitorCacheObjectToRow_(this.readObjectAtRow_('モニターキャッシュ', rowIndex) || {});
+  }
+
+  static upsertMonitorCacheRow(row) {
+    const normalizedKey = this.toString_(row && row.key);
+    if (normalizedKey === '') {
+      throw new Error('モニターキャッシュ更新対象のkeyが空です。');
+    }
+    const valuesByHeader = this.monitorCacheRowToHeaderValues_(row);
+    const rowIndex = this.findRowIndexByHeaderValue_('モニターキャッシュ', 'key', normalizedKey, { matchCase: true });
+    if (rowIndex) {
+      this.updateObjectRowByHeaders_('モニターキャッシュ', rowIndex, valuesByHeader);
+      return;
+    }
+    this.appendObjectRow_('モニターキャッシュ', valuesByHeader);
+  }
+
+  static monitorCacheObjectToRow_(row) {
+    const source = row || {};
+    return {
+      key: this.toString_(source.key),
+      json: this.toString_(source.json),
+      updatedAt: this.toString_(source.updatedAt),
+      note: this.toString_(source.note)
+    };
+  }
+
+  static monitorCacheRowToHeaderValues_(row) {
+    const source = row || {};
+    return {
+      key: this.toString_(source.key),
+      json: this.toString_(source.json),
+      updatedAt: this.toString_(source.updatedAt),
+      note: this.toString_(source.note)
+    };
+  }
+
   static appendDistributionLogs(logs) {
     if (!Array.isArray(logs) || logs.length === 0) {
       return;
@@ -1835,6 +1949,32 @@ class SheetRepository {
     return this.getSettingValue_(key);
   }
 
+  static getSettingValues(keys) {
+    const requestedKeys = Array.from(new Set((keys || []).map((key) => this.toString_(key)).filter((key) => key !== '')));
+    const result = {};
+    requestedKeys.forEach((key) => {
+      result[key] = '';
+    });
+    if (requestedKeys.length === 0) {
+      return result;
+    }
+    try {
+      const keySet = new Set(requestedKeys);
+      const sheet = this.getManagedSheetWithoutSchemaCheck_('設定');
+      const headerMap = this.getHeaderColumnMap_(sheet);
+      const rows = this.getBodyValues_(sheet);
+      for (const row of rows) {
+        const key = this.toString_(row[headerMap['キー'] - 1]);
+        if (keySet.has(key)) {
+          result[key] = this.toString_(row[headerMap['値'] - 1]);
+        }
+      }
+    } catch (_ignored) {
+      // Missing settings should fall back to defaults in the caller.
+    }
+    return result;
+  }
+
   static setSettingValue(key, value, description) {
     this.setSettingValues_([{ key, value, description: description || '' }]);
   }
@@ -1879,6 +2019,13 @@ class SheetRepository {
       }
     }
     this.writeRowsByHeaders_(sheet, headerMap, this.getSheetDefinition_('設定').headers, rows);
+    try {
+      if (typeof MolProblemService !== 'undefined' && MolProblemService.clearLevelSettingCache_) {
+        MolProblemService.clearLevelSettingCache_();
+      }
+    } catch (_ignored) {
+      // Cache invalidation is best-effort; settings remain the source of truth.
+    }
   }
 
   static ensureSheet_(spreadsheet, definition) {
@@ -1965,8 +2112,17 @@ class SheetRepository {
       const key = this.toString_(row[headerMap['キー'] - 1]);
       return key !== 'AVOGADRO_CONSTANT' && key !== 'DEFAULT_TOLERANCE';
     });
-    const existing = new Set(rows.map((row) => this.toString_(row[headerMap['キー'] - 1])));
+    const defaultsByKey = new Map(MOL_DRILL_DEFAULT_SETTINGS.map((setting) => [setting.key, setting]));
+    const existing = new Set();
     const now = this.nowIso_();
+    rows.forEach((row) => {
+      const key = this.toString_(row[headerMap['キー'] - 1]);
+      existing.add(key);
+      const defaultSetting = defaultsByKey.get(key);
+      if (defaultSetting) {
+        row[headerMap['説明'] - 1] = defaultSetting.description || '';
+      }
+    });
     const additions = MOL_DRILL_DEFAULT_SETTINGS
       .filter((setting) => !existing.has(setting.key))
       .map((setting) => [setting.key, setting.value || '', setting.description || '', now]);
@@ -1976,15 +2132,12 @@ class SheetRepository {
     this.writeRowsByHeaders_(sheet, headerMap, this.getSheetDefinition_('設定').headers, rows);
   }
 
-  static assertNoLegacySchemaBeforeSetup_() {
-    const schemaVersion = this.getSettingValue_('schemaVersion');
-    if (schemaVersion !== '' && schemaVersion !== MOL_DRILL_EXPECTED_SCHEMA_VERSION) {
-      throw new Error(`管理シートのスキーマが古いです。schemaVersion=${schemaVersion}、期待値=${MOL_DRILL_EXPECTED_SCHEMA_VERSION}。既存データを保持するため自動更新は行いません。必要なデータを確認したうえで「管理シート全初期化」を実行してください。`);
-    }
+  static getManagedSheet_(name) {
+    this.assertManagementSheetsReady();
+    return this.getManagedSheetWithoutSchemaCheck_(name);
   }
 
-  static getManagedSheet_(name) {
-    this.assertManagementSchemaReady();
+  static getStudentRuntimeSheet_(name) {
     return this.getManagedSheetWithoutSchemaCheck_(name);
   }
 
@@ -2036,6 +2189,10 @@ class SheetRepository {
 
   static findRowIndexByHeaderValue_(sheetName, headerName, value, options) {
     const sheet = this.getManagedSheet_(sheetName);
+    return this.findRowIndexByHeaderValueInSheet_(sheet, headerName, value, options);
+  }
+
+  static findRowIndexByHeaderValueInSheet_(sheet, headerName, value, options) {
     const headerMap = this.getHeaderColumnMap_(sheet);
     const column = headerMap[headerName];
     const lastRow = sheet.getLastRow();
@@ -2058,6 +2215,10 @@ class SheetRepository {
 
   static findObjectsByHeaderValue_(sheetName, headerName, value, options) {
     const sheet = this.getManagedSheet_(sheetName);
+    return this.findObjectsByHeaderValueInSheet_(sheet, headerName, value, options);
+  }
+
+  static findObjectsByHeaderValueInSheet_(sheet, headerName, value, options) {
     const headerMap = this.getHeaderColumnMap_(sheet);
     const column = headerMap[headerName];
     const lastRow = sheet.getLastRow();
@@ -2087,7 +2248,7 @@ class SheetRepository {
         break;
       }
       seenRows[rowIndex] = true;
-      const row = this.readObjectAtRow_(sheetName, rowIndex);
+      const row = this.readObjectAtRowFromSheet_(sheet, rowIndex);
       if (row) {
         rows.push(row);
       }
@@ -2097,6 +2258,10 @@ class SheetRepository {
 
   static readObjectAtRow_(sheetName, rowIndex) {
     const sheet = this.getManagedSheet_(sheetName);
+    return this.readObjectAtRowFromSheet_(sheet, rowIndex);
+  }
+
+  static readObjectAtRowFromSheet_(sheet, rowIndex) {
     const lastColumn = sheet.getLastColumn();
     if (rowIndex < 2 || rowIndex > sheet.getLastRow() || lastColumn < 1) {
       return null;
@@ -2268,21 +2433,16 @@ class SheetRepository {
     return new Array(Math.max(sheet.getLastColumn(), 1)).fill('');
   }
 
-  static formatSchemaStatusMessage_(status) {
+  static formatManagementSheetStatusMessage_(status) {
     const parts = [];
-    if (status.schemaVersion !== status.expectedSchemaVersion) {
-      parts.push(`schemaVersion=${status.schemaVersion || '(空)'} は期待値 ${status.expectedSchemaVersion} と一致しません。`);
-    }
     if (status.missingSheets.length > 0) {
       parts.push(`不足シート: ${status.missingSheets.join(', ')}`);
     }
     for (const item of status.missingHeadersBySheet) {
       parts.push(`${item.sheetName} シートに必要なヘッダーがありません: ${item.headers.join(', ')}`);
     }
-    for (const item of status.unexpectedHeadersBySheet || []) {
-      parts.push(`${item.sheetName} シートに現行スキーマでは使わないヘッダーがあります: ${item.headers.join(', ')}`);
-    }
-    return parts.join('\n') || '管理シートのスキーマが不正です。';
+    const detail = parts.join('\n') || '管理シートの構成を確認できません。';
+    return `${detail}\nスプレッドシートの「もるくえ！」メニューから「管理シートを作成・補修」を実行してください。`;
   }
 
   static nowIso_() {
@@ -2293,7 +2453,15 @@ class SheetRepository {
     return String(value == null ? '' : value).trim();
   }
 
-  static isCourseSyncEnabled_(value) {
+  static isFlagEnabled_(value) {
+    if (value === true) {
+      return true;
+    }
+    const normalized = this.toString_(value).toLowerCase();
+    return normalized === '1' || normalized === 'true' || normalized === '済';
+  }
+
+  static isRequestFlag_(value) {
     if (value === true) {
       return true;
     }
@@ -2301,8 +2469,37 @@ class SheetRepository {
     return normalized === '1' || normalized === 'true';
   }
 
-  static formatCourseSyncValue_(enabled) {
+  static formatFlagValue_(enabled) {
     return enabled === true ? '1' : '';
+  }
+
+  static formatCompletedFlagValue_(enabled) {
+    return enabled === true ? '済' : '';
+  }
+
+  static formatRequestFlagValue_(enabled) {
+    return enabled === true ? '1' : '';
+  }
+
+  static normalizePostDeletionStatus_(value) {
+    const normalized = this.toString_(value);
+    return ['済', '失敗', '対象なし'].includes(normalized) ? normalized : '';
+  }
+
+  static formatPostDeletionValue_(row) {
+    const status = this.normalizePostDeletionStatus_(row && row.postDeletionStatus);
+    if (status !== '') {
+      return status;
+    }
+    return this.formatRequestFlagValue_(this.isRequestFlag_(row && row.postDeletionRequested));
+  }
+
+  static isCourseSyncEnabled_(value) {
+    return this.isFlagEnabled_(value);
+  }
+
+  static formatCourseSyncValue_(enabled) {
+    return this.formatFlagValue_(enabled);
   }
 }
 
@@ -2382,6 +2579,15 @@ class ClassroomService {
     };
     return Classroom.Courses.Announcements.create(resource, normalizedCourseId);
   }
+
+  static deleteStudentUrlAnnouncement(courseId, announcementId) {
+    const normalizedCourseId = String(courseId || '').trim();
+    const normalizedAnnouncementId = String(announcementId || '').trim();
+    if (normalizedCourseId === '' || normalizedAnnouncementId === '') {
+      throw new Error('Classroomお知らせ削除に必要な courseId/announcementId が空です。');
+    }
+    return Classroom.Courses.Announcements.remove(normalizedCourseId, normalizedAnnouncementId);
+  }
 }
 
 class TokenService {
@@ -2389,6 +2595,10 @@ class TokenService {
     const normalizedCourseId = String(courseId || '').trim();
     const normalizedStudentId = String(studentId || '').trim();
     return normalizedCourseId === '' || normalizedStudentId === '' ? '' : `${normalizedCourseId}::${normalizedStudentId}`;
+  }
+
+  static isTeacherTestStudentRosterKey(rosterKey) {
+    return String(rosterKey || '').trim() === MOL_DRILL_TEACHER_TEST_STUDENT.rosterKey;
   }
 
   static generateToken() {
@@ -2416,7 +2626,13 @@ class TokenService {
         const studentId = String(student.studentId || '').trim();
         const rosterKey = String(student.rosterKey || this.createRosterKey(courseId, studentId)).trim();
         const existing = existingByRosterKey.get(rosterKey);
-        const reuseExisting = existing && existing.revoked !== true && String(existing.token || '').trim() !== '';
+        const reuseExisting = existing && !SheetRepository.isFlagEnabled_(existing.revoked) && String(existing.token || '').trim() !== '';
+        const existingPostDeletionRequested = reuseExisting && SheetRepository.isRequestFlag_(
+          existing.postDeletionRequested != null ? existing.postDeletionRequested : existing['投稿削除']
+        );
+        const existingPostDeletionStatus = reuseExisting && !existingPostDeletionRequested
+          ? SheetRepository.normalizePostDeletionStatus_(existing.postDeletionStatus != null ? existing.postDeletionStatus : existing['投稿削除'])
+          : '';
         const token = reuseExisting ? String(existing.token).trim() : createToken(student);
         return {
           token,
@@ -2431,9 +2647,52 @@ class TokenService {
           issuedAt: reuseExisting ? String(existing.issuedAt || issuedAt).trim() : issuedAt,
           lastAccessedAt: reuseExisting ? String(existing.lastAccessedAt || '').trim() : '',
           revoked: false,
+          postDeletionRequested: reuseExisting ? existingPostDeletionRequested : false,
+          postDeletionStatus: reuseExisting ? existingPostDeletionStatus : '',
           note: reuseExisting ? String(existing.note || '').trim() : ''
         };
       });
+  }
+
+  static ensureTeacherTestStudentToken(baseUrl) {
+    SheetRepository.assertManagementSheetsReady();
+    const normalizedBaseUrl = String(baseUrl || '').trim();
+    const issuedAt = new Date().toISOString();
+    const existingRows = SheetRepository.readTokenRows();
+    const existing = existingRows.find((row) => this.isTeacherTestStudentRosterKey(row.rosterKey)) || null;
+    const reuseExisting = existing && !SheetRepository.isFlagEnabled_(existing.revoked) && String(existing.token || '').trim() !== '';
+    const token = reuseExisting ? String(existing.token).trim() : this.generateToken();
+    const note = this.ensureTeacherTestStudentNote_(reuseExisting ? existing.note : '');
+    const testRow = {
+      token,
+      courseId: MOL_DRILL_TEACHER_TEST_STUDENT.courseId,
+      courseName: MOL_DRILL_TEACHER_TEST_STUDENT.courseName,
+      rosterKey: MOL_DRILL_TEACHER_TEST_STUDENT.rosterKey,
+      studentId: MOL_DRILL_TEACHER_TEST_STUDENT.studentId,
+      number: MOL_DRILL_TEACHER_TEST_STUDENT.number,
+      name: MOL_DRILL_TEACHER_TEST_STUDENT.name,
+      email: MOL_DRILL_TEACHER_TEST_STUDENT.email,
+      studentUrl: this.buildStudentUrl(normalizedBaseUrl, token),
+      issuedAt: reuseExisting ? String(existing.issuedAt || issuedAt).trim() : issuedAt,
+      lastAccessedAt: reuseExisting ? String(existing.lastAccessedAt || '').trim() : '',
+      revoked: false,
+      postDeletionRequested: false,
+      postDeletionStatus: '',
+      note
+    };
+    const preservedRows = existingRows.filter((row) => !this.isTeacherTestStudentRosterKey(row.rosterKey));
+    SheetRepository.writeTokenRows([...preservedRows, testRow]);
+    this.clearTokenRowCachesForRows_([existing, testRow]);
+    return testRow;
+  }
+
+  static ensureTeacherTestStudentNote_(current) {
+    const existing = String(current || '').trim();
+    const required = MOL_DRILL_TEACHER_TEST_STUDENT.note;
+    if (existing === '') {
+      return required;
+    }
+    return existing.includes(required) ? existing : this.appendNote_(existing, required);
   }
 
   static reissueTokenRowsForRosterKey(rows, rosterKey, baseUrl, issuedAt, tokenFactory) {
@@ -2455,6 +2714,8 @@ class TokenService {
         issuedAt,
         lastAccessedAt: '',
         revoked: false,
+        postDeletionRequested: false,
+        postDeletionStatus: '',
         note: this.appendNote_(row.note, `再発行 ${issuedAt}`)
       };
       return updated;
@@ -2489,7 +2750,7 @@ class TokenService {
   }
 
   static issueTokensForCheckedCourses(options) {
-    SheetRepository.assertManagementSchemaReady();
+    SheetRepository.assertManagementSheetsReady();
     const baseUrl = this.resolveStudentWebAppUrl_(options && options.baseUrl);
     const issuedAt = new Date().toISOString();
     const students = SheetRepository.getStudentsForCheckedCourses();
@@ -2498,6 +2759,10 @@ class TokenService {
     const preservedRows = existingRows.filter((row) => !touchedKeys.has(row.rosterKey));
     const issuedRows = this.buildTokenRowsForStudents(students, existingRows, baseUrl, issuedAt);
     SheetRepository.writeTokenRows([...preservedRows, ...issuedRows]);
+    this.clearTokenRowCachesForRows_([
+      ...existingRows.filter((row) => touchedKeys.has(row.rosterKey)),
+      ...issuedRows
+    ]);
     return {
       issued: issuedRows.length,
       rows: issuedRows
@@ -2505,7 +2770,7 @@ class TokenService {
   }
 
   static issueTokensForActiveStudents(options) {
-    SheetRepository.assertManagementSchemaReady();
+    SheetRepository.assertManagementSheetsReady();
     const baseUrl = this.resolveStudentWebAppUrl_(options && options.baseUrl);
     const issuedAt = new Date().toISOString();
     const students = SheetRepository.getActiveStudents();
@@ -2514,6 +2779,10 @@ class TokenService {
     const preservedRows = existingRows.filter((row) => !touchedKeys.has(row.rosterKey));
     const issuedRows = this.buildTokenRowsForStudents(students, existingRows, baseUrl, issuedAt);
     SheetRepository.writeTokenRows([...preservedRows, ...issuedRows]);
+    this.clearTokenRowCachesForRows_([
+      ...existingRows.filter((row) => touchedKeys.has(row.rosterKey)),
+      ...issuedRows
+    ]);
     return {
       issued: issuedRows.length,
       rows: issuedRows
@@ -2521,19 +2790,27 @@ class TokenService {
   }
 
   static reissueStudentToken(rosterKey, options) {
-    SheetRepository.assertManagementSchemaReady();
+    SheetRepository.assertManagementSheetsReady();
     const baseUrl = this.resolveStudentWebAppUrl_(options && options.baseUrl);
     const rows = SheetRepository.readTokenRows();
     const result = this.reissueTokenRowsForRosterKey(rows, rosterKey, baseUrl, new Date().toISOString());
     SheetRepository.writeTokenRows(result.rows);
+    this.clearTokenRowCachesForRows_([
+      ...rows.filter((row) => String(row.rosterKey || '').trim() === String(rosterKey || '').trim()),
+      result.updated
+    ]);
     return result.updated;
   }
 
   static revokeStudentToken(rosterKey) {
-    SheetRepository.assertManagementSchemaReady();
+    SheetRepository.assertManagementSheetsReady();
     const rows = SheetRepository.readTokenRows();
     const result = this.revokeTokenRowsForRosterKey(rows, rosterKey, new Date().toISOString());
     SheetRepository.writeTokenRows(result.rows);
+    this.clearTokenRowCachesForRows_([
+      ...rows.filter((row) => String(row.rosterKey || '').trim() === String(rosterKey || '').trim()),
+      result.updated
+    ]);
     return result.updated;
   }
 
@@ -2546,7 +2823,7 @@ class TokenService {
     if (!tokenRow) {
       throw new Error('tokenが見つかりません。');
     }
-    if (tokenRow.revoked === true || String(tokenRow.revoked || '').toLowerCase() === 'true') {
+    if (SheetRepository.isFlagEnabled_(tokenRow.revoked)) {
       throw new Error('このtokenは無効化されています。');
     }
     if (String(tokenRow.rosterKey || '').trim() === '') {
@@ -2555,12 +2832,127 @@ class TokenService {
     return tokenRow;
   }
 
-  static validateToken(token) {
+  static findTokenForValidation_(token, timings) {
+    const normalizedToken = String(token || '').trim();
+    if (normalizedToken === '') {
+      return null;
+    }
+    const metrics = timings || {};
+    const cacheReadStartedAtMs = Date.now();
+    const cached = this.readTokenRowCache_(normalizedToken);
+    metrics.tokenCacheReadElapsedMs = (metrics.tokenCacheReadElapsedMs || 0) + (Date.now() - cacheReadStartedAtMs);
+    if (cached) {
+      return cached;
+    }
+    const sheetFindStartedAtMs = Date.now();
+    const tokenRow = SheetRepository.findToken(normalizedToken);
+    metrics.tokenSheetFindElapsedMs = (metrics.tokenSheetFindElapsedMs || 0) + (Date.now() - sheetFindStartedAtMs);
+    if (tokenRow) {
+      const cacheWriteStartedAtMs = Date.now();
+      this.writeTokenRowCache_(tokenRow);
+      metrics.tokenCacheWriteElapsedMs = (metrics.tokenCacheWriteElapsedMs || 0) + (Date.now() - cacheWriteStartedAtMs);
+    }
+    return tokenRow;
+  }
+
+  static readTokenRowCache_(token) {
+    const cache = this.getTokenRowCache_();
+    if (!cache || typeof cache.get !== 'function') {
+      return null;
+    }
+    const normalizedToken = String(token || '').trim();
+    try {
+      const raw = cache.get(this.createTokenRowCacheKey_(normalizedToken));
+      if (!raw) {
+        return null;
+      }
+      const parsed = JSON.parse(raw);
+      if (!parsed || typeof parsed !== 'object' || String(parsed.token || '').trim() !== normalizedToken) {
+        return null;
+      }
+      return parsed;
+    } catch (_ignored) {
+      return null;
+    }
+  }
+
+  static writeTokenRowCache_(tokenRow) {
+    const cache = this.getTokenRowCache_();
+    if (!cache || typeof cache.put !== 'function') {
+      return;
+    }
+    const normalizedToken = String(tokenRow && tokenRow.token || '').trim();
+    if (normalizedToken === '') {
+      return;
+    }
+    try {
+      cache.put(this.createTokenRowCacheKey_(normalizedToken), JSON.stringify(tokenRow), MOL_DRILL_TOKEN_ROW_CACHE_TTL_SECONDS);
+    } catch (_ignored) {
+      // token cache is a short-lived optimization; validation must still work without it.
+    }
+  }
+
+  static clearTokenRowCache_(token) {
+    const cache = this.getTokenRowCache_();
+    const normalizedToken = String(token || '').trim();
+    if (!cache || normalizedToken === '') {
+      return;
+    }
+    try {
+      const key = this.createTokenRowCacheKey_(normalizedToken);
+      if (typeof cache.remove === 'function') {
+        cache.remove(key);
+      } else if (typeof cache.put === 'function') {
+        cache.put(key, '', 1);
+      }
+    } catch (_ignored) {
+      // Best effort: stale entries expire quickly.
+    }
+  }
+
+  static clearTokenRowCachesForRows_(rows) {
+    const seen = new Set();
+    for (const row of rows || []) {
+      const token = String(row && row.token || '').trim();
+      if (token === '' || seen.has(token)) {
+        continue;
+      }
+      seen.add(token);
+      this.clearTokenRowCache_(token);
+    }
+  }
+
+  static createTokenRowCacheKey_(token) {
+    return `tokenRowCache:${this.hashCacheKey_(`${String(token || '').trim()}|token-row-v1`)}`;
+  }
+
+  static hashCacheKey_(text) {
+    let hash = 2166136261;
+    const source = String(text || '');
+    for (let index = 0; index < source.length; index += 1) {
+      hash ^= source.charCodeAt(index);
+      hash = Math.imul(hash, 16777619);
+    }
+    return (hash >>> 0).toString(36);
+  }
+
+  static getTokenRowCache_() {
+    try {
+      if (typeof CacheService !== 'undefined' && CacheService.getScriptCache) {
+        return CacheService.getScriptCache();
+      }
+    } catch (_ignored) {
+      return null;
+    }
+    return null;
+  }
+
+  static validateToken(token, timings) {
     const normalizedToken = String(token || '').trim();
     if (normalizedToken === '') {
       throw new Error('tokenが空です。');
     }
-    const tokenRow = SheetRepository.findToken(normalizedToken);
+    const tokenRow = this.findTokenForValidation_(normalizedToken, timings || {});
     return this.validateTokenAgainstRows(normalizedToken, tokenRow ? [tokenRow] : []);
   }
 
@@ -3569,9 +3961,10 @@ class MolProblemService {
     if (Object.prototype.hasOwnProperty.call(cache, key)) {
       return cache[key];
     }
+    const values = this.getLevelSettingValues_();
     let value = fallback;
     try {
-      const numeric = Number(SheetRepository.getSettingValue(key));
+      const numeric = Number(values[key]);
       if (Number.isFinite(numeric) && numeric > 0) {
         value = numeric;
       }
@@ -3580,6 +3973,83 @@ class MolProblemService {
     }
     cache[key] = value;
     return value;
+  }
+
+  static getLevelSettingValues_() {
+    if (this.levelSettingRawValues_) {
+      return this.levelSettingRawValues_;
+    }
+    const scriptCache = this.getLevelSettingScriptCache_();
+    const cacheKey = this.getLevelSettingScriptCacheKey_();
+    if (scriptCache) {
+      try {
+        const cached = scriptCache.get(cacheKey);
+        if (cached) {
+          const parsed = JSON.parse(cached);
+          if (parsed && typeof parsed === 'object') {
+            this.levelSettingRawValues_ = parsed;
+            return this.levelSettingRawValues_;
+          }
+        }
+      } catch (_ignored) {
+        // Corrupted cache is ignored and settings are read from the sheet.
+      }
+    }
+    const keys = this.getLevelSettingKeys_();
+    let values = {};
+    try {
+      values = SheetRepository.getSettingValues(keys);
+    } catch (_ignored) {
+      values = {};
+    }
+    keys.forEach((key) => {
+      if (!Object.prototype.hasOwnProperty.call(values, key)) {
+        values[key] = '';
+      }
+    });
+    this.levelSettingRawValues_ = values;
+    if (scriptCache) {
+      try {
+        scriptCache.put(cacheKey, JSON.stringify(values), 120);
+      } catch (_ignored) {
+        // Script cache is an optimization only.
+      }
+    }
+    return this.levelSettingRawValues_;
+  }
+
+  static getLevelSettingKeys_() {
+    return Object.values(MOL_DRILL_LEVEL_SETTING_DEFAULTS)
+      .flatMap((defaults) => [defaults.avogadroConstantKey, defaults.toleranceKey]);
+  }
+
+  static getLevelSettingScriptCache_() {
+    try {
+      if (typeof CacheService !== 'undefined' && CacheService.getScriptCache) {
+        return CacheService.getScriptCache();
+      }
+    } catch (_ignored) {
+      return null;
+    }
+    return null;
+  }
+
+  static getLevelSettingScriptCacheKey_() {
+    return 'molDrill:levelSettings:v1';
+  }
+
+  static clearLevelSettingCache_() {
+    this.levelSettingCache_ = {};
+    this.levelSettingRawValues_ = null;
+    const scriptCache = this.getLevelSettingScriptCache_();
+    if (!scriptCache) {
+      return;
+    }
+    try {
+      scriptCache.remove(this.getLevelSettingScriptCacheKey_());
+    } catch (_ignored) {
+      // Ignore cache removal failures.
+    }
   }
 
   static getLevelSettingCache_() {
@@ -3719,12 +4189,12 @@ class MolProblemService {
   static createInputHint_(problem) {
     if (problem.level === 'advanced') {
       if (problem.unit === '個' || Math.abs(Number(problem.expectedAnswer || 0)) >= 100000) {
-        return '有効数字3桁で答えよう。例: 6.02e23 または 6.02×10^23';
+        return '有効数字3桁で答えよう。例: 6.02×10^23 または 6.02x10^23';
       }
       return `有効数字3桁で答えよう。単位 ${problem.unit} は入力しません。`;
     }
     if (problem.unit === '個' || Math.abs(Number(problem.expectedAnswer || 0)) >= 100000) {
-      return '数値のみ。例: 6e23 または 6×10^23';
+      return '数値のみ。例: 6.0×10^23 または 6.0x10^23';
     }
     return `数値のみ。単位 ${problem.unit} は入力しません。`;
   }
@@ -4050,66 +4520,106 @@ class AdaptiveProblemService {
 
 class AnswerService {
   static initializeTeacherPreviewSession(authToken, options) {
-    AdminService.assertAdminAccess(authToken);
-    const student = this.getTeacherPreviewStudent_(options && options.studentToken);
-    return {
-      ok: true,
-      teacherPreview: true,
-      student,
-      summary: this.buildTeacherPreviewSummary_(student),
-      problem: MolProblemService.issueProblemForToken(this.createTeacherPreviewProblemKey_(authToken), options || {}).publicProblem
-    };
+    const startedAtMs = Date.now();
+    let problemElapsedMs = 0;
+    try {
+      AdminService.assertAdminAccess(authToken);
+      const student = this.getTeacherPreviewStudent_(options && options.studentToken);
+      const problemStartedAtMs = Date.now();
+      const problem = MolProblemService.issueProblemForToken(this.createTeacherPreviewProblemKey_(authToken), options || {}).publicProblem;
+      problemElapsedMs = Date.now() - problemStartedAtMs;
+      return {
+        ok: true,
+        teacherPreview: true,
+        student,
+        summary: this.buildTeacherPreviewSummary_(student),
+        problem
+      };
+    } finally {
+      LoggerService.logDeveloperInfo(`initializeTeacherPreviewSession elapsedMs=${Date.now() - startedAtMs} problemElapsedMs=${problemElapsedMs} mode=teacherPreview`);
+    }
   }
 
   static getTeacherPreviewProblem(authToken, options) {
-    AdminService.assertAdminAccess(authToken);
-    return MolProblemService.issueProblemForToken(this.createTeacherPreviewProblemKey_(authToken), options || {}).publicProblem;
+    const startedAtMs = Date.now();
+    let problemElapsedMs = 0;
+    try {
+      AdminService.assertAdminAccess(authToken);
+      const problemStartedAtMs = Date.now();
+      const problem = MolProblemService.issueProblemForToken(this.createTeacherPreviewProblemKey_(authToken), options || {}).publicProblem;
+      problemElapsedMs = Date.now() - problemStartedAtMs;
+      return problem;
+    } finally {
+      LoggerService.logDeveloperInfo(`getTeacherPreviewProblem elapsedMs=${Date.now() - startedAtMs} problemElapsedMs=${problemElapsedMs} mode=teacherPreview`);
+    }
   }
 
   static submitTeacherPreviewAnswer(authToken, request) {
-    AdminService.assertAdminAccess(authToken);
-    const source = request || {};
-    const submittedProblem = source.problem || {};
-    const problem = MolProblemService.getStoredProblemForToken(this.createTeacherPreviewProblemKey_(authToken), submittedProblem.attemptId);
-    const submittedProblemId = String(submittedProblem.problemId || '').trim();
-    if (submittedProblemId !== '' && submittedProblemId !== String(problem.problemId || '').trim()) {
-      throw new Error('送信された問題IDと保存済み問題が一致しません。新しい問題を取得してください。');
-    }
-    const grade = MolProblemService.gradeProblemAnswer(problem, source.submittedAnswer);
-    const student = this.getTeacherPreviewStudent_();
-    const entry = {
-      timestamp: new Date().toISOString(),
-      attemptId: String(problem.attemptId || ''),
-      token: '',
-      courseId: student.courseId,
-      courseName: student.courseName,
-      rosterKey: student.rosterKey,
-      studentId: student.studentId,
-      number: student.number,
-      name: student.name,
-      level: String(problem.level || source.level || ''),
-      problemType: String(problem.problemType || ''),
-      questionText: String(problem.questionText || ''),
-      expectedAnswer: problem.expectedAnswer,
-      submittedAnswer: String(source.submittedAnswer == null ? '' : source.submittedAnswer),
-      normalizedSubmittedAnswer: grade.normalizedSubmittedAnswer,
-      unit: String(problem.unit || ''),
-      isCorrect: grade.isCorrect,
-      tolerance: grade.tolerance,
-      acceptedAnswerType: grade.acceptedAnswerType,
-      acceptedAnswer: grade.acceptedAnswer,
-      exactAnswer: grade.exactAnswer,
-      significantDigits: problem.significantDigits || '',
-      avogadroConstant: problem.avogadroConstant || '',
-      requiresRounding: problem.requiresRounding === true,
-      explanation: String(problem.explanation || ''),
-      elapsedMs: Number(source.elapsedMs || 0),
-      clientInfo: JSON.stringify(this.buildAnswerClientInfo_(source.clientInfo, grade))
+    const startedAtMs = Date.now();
+    const timings = {
+      storedProblemElapsedMs: 0,
+      gradingElapsedMs: 0,
+      nextProblemElapsedMs: 0
     };
-    const nextProblem = MolProblemService.issueProblemForToken(this.createTeacherPreviewProblemKey_(authToken), {
-      level: source.nextLevel || problem.level
-    }).publicProblem;
-    return this.buildSubmitAnswerResponse(entry, this.buildTeacherPreviewSummary_(student), nextProblem);
+    let attemptId = '';
+    let skipNextProblem = false;
+    try {
+      AdminService.assertAdminAccess(authToken);
+      const source = request || {};
+      const submittedProblem = source.problem || {};
+      const storedProblemStartedAtMs = Date.now();
+      const problem = MolProblemService.getStoredProblemForToken(this.createTeacherPreviewProblemKey_(authToken), submittedProblem.attemptId);
+      timings.storedProblemElapsedMs = Date.now() - storedProblemStartedAtMs;
+      const submittedProblemId = String(submittedProblem.problemId || '').trim();
+      if (submittedProblemId !== '' && submittedProblemId !== String(problem.problemId || '').trim()) {
+        throw new Error('送信された問題IDと保存済み問題が一致しません。新しい問題を取得してください。');
+      }
+      const gradingStartedAtMs = Date.now();
+      const grade = MolProblemService.gradeProblemAnswer(problem, source.submittedAnswer);
+      timings.gradingElapsedMs = Date.now() - gradingStartedAtMs;
+      const student = this.getTeacherPreviewStudent_();
+      const entry = {
+        timestamp: new Date().toISOString(),
+        attemptId: String(problem.attemptId || ''),
+        token: '',
+        courseId: student.courseId,
+        courseName: student.courseName,
+        rosterKey: student.rosterKey,
+        studentId: student.studentId,
+        number: student.number,
+        name: student.name,
+        level: String(problem.level || source.level || ''),
+        problemType: String(problem.problemType || ''),
+        questionText: String(problem.questionText || ''),
+        expectedAnswer: problem.expectedAnswer,
+        submittedAnswer: String(source.submittedAnswer == null ? '' : source.submittedAnswer),
+        normalizedSubmittedAnswer: grade.normalizedSubmittedAnswer,
+        unit: String(problem.unit || ''),
+        isCorrect: grade.isCorrect,
+        tolerance: grade.tolerance,
+        acceptedAnswerType: grade.acceptedAnswerType,
+        acceptedAnswer: grade.acceptedAnswer,
+        exactAnswer: grade.exactAnswer,
+        significantDigits: problem.significantDigits || '',
+        avogadroConstant: problem.avogadroConstant || '',
+        requiresRounding: problem.requiresRounding === true,
+        explanation: String(problem.explanation || ''),
+        elapsedMs: Number(source.elapsedMs || 0),
+        clientInfo: JSON.stringify(this.buildAnswerClientInfo_(source.clientInfo, grade))
+      };
+      attemptId = entry.attemptId;
+      skipNextProblem = source.skipNextProblem === true;
+      const nextProblemStartedAtMs = Date.now();
+      const nextProblem = skipNextProblem
+        ? null
+        : MolProblemService.issueProblemForToken(this.createTeacherPreviewProblemKey_(authToken), {
+          level: source.nextLevel || problem.level
+        }).publicProblem;
+      timings.nextProblemElapsedMs = Date.now() - nextProblemStartedAtMs;
+      return this.buildSubmitAnswerResponse(entry, this.buildTeacherPreviewSummary_(student), nextProblem);
+    } finally {
+      LoggerService.logDeveloperInfo(`submitTeacherPreviewAnswer elapsedMs=${Date.now() - startedAtMs} storedProblemElapsedMs=${timings.storedProblemElapsedMs} gradingElapsedMs=${timings.gradingElapsedMs} nextProblemElapsedMs=${timings.nextProblemElapsedMs} mode=teacherPreview attemptId=${attemptId} skipNextProblem=${skipNextProblem}`);
+    }
   }
 
   static createTeacherPreviewProblemKey_(authToken) {
@@ -4139,34 +4649,57 @@ class AnswerService {
   }
 
   static initializeStudentSession(token, options) {
-    const tokenRow = this.requireActiveToken_(token);
-    this.recordStudentAccess_(tokenRow);
-    const summary = this.getStudentAnswerSummaryFromCache_(tokenRow);
-    const firstProblem = this.issueProblemForStudent_(tokenRow, options || {}).publicProblem;
-    return {
-      ok: true,
-      student: this.toPublicStudent_(tokenRow),
-      summary,
-      problem: firstProblem
+    const startedAtMs = Date.now();
+    let tokenRow = null;
+    let tokenElapsedMs = 0;
+    const tokenTimings = {
+      tokenCacheReadElapsedMs: 0,
+      tokenSheetFindElapsedMs: 0,
+      tokenCacheWriteElapsedMs: 0
     };
+    let summaryElapsedMs = 0;
+    let adaptiveElapsedMs = 0;
+    let problemElapsedMs = 0;
+    let accessRecordStatus = 'skipped_student_runtime';
+    try {
+      const tokenStartedAtMs = Date.now();
+      tokenRow = this.requireActiveToken_(token, tokenTimings);
+      tokenElapsedMs = Date.now() - tokenStartedAtMs;
+      const summaryStartedAtMs = Date.now();
+      const summary = this.buildStudentSummaryFromAggregate_(tokenRow, {});
+      summaryElapsedMs = Date.now() - summaryStartedAtMs;
+      const issuedWithTiming = this.issueProblemForStudentWithTiming_(tokenRow, options || {});
+      adaptiveElapsedMs = issuedWithTiming.adaptiveElapsedMs;
+      problemElapsedMs = issuedWithTiming.problemElapsedMs;
+      return {
+        ok: true,
+        student: this.toPublicStudent_(tokenRow),
+        summary,
+        problem: issuedWithTiming.issued.publicProblem
+      };
+    } finally {
+      LoggerService.logDeveloperInfo(`initializeStudentSession elapsedMs=${Date.now() - startedAtMs} mode=student studentRoute=fast tokenElapsedMs=${tokenElapsedMs} tokenCacheReadElapsedMs=${tokenTimings.tokenCacheReadElapsedMs} tokenSheetFindElapsedMs=${tokenTimings.tokenSheetFindElapsedMs} tokenCacheWriteElapsedMs=${tokenTimings.tokenCacheWriteElapsedMs} accessRecord=${accessRecordStatus} summaryElapsedMs=${summaryElapsedMs} adaptiveElapsedMs=${adaptiveElapsedMs} problemElapsedMs=${problemElapsedMs} rosterKey=${tokenRow ? tokenRow.rosterKey : ''}`);
+    }
   }
 
   static recordStudentAccess_(tokenRow) {
     if (typeof SpreadsheetApp === 'undefined') {
-      return;
+      return 'skipped_no_spreadsheet';
     }
     const token = String(tokenRow && tokenRow.token || '').trim();
     // lastAccessedAt更新は初回アクセス時に集中するため、短時間の再アクセスはスロットリングする。
     if (token === '' || this.hasRecentStudentAccessRecord_(token)) {
-      return;
+      return token === '' ? 'skipped_missing_token' : 'skipped_recent';
     }
     try {
       SheetRepository.withDocumentLock(() => {
         SheetRepository.recordTokenAccess(token, new Date().toISOString());
       });
       this.rememberStudentAccessRecord_(token);
+      return 'recorded';
     } catch (error) {
       LoggerService.logDeveloperError(`Failed to record student access for ${tokenRow && tokenRow.rosterKey}`, error);
+      return 'failed';
     }
   }
 
@@ -4216,25 +4749,56 @@ class AnswerService {
   }
 
   static getStudentState(token) {
-    const tokenRow = this.requireActiveToken_(token);
+    const tokenRow = this.requireActiveToken_(token, {});
     return {
       student: this.toPublicStudent_(tokenRow),
-      summary: this.getStudentAnswerSummaryFromCache_(tokenRow)
+      summary: this.buildStudentSummaryFromAggregate_(tokenRow, {})
     };
   }
 
   static getPracticeProblem(token, options) {
-    const tokenRow = this.requireActiveToken_(token);
-    return this.issueProblemForStudent_(tokenRow, options || {}).publicProblem;
+    const startedAtMs = Date.now();
+    let tokenRow = null;
+    let tokenElapsedMs = 0;
+    const tokenTimings = {
+      tokenCacheReadElapsedMs: 0,
+      tokenSheetFindElapsedMs: 0,
+      tokenCacheWriteElapsedMs: 0
+    };
+    let adaptiveElapsedMs = 0;
+    let problemElapsedMs = 0;
+    try {
+      const tokenStartedAtMs = Date.now();
+      tokenRow = this.requireActiveToken_(token, tokenTimings);
+      tokenElapsedMs = Date.now() - tokenStartedAtMs;
+      const issuedWithTiming = this.issueProblemForStudentWithTiming_(tokenRow, options || {});
+      adaptiveElapsedMs = issuedWithTiming.adaptiveElapsedMs;
+      problemElapsedMs = issuedWithTiming.problemElapsedMs;
+      return issuedWithTiming.issued.publicProblem;
+    } finally {
+      LoggerService.logDeveloperInfo(`getPracticeProblem elapsedMs=${Date.now() - startedAtMs} mode=student studentRoute=fast tokenElapsedMs=${tokenElapsedMs} tokenCacheReadElapsedMs=${tokenTimings.tokenCacheReadElapsedMs} tokenSheetFindElapsedMs=${tokenTimings.tokenSheetFindElapsedMs} tokenCacheWriteElapsedMs=${tokenTimings.tokenCacheWriteElapsedMs} adaptiveElapsedMs=${adaptiveElapsedMs} problemElapsedMs=${problemElapsedMs} rosterKey=${tokenRow ? tokenRow.rosterKey : ''}`);
+    }
   }
 
   static issueProblemForStudent_(tokenRow, options) {
-    const issueOptions = AdaptiveProblemService.buildIssueOptionsForStudent(tokenRow, options || {});
+    return this.issueProblemForStudentWithTiming_(tokenRow, options || {}).issued;
+  }
+
+  static issueProblemForStudentWithTiming_(tokenRow, options) {
+    const sourceOptions = options || {};
+    const adaptiveElapsedMs = 0;
+    const issueOptions = {
+      ...sourceOptions,
+      level: MolProblemService.normalizeLevel_(sourceOptions.level)
+    };
+    const problemStartedAtMs = Date.now();
     const issued = MolProblemService.issueProblemForToken(tokenRow.token, issueOptions);
-    if (AdaptiveProblemService.isEnabled(options || {})) {
-      AdaptiveProblemService.rememberIssuedProblemType(tokenRow, issued.problem.level, issued.problem.problemType);
-    }
-    return issued;
+    const problemElapsedMs = Date.now() - problemStartedAtMs;
+    return {
+      issued,
+      adaptiveElapsedMs,
+      problemElapsedMs
+    };
   }
 
   static submitAnswer(request) {
@@ -4244,16 +4808,42 @@ class AnswerService {
     let duplicate = false;
     let cacheUpdated = false;
     let problemTypeCacheUpdated = false;
-    let aggregatePath = '';
+    let aggregatePath = 'deferred_aggregate_update';
+    let deferredSummaryUpdate = false;
+    let nextProblemIncluded = false;
+    const tokenTimings = {
+      tokenCacheReadElapsedMs: 0,
+      tokenSheetFindElapsedMs: 0,
+      tokenCacheWriteElapsedMs: 0
+    };
+    const timings = {
+      tokenElapsedMs: 0,
+      storedProblemElapsedMs: 0,
+      gradingElapsedMs: 0,
+      lockElapsedMs: 0,
+      appendLogElapsedMs: 0,
+      duplicateCheckElapsedMs: 0,
+      appendOnlyElapsedMs: 0,
+      documentLockWaitAndRunElapsedMs: 0,
+      aggregateUpdateElapsedMs: 0,
+      problemTypeCacheUpdateElapsedMs: 0,
+      nextProblemElapsedMs: 0
+    };
     try {
-      tokenRow = this.requireActiveToken_(request && request.token);
+      const tokenStartedAtMs = Date.now();
+      tokenRow = this.requireActiveToken_(request && request.token, tokenTimings);
+      timings.tokenElapsedMs = Date.now() - tokenStartedAtMs;
       const submittedProblem = request.problem || {};
+      const storedProblemStartedAtMs = Date.now();
       const problem = MolProblemService.getStoredProblemForToken(tokenRow.token, submittedProblem.attemptId);
+      timings.storedProblemElapsedMs = Date.now() - storedProblemStartedAtMs;
       const submittedProblemId = String(submittedProblem.problemId || '').trim();
       if (submittedProblemId !== '' && submittedProblemId !== String(problem.problemId || '').trim()) {
         throw new Error('送信された問題IDと保存済み問題が一致しません。新しい問題を取得してください。');
       }
+      const gradingStartedAtMs = Date.now();
       const grade = MolProblemService.gradeProblemAnswer(problem, request.submittedAnswer);
+      timings.gradingElapsedMs = Date.now() - gradingStartedAtMs;
       const now = new Date().toISOString();
       const entry = {
         timestamp: now,
@@ -4287,61 +4877,38 @@ class AnswerService {
       attemptId = entry.attemptId;
       let logEntry = entry;
       let summary = null;
-      SheetRepository.withDocumentLock(() => {
-        // 同じattemptIdの再送は既存ログを返し、解答ログを二重に増やさない。
-        const existingLog = SheetRepository.findAnswerLogByAttemptId(entry.rosterKey, entry.attemptId);
-        if (existingLog) {
-          logEntry = this.toEntryFromExistingLog_(existingLog);
-          duplicate = true;
-        } else {
-          SheetRepository.appendAnswerLog(entry);
-        }
-        let aggregateRow = null;
-        try {
-          aggregateRow = SheetRepository.findAggregateCacheByRosterKey(tokenRow.rosterKey);
-        } catch (error) {
-          LoggerService.logDeveloperError(`Failed to read aggregate cache row for ${tokenRow.rosterKey}`, error);
-        }
-        if (duplicate) {
-          const recentRows = this.readLatestAnswerLogsForRosterKeySafely_(tokenRow.rosterKey, logEntry);
-          summary = this.buildFastStudentAnswerSummary_(tokenRow, aggregateRow, logEntry, recentRows, false);
-          aggregatePath = aggregateRow ? 'fast path duplicate' : 'duplicate without cache update';
-          return;
-        }
-        if (aggregateRow) {
-          const recentRows = this.readLatestAnswerLogsForRosterKeySafely_(tokenRow.rosterKey, logEntry);
-          summary = this.buildFastStudentAnswerSummary_(tokenRow, aggregateRow, logEntry, recentRows, true);
-          aggregatePath = 'fast path';
-          try {
-            SheetRepository.upsertAggregateCacheRow(summary);
-            cacheUpdated = true;
-          } catch (error) {
-            LoggerService.logDeveloperError(`Failed to update aggregate cache for ${tokenRow.rosterKey}`, error);
+      const lockStartedAtMs = Date.now();
+      try {
+        SheetRepository.withDocumentLock(() => {
+          const duplicateCheckStartedAtMs = Date.now();
+          // 同じattemptIdの再送は既存ログを返し、解答ログを二重に増やさない。
+          const existingLog = SheetRepository.findAnswerLogByAttemptId(entry.rosterKey, entry.attemptId);
+          timings.duplicateCheckElapsedMs += Date.now() - duplicateCheckStartedAtMs;
+          if (existingLog) {
+            logEntry = this.toEntryFromExistingLog_(existingLog);
+            duplicate = true;
+          } else {
+            const appendOnlyStartedAtMs = Date.now();
+            SheetRepository.appendAnswerLog(entry);
+            timings.appendOnlyElapsedMs += Date.now() - appendOnlyStartedAtMs;
           }
-          problemTypeCacheUpdated = this.updateProblemTypeStatsCacheAfterAppend_(tokenRow, entry, null) || problemTypeCacheUpdated;
-          return;
-        }
-        const fullRows = SheetRepository.readAnswerLogsForRosterKey(tokenRow.rosterKey);
-        summary = this.buildStudentAnswerSummaryFromLogs_(tokenRow, fullRows);
-        aggregatePath = 'full rebuild fallback';
-        try {
-          SheetRepository.upsertAggregateCacheRow(summary);
-          cacheUpdated = true;
-        } catch (error) {
-          LoggerService.logDeveloperError(`Failed to rebuild aggregate cache for ${tokenRow.rosterKey}`, error);
-        }
-        problemTypeCacheUpdated = this.updateProblemTypeStatsCacheAfterAppend_(tokenRow, entry, fullRows) || problemTypeCacheUpdated;
-      });
-      AdaptiveProblemService.clearStatsCache(tokenRow.rosterKey, entry.level);
-      const nextProblem = this.issueProblemForStudent_(tokenRow, {
-        level: request.nextLevel || problem.level
-      }).publicProblem;
+          timings.appendLogElapsedMs += timings.duplicateCheckElapsedMs + timings.appendOnlyElapsedMs;
+        });
+      } finally {
+        timings.lockElapsedMs = Date.now() - lockStartedAtMs;
+        timings.documentLockWaitAndRunElapsedMs = timings.lockElapsedMs;
+      }
+      summary = this.buildStudentRuntimeApproxSummary_(tokenRow, {}, logEntry, !duplicate);
+      deferredSummaryUpdate = true;
+      const nextProblem = null;
+      nextProblemIncluded = false;
       return {
         ...this.buildSubmitAnswerResponse(logEntry, summary, nextProblem),
-        duplicate
+        duplicate,
+        deferredSummaryUpdate
       };
     } finally {
-      LoggerService.logDeveloperInfo(`submitAnswer elapsedMs=${Date.now() - startedAtMs} rosterKey=${tokenRow ? tokenRow.rosterKey : ''} attemptId=${attemptId} duplicate=${duplicate} aggregatePath=${aggregatePath} cacheUpdated=${cacheUpdated} problemTypeCacheUpdated=${problemTypeCacheUpdated}`);
+      LoggerService.logDeveloperInfo(`submitAnswer elapsedMs=${Date.now() - startedAtMs} mode=student studentRoute=fast tokenElapsedMs=${timings.tokenElapsedMs} tokenCacheReadElapsedMs=${tokenTimings.tokenCacheReadElapsedMs} tokenSheetFindElapsedMs=${tokenTimings.tokenSheetFindElapsedMs} tokenCacheWriteElapsedMs=${tokenTimings.tokenCacheWriteElapsedMs} storedProblemElapsedMs=${timings.storedProblemElapsedMs} gradingElapsedMs=${timings.gradingElapsedMs} lockElapsedMs=${timings.lockElapsedMs} documentLockWaitAndRunElapsedMs=${timings.documentLockWaitAndRunElapsedMs} appendLogElapsedMs=${timings.appendLogElapsedMs} duplicateCheckElapsedMs=${timings.duplicateCheckElapsedMs} appendOnlyElapsedMs=${timings.appendOnlyElapsedMs} aggregateUpdateElapsedMs=${timings.aggregateUpdateElapsedMs} problemTypeCacheUpdateElapsedMs=${timings.problemTypeCacheUpdateElapsedMs} nextProblemElapsedMs=${timings.nextProblemElapsedMs} nextProblemIncluded=${nextProblemIncluded} rosterKey=${tokenRow ? tokenRow.rosterKey : ''} attemptId=${attemptId} duplicate=${duplicate} aggregatePath=${aggregatePath} cacheUpdated=${cacheUpdated} problemTypeCacheUpdated=${problemTypeCacheUpdated}`);
     }
   }
 
@@ -4512,6 +5079,119 @@ class AnswerService {
       lastLevel: recentSummary.lastLevel || base.lastLevel || '',
       lastProblemType: recentSummary.lastProblemType || base.lastProblemType || '',
       ...elapsedMetrics
+    };
+  }
+
+  static buildStudentRuntimeApproxSummary_(tokenRow, aggregateRow, entry, appended) {
+    const base = this.buildStudentSummaryFromAggregate_(tokenRow, aggregateRow || {});
+    const shouldAppend = appended === true;
+    const isCorrect = entry && entry.isCorrect === true;
+    const correctIncrement = shouldAppend && isCorrect ? 1 : 0;
+    const previousAttempts = Number(base.totalAttempts || 0);
+    const previousCorrect = Number(base.totalCorrect || 0);
+    const nextAttempts = previousAttempts + (shouldAppend ? 1 : 0);
+    const nextCorrect = previousCorrect + correctIncrement;
+    const previousRecentAttempts = Number(base.recent10Attempts || 0);
+    const previousRecentCorrect = Number(base.recent10Correct || 0);
+    const recent10Attempts = shouldAppend
+      ? Math.min(10, previousRecentAttempts + 1)
+      : Math.min(10, previousRecentAttempts);
+    const recent10Correct = shouldAppend
+      ? Math.min(recent10Attempts, previousRecentCorrect + correctIncrement)
+      : Math.min(recent10Attempts, previousRecentCorrect);
+    const levelMetrics = this.incrementApproxLevelMetricsFromAggregate_(base, entry, shouldAppend, recent10Attempts);
+    const elapsedMetrics = this.incrementApproxElapsedMetricsFromAggregate_(
+      base,
+      entry,
+      shouldAppend,
+      previousAttempts,
+      previousCorrect,
+      nextAttempts,
+      nextCorrect,
+      previousRecentAttempts,
+      previousRecentCorrect,
+      recent10Attempts,
+      recent10Correct
+    );
+
+    return {
+      updatedAt: new Date().toISOString(),
+      courseId: tokenRow.courseId,
+      courseName: tokenRow.courseName,
+      rosterKey: tokenRow.rosterKey,
+      studentId: tokenRow.studentId,
+      number: tokenRow.number,
+      name: tokenRow.name,
+      totalAttempts: nextAttempts,
+      totalCorrect: nextCorrect,
+      totalAccuracy: this.roundRate_(nextCorrect, nextAttempts),
+      recent10Attempts,
+      recent10Correct,
+      recent10Accuracy: this.roundRate_(recent10Correct, recent10Attempts),
+      currentCorrectStreak: shouldAppend ? (isCorrect ? Number(base.currentCorrectStreak || 0) + 1 : 0) : Number(base.currentCorrectStreak || 0),
+      ...levelMetrics,
+      lastAnsweredAt: shouldAppend ? String(entry.timestamp || base.lastAnsweredAt || '') : String(base.lastAnsweredAt || ''),
+      lastLevel: shouldAppend ? String(entry.level || base.lastLevel || '') : String(base.lastLevel || ''),
+      lastProblemType: shouldAppend ? String(entry.problemType || base.lastProblemType || '') : String(base.lastProblemType || ''),
+      ...elapsedMetrics
+    };
+  }
+
+  static incrementApproxLevelMetricsFromAggregate_(base, entry, appended, recent10Attempts) {
+    const output = {};
+    const entryLevel = String(entry && entry.level || '').trim();
+    ['beginner', 'intermediate', 'advanced'].forEach((level) => {
+      const key = `${level[0].toUpperCase()}${level.slice(1)}`;
+      const attemptKey = `${level}Attempts`;
+      const correctKey = `${level}Correct`;
+      const accuracyKey = `${level}Accuracy`;
+      const recentAttemptKey = `recent10${key}Attempts`;
+      const matchesLevel = appended && entryLevel === level;
+      const attempts = Number(base[attemptKey] || 0) + (matchesLevel ? 1 : 0);
+      const correct = Number(base[correctKey] || 0) + (matchesLevel && entry.isCorrect === true ? 1 : 0);
+      output[attemptKey] = attempts;
+      output[correctKey] = correct;
+      output[accuracyKey] = this.roundRate_(correct, attempts);
+      output[recentAttemptKey] = matchesLevel
+        ? Math.min(Number(recent10Attempts || 0), Number(base[recentAttemptKey] || 0) + 1)
+        : Math.min(Number(recent10Attempts || 0), Number(base[recentAttemptKey] || 0));
+    });
+    return output;
+  }
+
+  static incrementApproxElapsedMetricsFromAggregate_(base, entry, appended, previousAttempts, previousCorrect, nextAttempts, nextCorrect, previousRecentAttempts, previousRecentCorrect, recent10Attempts, recent10Correct) {
+    const elapsedMs = Number(entry && entry.elapsedMs || 0);
+    const hasValidElapsed = this.isValidElapsedMs_(elapsedMs);
+    const averageElapsedMs = appended && hasValidElapsed
+      ? this.incrementAverage_(Number(base.averageElapsedMs || 0), previousAttempts, elapsedMs)
+      : Number(base.averageElapsedMs || 0);
+    const recentBaseCount = Math.min(9, Number(previousRecentAttempts || 0));
+    const recent10AverageElapsedMs = appended && hasValidElapsed
+      ? this.incrementAverage_(Number(base.recent10AverageElapsedMs || 0), recentBaseCount, elapsedMs)
+      : Number(base.recent10AverageElapsedMs || 0);
+    const correctAverageElapsedMs = appended && entry && entry.isCorrect === true && hasValidElapsed
+      ? this.incrementAverage_(Number(base.correctAverageElapsedMs || 0), previousCorrect, elapsedMs)
+      : Number(base.correctAverageElapsedMs || 0);
+    const correctRecentBaseCount = Math.min(9, Number(previousRecentCorrect || 0));
+    const correctRecent10AverageElapsedMs = appended && entry && entry.isCorrect === true && hasValidElapsed
+      ? this.incrementAverage_(Number(base.correctRecent10AverageElapsedMs || 0), correctRecentBaseCount, elapsedMs)
+      : Number(base.correctRecent10AverageElapsedMs || 0);
+    const first10AverageElapsedMs = appended && hasValidElapsed && nextAttempts <= 10
+      ? this.incrementAverage_(Number(base.first10AverageElapsedMs || 0), previousAttempts, elapsedMs)
+      : Number(base.first10AverageElapsedMs || 0);
+
+    return {
+      averageElapsedMs,
+      medianElapsedMs: Number(base.medianElapsedMs || 0),
+      recent10AverageElapsedMs: recent10Attempts > 0 ? recent10AverageElapsedMs : 0,
+      recent10MedianElapsedMs: Number(base.recent10MedianElapsedMs || 0),
+      correctAverageElapsedMs: nextCorrect > 0 ? correctAverageElapsedMs : 0,
+      correctRecent10AverageElapsedMs: recent10Correct > 0 ? correctRecent10AverageElapsedMs : 0,
+      first10AverageElapsedMs,
+      speedImprovementRate: first10AverageElapsedMs > 0 && recent10AverageElapsedMs > 0
+        ? this.roundDecimal_((first10AverageElapsedMs - recent10AverageElapsedMs) / first10AverageElapsedMs, 4)
+        : 0,
+      lastElapsedMs: appended && hasValidElapsed ? elapsedMs : Number(base.lastElapsedMs || 0)
     };
   }
 
@@ -4924,9 +5604,9 @@ class AnswerService {
     return Math.round(Number(value || 0) * factor) / factor;
   }
 
-  static requireActiveToken_(token) {
+  static requireActiveToken_(token, timings) {
     try {
-      return TokenService.validateToken(token);
+      return TokenService.validateToken(token, timings || {});
     } catch (error) {
       throw new Error(`無効なURLです。先生に新しいURLを確認してください。${error && error.message ? error.message : String(error)}`);
     }
@@ -4938,7 +5618,7 @@ class AggregationService {
     const grouped = new Map();
     for (const log of logs || []) {
       const rosterKey = String(log.rosterKey || '').trim();
-      if (rosterKey === '') {
+      if (rosterKey === '' || TokenService.isTeacherTestStudentRosterKey(rosterKey)) {
         continue;
       }
       if (!grouped.has(rosterKey)) {
@@ -4974,7 +5654,7 @@ class AggregationService {
       const rosterKey = String(log.rosterKey || '').trim();
       const level = String(log.level || '').trim();
       const problemType = String(log.problemType || '').trim();
-      if (rosterKey === '' || level === '' || problemType === '') {
+      if (rosterKey === '' || TokenService.isTeacherTestStudentRosterKey(rosterKey) || level === '' || problemType === '') {
         continue;
       }
       const key = `${rosterKey}\u0001${level}\u0001${problemType}`;
@@ -5017,7 +5697,7 @@ class AggregationService {
         const rosterKey = String(student.rosterKey || TokenService.createRosterKey(student.courseId, student.studentId)).trim();
         const summary = summaryByRosterKey.get(rosterKey) || {};
         const token = tokenByRosterKey.get(rosterKey) || {};
-        const hasActiveToken = String(token.token || '').trim() !== '' && token.revoked !== true && String(token.revoked || '').toLowerCase() !== 'true';
+        const hasActiveToken = String(token.token || '').trim() !== '' && !SheetRepository.isFlagEnabled_(token.revoked);
         const totalAttempts = Number(summary.totalAttempts || 0);
         const hasAccessEvidence = String(token.lastAccessedAt || '').trim() !== '' || totalAttempts > 0;
         const distributionStatus = !hasActiveToken
@@ -5237,7 +5917,10 @@ class DistributionService {
     for (const row of tokenRows || []) {
       const rowToken = String(row && row.token || '').trim();
       const key = this.getDistributionIdentityKey_(row);
-      if (rowToken === '' || key === '' || row.revoked === true || String(row.revoked || '').toLowerCase() === 'true') {
+      if (rowToken === '' || key === '' || SheetRepository.isFlagEnabled_(row.revoked)) {
+        continue;
+      }
+      if (TokenService.isTeacherTestStudentRosterKey(row.rosterKey)) {
         continue;
       }
       if (courseFilter.values.size > 0 && !courseFilter.values.has(String(row.courseId || '').trim())) {
@@ -5261,7 +5944,7 @@ class DistributionService {
   }
 
   static getDistributionTargetsPreview(options) {
-    SheetRepository.assertManagementSchemaReady();
+    SheetRepository.assertManagementSheetsReady();
     const normalizedOptions = options || {};
     const tokenRows = SheetRepository.readTokenRows();
     const logRows = SheetRepository.readDistributionLogs();
@@ -5312,7 +5995,7 @@ class DistributionService {
   }
 
   static distributeStudentUrlsForCheckedCourses(options) {
-    SheetRepository.assertManagementSchemaReady();
+    SheetRepository.assertManagementSheetsReady();
     const normalizedOptions = options || {};
     const startedAt = new Date().toISOString();
     const runId = this.createRunId();
@@ -5407,6 +6090,357 @@ class DistributionService {
     });
   }
 
+  static deleteRequestedClassroomUrlPosts(options) {
+    SheetRepository.assertManagementSheetsReady();
+    const startedAt = new Date().toISOString();
+    const runId = this.createRunId();
+    const tokenRows = SheetRepository.readTokenRows();
+    const logRows = SheetRepository.readDistributionLogs();
+    const targets = this.buildRequestedClassroomUrlDeletionTargets(tokenRows, logRows);
+    const targetsByTokenIndex = new Map();
+    for (const target of targets) {
+      const list = targetsByTokenIndex.get(target.tokenRowIndex) || [];
+      list.push(target);
+      targetsByTokenIndex.set(target.tokenRowIndex, list);
+    }
+    const requestedIndexes = [];
+    const nextTokenRows = tokenRows.map((row, index) => {
+      if (!SheetRepository.isRequestFlag_(row && row.postDeletionRequested)) {
+        return { ...row };
+      }
+      requestedIndexes.push(index);
+      return {
+        ...row,
+        revoked: true
+      };
+    });
+    const outcomes = new Map(requestedIndexes.map((index) => [index, {
+      targetCount: (targetsByTokenIndex.get(index) || []).length,
+      hasError: false
+    }]));
+    const logs = [];
+    let successCount = 0;
+    let errorCount = 0;
+    let skippedCount = 0;
+    let noTargetCount = 0;
+    for (const tokenRowIndex of requestedIndexes) {
+      const rowTargets = targetsByTokenIndex.get(tokenRowIndex) || [];
+      if (rowTargets.length === 0) {
+        noTargetCount += 1;
+        continue;
+      }
+      for (const target of rowTargets) {
+        try {
+          ClassroomService.deleteStudentUrlAnnouncement(target.courseId, target.classroomAnnouncementId);
+          logs.push(this.createClassroomUrlDeletionLog_(runId, target, 'DELETED', `Classroom投稿を削除しました。投稿削除指定: ${target.rosterKey || target.token} / 元runId: ${target.sourceRunId}`));
+          successCount += 1;
+        } catch (error) {
+          const message = AdminService.formatErrorMessage_(error);
+          if (this.isAlreadyDeletedClassroomAnnouncementError_(error)) {
+            logs.push(this.createClassroomUrlDeletionLog_(runId, target, 'DELETE_SKIPPED', `Classroom投稿はすでに削除済みです。投稿削除指定: ${target.rosterKey || target.token} / 元runId: ${target.sourceRunId}: ${message}`));
+            skippedCount += 1;
+          } else {
+            const outcome = outcomes.get(tokenRowIndex);
+            if (outcome) {
+              outcome.hasError = true;
+            }
+            LoggerService.logDeveloperError(`Failed to delete requested Classroom URL announcement: ${target.courseId}/${target.classroomAnnouncementId}`, error);
+            logs.push(this.createClassroomUrlDeletionLog_(runId, target, 'DELETE_ERROR', message));
+            errorCount += 1;
+          }
+        }
+      }
+    }
+    const finishedAt = new Date().toISOString();
+    for (const tokenRowIndex of requestedIndexes) {
+      const outcome = outcomes.get(tokenRowIndex) || { targetCount: 0, hasError: false };
+      const row = nextTokenRows[tokenRowIndex];
+      if (outcome.hasError) {
+        nextTokenRows[tokenRowIndex] = {
+          ...row,
+          postDeletionRequested: false,
+          postDeletionStatus: '失敗',
+          note: TokenService.appendNote_(row.note, `投稿削除失敗 ${finishedAt}`)
+        };
+      } else if (outcome.targetCount > 0) {
+        nextTokenRows[tokenRowIndex] = {
+          ...row,
+          postDeletionRequested: false,
+          postDeletionStatus: '済',
+          note: TokenService.appendNote_(row.note, `投稿削除済 ${finishedAt}`)
+        };
+      } else {
+        nextTokenRows[tokenRowIndex] = {
+          ...row,
+          postDeletionRequested: false,
+          postDeletionStatus: '対象なし',
+          note: TokenService.appendNote_(row.note, `投稿削除対象なし ${finishedAt}`)
+        };
+      }
+    }
+    if (requestedIndexes.length > 0) {
+      SheetRepository.writeTokenRows(nextTokenRows);
+      TokenService.clearTokenRowCachesForRows_(requestedIndexes.flatMap((index) => [tokenRows[index], nextTokenRows[index]]));
+    }
+    SheetRepository.appendDistributionLogs(logs);
+    SheetRepository.appendRunLog({
+      runId,
+      operation: 'REQUESTED_CLASSROOM_URL_POST_DELETE',
+      startedAt,
+      finishedAt,
+      processedCount: requestedIndexes.length,
+      successCount,
+      errorCount,
+      skippedCount: skippedCount + noTargetCount,
+      nextAction: errorCount > 0 ? 'RETRY_REQUESTED_CLASSROOM_URL_POST_DELETE' : 'DONE'
+    });
+    return {
+      runId,
+      targetStudents: requestedIndexes.length,
+      revokedCount: requestedIndexes.length,
+      processed: targets.length,
+      success: successCount,
+      error: errorCount,
+      skipped: skippedCount,
+      noTarget: noTargetCount,
+      logs,
+      message: `投稿削除=1 のURL無効化とClassroom投稿削除を実行しました。対象 ${requestedIndexes.length}人 / 無効化 ${requestedIndexes.length}件 / 投稿削除成功 ${successCount}件 / 投稿削除失敗 ${errorCount}件 / スキップ ${skippedCount + noTargetCount}件`
+    };
+  }
+
+  static buildRequestedClassroomUrlDeletionTargets(tokenRows, distributionLogs) {
+    const deletedKeys = this.getDeletedClassroomAnnouncementKeys_(distributionLogs);
+    const seenKeys = new Set();
+    const targets = [];
+    (tokenRows || []).forEach((tokenRow, tokenRowIndex) => {
+      if (!SheetRepository.isRequestFlag_(tokenRow && tokenRow.postDeletionRequested)) {
+        return;
+      }
+      for (const log of distributionLogs || []) {
+        if (this.normalizeDistributionStatus_(log && log.status) !== 'SUCCESS') {
+          continue;
+        }
+        const courseId = String(log && log.courseId || '').trim();
+        const classroomAnnouncementId = String(log && log.classroomAnnouncementId || '').trim();
+        if (courseId === '' || classroomAnnouncementId === '') {
+          continue;
+        }
+        if (!this.doesDistributionLogMatchTokenRow_(log, tokenRow)) {
+          continue;
+        }
+        const key = this.getClassroomAnnouncementKey_(courseId, classroomAnnouncementId);
+        if (deletedKeys.has(key) || seenKeys.has(key)) {
+          continue;
+        }
+        seenKeys.add(key);
+        targets.push({
+          timestamp: String(log.timestamp || '').trim(),
+          sourceRunId: String(log.runId || '').trim(),
+          tokenRowIndex,
+          courseId,
+          rosterKey: String(log.rosterKey || tokenRow.rosterKey || '').trim(),
+          studentId: String(log.studentId || tokenRow.studentId || '').trim(),
+          token: String(log.token || tokenRow.token || '').trim(),
+          studentUrl: String(log.studentUrl || tokenRow.studentUrl || '').trim(),
+          classroomAnnouncementId
+        });
+      }
+    });
+    return targets;
+  }
+
+  static doesDistributionLogMatchTokenRow_(log, tokenRow) {
+    const rowToken = String(tokenRow && tokenRow.token || '').trim();
+    const logToken = String(log && log.token || '').trim();
+    if (rowToken !== '' && logToken === rowToken) {
+      return true;
+    }
+    const rowRosterKey = String(tokenRow && tokenRow.rosterKey || '').trim();
+    const logRosterKey = String(log && log.rosterKey || '').trim();
+    if (rowRosterKey !== '' && logRosterKey === rowRosterKey) {
+      return true;
+    }
+    const rowCourseId = String(tokenRow && tokenRow.courseId || '').trim();
+    const rowStudentId = String(tokenRow && tokenRow.studentId || '').trim();
+    const logCourseId = String(log && log.courseId || '').trim();
+    const logStudentId = String(log && log.studentId || '').trim();
+    return rowCourseId !== '' && rowStudentId !== '' && logCourseId === rowCourseId && logStudentId === rowStudentId;
+  }
+
+  static deleteLatestClassroomUrlDistribution(options) {
+    SheetRepository.assertManagementSheetsReady();
+    const logRows = SheetRepository.readDistributionLogs();
+    const latestRunId = this.findLatestClassroomUrlDistributionRunId_(logRows);
+    if (latestRunId === '') {
+      return this.executeClassroomUrlDistributionDeletion_('', [], 'CLASSROOM_URL_DISTRIBUTION_DELETE_LATEST');
+    }
+    return this.deleteClassroomUrlDistributionByRunId(latestRunId, {
+      ...(options || {}),
+      operationName: 'CLASSROOM_URL_DISTRIBUTION_DELETE_LATEST'
+    });
+  }
+
+  static deleteClassroomUrlDistributionByRunId(runId, options) {
+    SheetRepository.assertManagementSheetsReady();
+    const sourceRunId = String(runId || '').trim();
+    if (sourceRunId === '') {
+      throw new Error('削除対象の配付runIdが空です。');
+    }
+    const logRows = SheetRepository.readDistributionLogs();
+    const targets = this.buildClassroomUrlDeletionTargets(logRows, sourceRunId);
+    const operationName = String(options && options.operationName || 'CLASSROOM_URL_DISTRIBUTION_DELETE_BY_RUN_ID');
+    return this.executeClassroomUrlDistributionDeletion_(sourceRunId, targets, operationName);
+  }
+
+  static buildClassroomUrlDeletionTargets(logRows, sourceRunId) {
+    const normalizedRunId = String(sourceRunId || '').trim();
+    const deletedKeys = this.getDeletedClassroomAnnouncementKeys_(logRows);
+    const seenKeys = new Set();
+    const targets = [];
+    for (const log of logRows || []) {
+      if (String(log && log.runId || '').trim() !== normalizedRunId) {
+        continue;
+      }
+      if (this.normalizeDistributionStatus_(log && log.status) !== 'SUCCESS') {
+        continue;
+      }
+      const courseId = String(log && log.courseId || '').trim();
+      const classroomAnnouncementId = String(log && log.classroomAnnouncementId || '').trim();
+      if (courseId === '' || classroomAnnouncementId === '') {
+        continue;
+      }
+      const key = this.getClassroomAnnouncementKey_(courseId, classroomAnnouncementId);
+      if (deletedKeys.has(key) || seenKeys.has(key)) {
+        continue;
+      }
+      seenKeys.add(key);
+      targets.push({
+        timestamp: String(log.timestamp || '').trim(),
+        sourceRunId: normalizedRunId,
+        courseId,
+        rosterKey: String(log.rosterKey || '').trim(),
+        studentId: String(log.studentId || '').trim(),
+        token: String(log.token || '').trim(),
+        studentUrl: String(log.studentUrl || '').trim(),
+        classroomAnnouncementId
+      });
+    }
+    return targets;
+  }
+
+  static findLatestClassroomUrlDistributionRunId_(logRows) {
+    for (let index = (logRows || []).length - 1; index >= 0; index -= 1) {
+      const log = logRows[index] || {};
+      if (this.normalizeDistributionStatus_(log.status) !== 'SUCCESS') {
+        continue;
+      }
+      const runId = String(log.runId || '').trim();
+      const courseId = String(log.courseId || '').trim();
+      const classroomAnnouncementId = String(log.classroomAnnouncementId || '').trim();
+      if (runId !== '' && courseId !== '' && classroomAnnouncementId !== '') {
+        return runId;
+      }
+    }
+    return '';
+  }
+
+  static getDeletedClassroomAnnouncementKeys_(logRows) {
+    const deletedKeys = new Set();
+    for (const log of logRows || []) {
+      const status = this.normalizeDistributionStatus_(log && log.status);
+      if (status !== 'DELETED' && status !== 'DELETE_SKIPPED') {
+        continue;
+      }
+      const courseId = String(log && log.courseId || '').trim();
+      const classroomAnnouncementId = String(log && log.classroomAnnouncementId || '').trim();
+      if (courseId !== '' && classroomAnnouncementId !== '') {
+        deletedKeys.add(this.getClassroomAnnouncementKey_(courseId, classroomAnnouncementId));
+      }
+    }
+    return deletedKeys;
+  }
+
+  static getClassroomAnnouncementKey_(courseId, announcementId) {
+    return `${String(courseId || '').trim()}::${String(announcementId || '').trim()}`;
+  }
+
+  static executeClassroomUrlDistributionDeletion_(sourceRunId, targets, operationName) {
+    const startedAt = new Date().toISOString();
+    const runId = this.createRunId();
+    const logs = [];
+    let successCount = 0;
+    let errorCount = 0;
+    let skippedCount = 0;
+    for (const target of targets || []) {
+      try {
+        ClassroomService.deleteStudentUrlAnnouncement(target.courseId, target.classroomAnnouncementId);
+        logs.push(this.createClassroomUrlDeletionLog_(runId, target, 'DELETED', `Classroom投稿を削除しました。元runId: ${target.sourceRunId}`));
+        successCount += 1;
+      } catch (error) {
+        const message = AdminService.formatErrorMessage_(error);
+        if (this.isAlreadyDeletedClassroomAnnouncementError_(error)) {
+          // Classroom returns FAILED_PRECONDITION when the announcement is already deleted.
+          // Keep it distinct from DELETED so operators can see that the local log did not contain the original deletion record.
+          logs.push(this.createClassroomUrlDeletionLog_(runId, target, 'DELETE_SKIPPED', `Classroom投稿はすでに削除済みです。元runId: ${target.sourceRunId}: ${message}`));
+          skippedCount += 1;
+        } else {
+          LoggerService.logDeveloperError(`Failed to delete Classroom URL announcement: ${target.courseId}/${target.classroomAnnouncementId}`, error);
+          logs.push(this.createClassroomUrlDeletionLog_(runId, target, 'DELETE_ERROR', message));
+          errorCount += 1;
+        }
+      }
+    }
+    SheetRepository.appendDistributionLogs(logs);
+    const finishedAt = new Date().toISOString();
+    SheetRepository.appendRunLog({
+      runId,
+      operation: operationName,
+      startedAt,
+      finishedAt,
+      processedCount: (targets || []).length,
+      successCount,
+      errorCount,
+      skippedCount,
+      nextAction: errorCount > 0 ? 'RETRY_CLASSROOM_URL_DISTRIBUTION_DELETE' : 'DONE'
+    });
+    const hasTargets = (targets || []).length > 0;
+    const message = hasTargets
+      ? `Classroom URL配付投稿の削除を実行しました。元runId: ${sourceRunId} / 処理 ${targets.length}件 / 成功 ${successCount}件 / 失敗 ${errorCount}件 / スキップ ${skippedCount}件`
+      : (sourceRunId
+        ? `元runId ${sourceRunId} に削除対象のClassroom URL配付投稿はありません。`
+        : '削除対象のClassroom URL配付投稿はありません。');
+    return {
+      runId,
+      sourceRunId: String(sourceRunId || '').trim(),
+      processed: (targets || []).length,
+      success: successCount,
+      error: errorCount,
+      skipped: skippedCount,
+      logs,
+      message
+    };
+  }
+
+  static createClassroomUrlDeletionLog_(runId, target, status, errorMessage) {
+    return {
+      timestamp: new Date().toISOString(),
+      runId,
+      courseId: target.courseId,
+      rosterKey: target.rosterKey,
+      studentId: target.studentId,
+      token: target.token,
+      studentUrl: target.studentUrl,
+      classroomAnnouncementId: target.classroomAnnouncementId,
+      status,
+      errorMessage
+    };
+  }
+
+  static isAlreadyDeletedClassroomAnnouncementError_(error) {
+    const message = AdminService.formatErrorMessage_(error);
+    return /FAILED_PRECONDITION|already\s+deleted|すでに削除|削除済み/i.test(message);
+  }
+
   static renderTemplate_(template, row) {
     const values = {
       courseId: row.courseId,
@@ -5423,6 +6457,12 @@ class DistributionService {
     return String(template || '').replace(/\{\{\s*([^}]+?)\s*\}\}/g, (_match, key) => String(values[key] == null ? '' : values[key]));
   }
 
+  static validatePostTextTemplate_(template) {
+    if (!/\{\{\s*studentUrl\s*\}\}/.test(String(template || ''))) {
+      throw new Error('設定シートの POST_TEXT_TEMPLATE に {{studentUrl}} を含めてください。');
+    }
+  }
+
   static getClassroomSendSettings_(options) {
     const batchSize = this.normalizeBatchSize_(
       options.batchSize,
@@ -5431,6 +6471,7 @@ class DistributionService {
     const dryRun = typeof options.dryRun === 'boolean' ? options.dryRun : this.toBoolean_(SheetRepository.getSettingValue('DRY_RUN'), false);
     const enableDistributionLog = typeof options.enableDistributionLog === 'boolean' ? options.enableDistributionLog : this.toBoolean_(SheetRepository.getSettingValue('ENABLE_DISTRIBUTION_LOG'), true);
     const template = String(options.postTextTemplate || SheetRepository.getSettingValue('POST_TEXT_TEMPLATE') || SheetRepository.getSettingValue('classroomPostTextTemplate') || MOL_DRILL_DEFAULT_POST_TEXT_TEMPLATE);
+    this.validatePostTextTemplate_(template);
     return {
       batchSize,
       dryRun,
@@ -5538,6 +6579,9 @@ class DistributionService {
     if (normalized === 'DRY_RUN') {
       return 'DRY_RUN';
     }
+    if (normalized === 'DELETED' || normalized === 'DELETE_ERROR' || normalized === 'DELETE_SKIPPED') {
+      return normalized;
+    }
     return normalized;
   }
 
@@ -5561,30 +6605,248 @@ class DistributionService {
   }
 }
 
+class MonitorSnapshotService {
+  static getDashboardSnapshotCacheKey_() {
+    return 'molDrill:monitorDashboardSnapshot:v1';
+  }
+
+  static getDashboardSnapshotCacheTtlSeconds_() {
+    return 90;
+  }
+
+  static getScriptCache_() {
+    try {
+      if (typeof CacheService !== 'undefined' && CacheService.getScriptCache) {
+        return CacheService.getScriptCache();
+      }
+    } catch (_ignored) {
+      return null;
+    }
+    return null;
+  }
+
+  static createReadMetrics_() {
+    return {
+      cacheReadElapsedMs: 0,
+      sheetReadElapsedMs: 0,
+      jsonParseElapsedMs: 0,
+      payloadBytes: 0,
+      snapshotGeneratedAt: ''
+    };
+  }
+
+  static buildDashboardSnapshot() {
+    const generatedAt = new Date().toISOString();
+    const liveData = buildMonitorDashboardData_();
+    return {
+      ...liveData,
+      snapshotVersion: MOL_DRILL_MONITOR_SNAPSHOT_VERSION,
+      source: 'monitor-snapshot',
+      generatedAt,
+      studentRuntime: 'fast',
+      snapshotMode: 'snapshot',
+      snapshotGeneratedAt: generatedAt,
+      stale: false
+    };
+  }
+
+  static writeDashboardSnapshot() {
+    const snapshot = this.buildDashboardSnapshot();
+    const json = JSON.stringify(snapshot);
+    SheetRepository.upsertMonitorCacheRow({
+      key: MOL_DRILL_MONITOR_DASHBOARD_CACHE_KEY,
+      json,
+      updatedAt: snapshot.generatedAt,
+      note: '自動生成。直接編集しない'
+    });
+    this.writeDashboardSnapshotCache_(json);
+    return snapshot;
+  }
+
+  static readDashboardSnapshot(metrics) {
+    const timings = metrics || this.createReadMetrics_();
+    const cacheSnapshot = this.readDashboardSnapshotFromCache_(timings);
+    if (cacheSnapshot) {
+      return cacheSnapshot;
+    }
+    return this.readDashboardSnapshotFromSheet_(timings);
+  }
+
+  static hasUsableDashboardSnapshot() {
+    return this.readDashboardSnapshot() !== null;
+  }
+
+  static isUsableDashboardSnapshot_(snapshot) {
+    return snapshot
+      && typeof snapshot === 'object'
+      && !Array.isArray(snapshot)
+      && Array.isArray(snapshot.progressRows)
+      && snapshot.dashboardMetrics
+      && typeof snapshot.dashboardMetrics === 'object'
+      && snapshot.courseOverview
+      && typeof snapshot.courseOverview === 'object'
+      && snapshot.studentOverview
+      && typeof snapshot.studentOverview === 'object'
+      && snapshot.tokenOverview
+      && typeof snapshot.tokenOverview === 'object';
+  }
+
+  static readDashboardSnapshotFromCache_(metrics) {
+    const cache = this.getScriptCache_();
+    if (!cache) {
+      return null;
+    }
+    const startedAtMs = Date.now();
+    try {
+      const json = String(cache.get(this.getDashboardSnapshotCacheKey_()) || '');
+      metrics.cacheReadElapsedMs += Date.now() - startedAtMs;
+      if (json.trim() === '') {
+        return null;
+      }
+      return this.parseDashboardSnapshotJson_(json, '', metrics);
+    } catch (error) {
+      metrics.cacheReadElapsedMs += Date.now() - startedAtMs;
+      LoggerService.logDeveloperInfo(`monitor dashboard snapshot CacheService read skipped. reason=${error && error.message ? error.message : String(error)}`);
+      return null;
+    }
+  }
+
+  static readDashboardSnapshotFromSheet_(metrics) {
+    try {
+      const sheetStartedAtMs = Date.now();
+      const row = SheetRepository.readMonitorCacheRow(MOL_DRILL_MONITOR_DASHBOARD_CACHE_KEY);
+      metrics.sheetReadElapsedMs += Date.now() - sheetStartedAtMs;
+      if (!row || String(row.json || '').trim() === '') {
+        return null;
+      }
+      const json = String(row.json || '');
+      const snapshot = this.parseDashboardSnapshotJson_(json, String(row.updatedAt || ''), metrics);
+      if (snapshot) {
+        this.writeDashboardSnapshotCache_(json);
+      }
+      return snapshot;
+    } catch (error) {
+      LoggerService.logDeveloperInfo(`monitor dashboard snapshot unavailable; snapshot-missing will be returned. reason=${error && error.message ? error.message : String(error)}`);
+      return null;
+    }
+  }
+
+  static parseDashboardSnapshotJson_(json, fallbackGeneratedAt, metrics) {
+    metrics.payloadBytes = String(json || '').length;
+    const parseStartedAtMs = Date.now();
+    let parsed = null;
+    try {
+      parsed = JSON.parse(String(json || ''));
+    } catch (error) {
+      metrics.jsonParseElapsedMs += Date.now() - parseStartedAtMs;
+      LoggerService.logDeveloperInfo(`monitor dashboard snapshot JSON parse failed. reason=${error && error.message ? error.message : String(error)}`);
+      return null;
+    }
+    metrics.jsonParseElapsedMs += Date.now() - parseStartedAtMs;
+    if (!this.isUsableDashboardSnapshot_(parsed)) {
+      return null;
+    }
+    const generatedAt = String(parsed.generatedAt || fallbackGeneratedAt || '');
+    metrics.snapshotGeneratedAt = generatedAt;
+    return {
+      ...parsed,
+      source: String(parsed.source || 'monitor-snapshot'),
+      snapshotMode: 'snapshot',
+      snapshotGeneratedAt: generatedAt,
+      stale: parsed.stale === true
+    };
+  }
+
+  static writeDashboardSnapshotCache_(json) {
+    const cache = this.getScriptCache_();
+    if (!cache) {
+      return;
+    }
+    try {
+      cache.put(this.getDashboardSnapshotCacheKey_(), String(json || ''), this.getDashboardSnapshotCacheTtlSeconds_());
+    } catch (error) {
+      LoggerService.logDeveloperInfo(`monitor dashboard snapshot CacheService write skipped. reason=${error && error.message ? error.message : String(error)}`);
+    }
+  }
+}
+
+class MonitorService {
+  static isMonitorRoute(e) {
+    const params = e && e.parameter ? e.parameter : {};
+    return String(params.page || '').trim().toLowerCase() === 'monitor'
+      || String(params.monitor || '').trim() === '1';
+  }
+
+  static assertMonitorAccess() {
+    SheetRepository.assertManagementSheetsReady();
+  }
+
+  static buildMonitorAccessDeniedHtml_(message) {
+    const safeMessage = String(message || '管理シートを作成・補修してから、もう一度Webモニターを開いてください。')
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#39;');
+    return HtmlService.createHtmlOutput(`<!doctype html>
+<html>
+<head>
+  <base target="_top">
+  <meta charset="UTF-8">
+  <style>
+    body { font-family: Arial, "Helvetica Neue", sans-serif; margin: 32px; color: #1f2937; line-height: 1.7; }
+    .box { max-width: 720px; border: 1px solid #d1d5db; border-radius: 8px; padding: 20px; background: #f9fafb; }
+    h1 { font-size: 20px; margin: 0 0 12px; }
+  </style>
+</head>
+<body>
+  <div class="box">
+    <h1>モニター画面を開けません</h1>
+    <p>${safeMessage}</p>
+  </div>
+</body>
+</html>`).setTitle('モニター画面を開けません');
+  }
+}
+
 function onOpen(e) {
   molDrillOnOpen(e);
 }
 
 function molDrillOnOpen(_e) {
   const ui = SpreadsheetApp.getUi();
-  const setupMenu = ui.createMenu('初期設定・同期')
-    .addItem('管理シートを作成・補修', 'setupSheetsFromMenu')
-    .addItem('Classroom一覧を取得', 'refreshClassroomListFromMenu')
-    .addItem('生徒名簿を取得', 'refreshStudentsForCheckedCoursesFromMenu')
-    .addItem('トークンを発行', 'issueTokensForActiveStudentsFromMenu');
-  const distributionMenu = ui.createMenu('配付')
-    .addItem('配付対象を確認', 'previewDistributionTargetsFromMenu')
-    .addItem('DRY_RUNでURL配付確認', 'dryRunStudentUrlDistributionFromMenu')
-    .addItem('URLをClassroomに配付', 'distributeStudentUrlsForCheckedCoursesFromMenu')
-    .addItem('失敗分を再送', 'retryFailedStudentUrlDistributionsFromMenu');
-  const maintenanceMenu = ui.createMenu('保守')
-    .addItem('管理データを全削除して初期状態に戻す', 'reinitializeSheetsFromMenu');
+  const setupMenu = ui.createMenu('⓪ 初期整備・保守')
+    .addItem('⓪-1 管理シートを作成・補修', 'setupSheetsFromMenu')
+    .addItem('⓪-2 管理データを全削除して初期状態に戻す', 'reinitializeSheetsFromMenu');
+  const classroomMenu = ui.createMenu('① Classroom同期')
+    .addItem('①-1 Classroom一覧を取得', 'refreshClassroomListFromMenu')
+    .addItem('①-2 同期対象の説明を表示', 'showCourseSyncSelectionHelpFromMenu')
+    .addItem('①-3 生徒名簿を取得', 'refreshStudentsForCheckedCoursesFromMenu');
+  const studentUrlMenu = ui.createMenu('② 生徒URL')
+    .addItem('②-1 トークンを発行', 'issueTokensForActiveStudentsFromMenu')
+    .addItem('②-2 配付対象を確認', 'previewDistributionTargetsFromMenu')
+    .addItem('②-3 DRY_RUNでURL配付確認', 'dryRunStudentUrlDistributionFromMenu')
+    .addItem('②-4 URLをClassroomに配付', 'distributeStudentUrlsForCheckedCoursesFromMenu')
+    .addItem('②-5 失敗分を再送', 'retryFailedStudentUrlDistributionsFromMenu');
+  const cancellationMenu = ui.createMenu('③ 投稿・URL取消')
+    .addItem('③-1 投稿削除=1 のURLを無効化してClassroom投稿を削除', 'deleteRequestedClassroomUrlPostsFromMenu');
+  const individualSupportMenu = ui.createMenu('④ 個別対応')
+    .addItem('④-1 選択行の教師プレビューURLを表示', 'showTeacherPreviewUrlForSelectedTokenRowFromMenu')
+    .addItem('④-2 選択行のトークンを再発行', 'reissueSelectedStudentTokenFromMenu')
+    .addItem('④-3 選択行のURLを無効化', 'revokeSelectedStudentTokenFromMenu');
+  const autoRefreshMenu = ui.createMenu('⑤ 自動更新')
+    .addItem('⑤-1 集計・モニター自動更新を有効化', 'installAggregateMonitorAutoRefreshTriggerFromMenu')
+    .addItem('⑤-2 集計・モニター自動更新を停止', 'uninstallAggregateMonitorAutoRefreshTriggerFromMenu')
+    .addItem('⑤-3 自動更新の状態を表示', 'showAggregateMonitorAutoRefreshStatusFromMenu');
   ui.createMenu(MOL_DRILL_APP_NAME)
-    .addItem('管理ダッシュボードを開く', 'openAdminDialog')
-    .addItem('集計キャッシュを更新', 'rebuildAggregateCacheFromMenu')
+    .addItem('★ 先生用URLを設定シートに出力', 'writeTeacherUrlsToSettingsFromMenu')
+    .addItem('⑨ 集計キャッシュを更新', 'rebuildAggregateCacheFromMenu')
     .addSubMenu(setupMenu)
-    .addSubMenu(distributionMenu)
-    .addSubMenu(maintenanceMenu)
+    .addSubMenu(classroomMenu)
+    .addSubMenu(studentUrlMenu)
+    .addSubMenu(cancellationMenu)
+    .addSubMenu(individualSupportMenu)
+    .addSubMenu(autoRefreshMenu)
     .addToUi();
 }
 
@@ -5605,9 +6867,18 @@ function doGet(e) {
       return HtmlService.createHtmlOutput(`<p>教師プレビューを開けません。</p><p>${String(error && error.message ? error.message : error)}</p>`).setTitle('教師プレビューアクセス不可');
     }
   }
+  if (MonitorService.isMonitorRoute(e)) {
+    try {
+      MonitorService.assertMonitorAccess();
+      const monitorTemplate = HtmlService.createTemplateFromFile('Monitor');
+      return monitorTemplate.evaluate().setTitle('もるくえ！ モニター').setSandboxMode(HtmlService.SandboxMode.IFRAME);
+    } catch (error) {
+      return MonitorService.buildMonitorAccessDeniedHtml_(String(error && error.message ? error.message : error));
+    }
+  }
   if (AdminService.isAdminRoute(e)) {
-    return HtmlService.createHtmlOutput('<p>管理画面はスプレッドシートの `もるくえ！` メニューから開いてください。</p>')
-      .setTitle('管理画面はスプレッドシートから開いてください');
+    return HtmlService.createHtmlOutput('<p>旧管理画面は廃止されました。授業中確認はWebモニター、準備・配付・保守はスプレッドシートの「もるくえ！」メニューを使ってください。</p>')
+      .setTitle('旧管理画面は廃止されました');
   }
   const template = HtmlService.createTemplateFromFile('Student');
   template.initialToken = token;
@@ -5616,12 +6887,237 @@ function doGet(e) {
   return template.evaluate().setTitle(MOL_DRILL_APP_NAME).setSandboxMode(HtmlService.SandboxMode.IFRAME);
 }
 
-function openAdminDialog() {
-  const template = HtmlService.createTemplateFromFile('Admin');
-  // TODO: Replace this hidden internal token with a short-lived admin-dialog nonce.
-  template.initialAdminToken = AdminService.getOrCreateAdminToken();
-  const output = template.evaluate().setTitle(MOL_DRILL_ADMIN_APP_NAME).setWidth(1280).setHeight(860).setSandboxMode(HtmlService.SandboxMode.IFRAME);
-  SpreadsheetApp.getUi().showModalDialog(output, MOL_DRILL_ADMIN_APP_NAME);
+function buildMonitorWebAppUrl_(webAppUrl) {
+  const normalizedWebAppUrl = String(webAppUrl || '').trim();
+  if (normalizedWebAppUrl === '') {
+    throw new Error('設定シートの WEB_APP_URL を先に設定してください。WebアプリをデプロイしたURLを入れてください。');
+  }
+  const separator = normalizedWebAppUrl.includes('?') ? '&' : '?';
+  return `${normalizedWebAppUrl}${separator}page=monitor`;
+}
+
+function writeTeacherUrlsToSettings_() {
+  SheetRepository.assertManagementSheetsReady();
+  const webAppUrl = String(SheetRepository.getSettingValue('WEB_APP_URL') || '').trim();
+  const monitorUrl = buildMonitorWebAppUrl_(webAppUrl);
+  const testStudent = TokenService.ensureTeacherTestStudentToken(webAppUrl);
+  SheetRepository.setSettingValues_([
+    { key: 'MONITOR_URL', value: monitorUrl, description: MOL_DRILL_SETTING_DESCRIPTIONS.MONITOR_URL },
+    { key: 'TEST_STUDENT_URL', value: testStudent.studentUrl, description: MOL_DRILL_SETTING_DESCRIPTIONS.TEST_STUDENT_URL }
+  ]);
+  const initialMonitorSnapshot = tryBuildInitialMonitorSnapshotAfterTeacherUrlSetup_();
+  return {
+    monitorUrl,
+    testStudentUrl: testStudent.studentUrl,
+    testStudent,
+    initialMonitorSnapshot
+  };
+}
+
+function tryBuildInitialMonitorSnapshotAfterTeacherUrlSetup_() {
+  try {
+    const snapshot = MonitorSnapshotService.writeDashboardSnapshot();
+    return {
+      ok: true,
+      monitorSnapshotUpdatedAt: snapshot && snapshot.generatedAt ? snapshot.generatedAt : '',
+      rowCount: snapshot && Array.isArray(snapshot.progressRows) ? snapshot.progressRows.length : 0
+    };
+  } catch (error) {
+    LoggerService.logDeveloperError('Failed to build initial monitor snapshot after teacher URL setup', error);
+    return {
+      ok: false,
+      message: AdminService.formatErrorMessage_(error)
+    };
+  }
+}
+
+function formatTeacherUrlsToSettingsMenuMessage_(result) {
+  const initialSnapshot = result && result.initialMonitorSnapshot ? result.initialMonitorSnapshot : null;
+  if (initialSnapshot && initialSnapshot.ok === true) {
+    return [
+      '先生用URLを設定シートに出力しました。',
+      '設定シートの MONITOR_URL / TEST_STUDENT_URL を確認してください。',
+      'モニター表示用キャッシュも初期作成しました。',
+      'MONITOR_URL を開くとWebモニターを確認できます。'
+    ].join('\n');
+  }
+  return [
+    '先生用URLを設定シートに出力しました。',
+    '設定シートの MONITOR_URL / TEST_STUDENT_URL を確認してください。',
+    'モニター表示用キャッシュの初期作成はスキップされました。',
+    'MONITOR_URL を開き、必要に応じて「モニターだけ更新」または「集計から完全更新」を押してください。'
+  ].join('\n');
+}
+
+function summarizeTeacherUrlsToSettingsResult_(result) {
+  const initialSnapshot = result && result.initialMonitorSnapshot ? result.initialMonitorSnapshot : null;
+  return {
+    processedCount: 3,
+    successCount: initialSnapshot && initialSnapshot.ok === true ? 3 : 2,
+    errorCount: 0,
+    skippedCount: initialSnapshot && initialSnapshot.ok === true ? 0 : 1,
+    nextAction: initialSnapshot && initialSnapshot.ok === true
+      ? 'TEACHER_URLS_WRITTEN_INITIAL_MONITOR_SNAPSHOT_CREATED'
+      : 'TEACHER_URLS_WRITTEN_INITIAL_MONITOR_SNAPSHOT_SKIPPED'
+  };
+}
+
+function writeTeacherUrlsToSettingsFromMenu() {
+  return runMenuOperation_(
+    '先生用URLを設定シートに出力',
+    'MENU_WRITE_TEACHER_URLS_TO_SETTINGS',
+    () => writeTeacherUrlsToSettings_(),
+    formatTeacherUrlsToSettingsMenuMessage_,
+    { summarizeResult: summarizeTeacherUrlsToSettingsResult_ }
+  );
+}
+
+function showMonitorWebAppUrlFromMenu() {
+  return writeTeacherUrlsToSettingsFromMenu();
+}
+
+function getSelectedTokenManagementRowFromMenu_() {
+  const spreadsheet = SpreadsheetApp.getActiveSpreadsheet();
+  const activeSheet = spreadsheet && spreadsheet.getActiveSheet ? spreadsheet.getActiveSheet() : null;
+  const activeRange = spreadsheet && spreadsheet.getActiveRange ? spreadsheet.getActiveRange() : null;
+  if (!activeSheet || activeSheet.getName() !== 'トークン管理') {
+    throw new Error('トークン管理 シートで対象生徒の行を1行だけ選択してから実行してください。');
+  }
+  if (!activeRange || typeof activeRange.getNumRows !== 'function' || activeRange.getNumRows() !== 1) {
+    throw new Error('トークン管理 シートで対象生徒の行を1行だけ選択してから実行してください。');
+  }
+  const rowIndex = activeRange.getRow();
+  if (rowIndex <= 1) {
+    throw new Error('ヘッダー行ではなく、生徒の行を選択してください。');
+  }
+  const lastColumn = activeSheet.getLastColumn();
+  const headers = activeSheet.getRange(1, 1, 1, lastColumn).getValues()[0].map((header) => String(header || '').trim());
+  const row = activeSheet.getRange(rowIndex, 1, 1, lastColumn).getValues()[0];
+  const isEmptyRow = row.every((value) => String(value == null ? '' : value).trim() === '');
+  if (isEmptyRow) {
+    throw new Error('選択行は空行です。トークン管理 シートで対象生徒の行を選択してください。');
+  }
+  const headerMap = {};
+  headers.forEach((header, index) => {
+    if (header !== '' && headerMap[header] == null) {
+      headerMap[header] = index;
+    }
+  });
+  const read = (header) => {
+    const index = headerMap[header];
+    return index == null ? '' : String(row[index] == null ? '' : row[index]).trim();
+  };
+  const rosterKey = read('rosterKey');
+  if (rosterKey === '') {
+    throw new Error('選択行の rosterKey が空です。生徒名簿とトークン管理を確認してください。');
+  }
+  const revokedValue = read('revoked');
+  return {
+    rowIndex,
+    headers,
+    row,
+    token: read('token'),
+    courseId: read('courseId'),
+    courseName: read('courseName'),
+    rosterKey,
+    studentId: read('studentId'),
+    number: read('出席番号'),
+    name: read('氏名'),
+    email: read('メール'),
+    studentUrl: read('studentUrl'),
+    revoked: SheetRepository.isFlagEnabled_(revokedValue),
+    postDeletion: read('投稿削除'),
+    note: read('note')
+  };
+}
+
+function formatSelectedTokenStudentLabel_(selected) {
+  const number = String(selected && selected.number ? selected.number : '').trim();
+  const name = String(selected && selected.name ? selected.name : '').trim();
+  const rosterKey = String(selected && selected.rosterKey ? selected.rosterKey : '').trim();
+  const displayName = name !== '' ? name : rosterKey;
+  return number !== '' ? `${number}番 ${displayName}` : displayName;
+}
+
+function getSelectedTokenManagementRowForMenuAction_(label) {
+  const ui = SpreadsheetApp.getUi();
+  try {
+    return getSelectedTokenManagementRowFromMenu_();
+  } catch (error) {
+    const message = AdminService.formatErrorMessage_(error);
+    LoggerService.logDeveloperError(`${label} selection failed`, error);
+    ui.alert(`${label}に失敗しました:\n${message}`);
+    throw error;
+  }
+}
+
+function showTeacherPreviewUrlForSelectedTokenRowFromMenu() {
+  const label = '選択行の教師プレビューURLを表示';
+  const ui = SpreadsheetApp.getUi();
+  try {
+    const selected = getSelectedTokenManagementRowFromMenu_();
+    if (selected.token === '') {
+      throw new Error('選択行の token が空です。先に ②-1 トークンを発行 を実行してください。');
+    }
+    if (selected.revoked) {
+      throw new Error('このURLはすでに無効化済みです。有効なURLの行を選択してください。');
+    }
+    const adminToken = AdminService.getOrCreateAdminToken();
+    const previewUrl = AdminService.buildTeacherStudentPreviewUrl(adminToken, selected.token);
+    ui.alert(
+      '教師プレビューURL',
+      `対象: ${formatSelectedTokenStudentLabel_(selected)}\n\n教師プレビューURL:\n${previewUrl}\n\n先生用プレビューURLです。生徒には共有しないでください。`,
+      ui.ButtonSet.OK
+    );
+    return previewUrl;
+  } catch (error) {
+    const message = AdminService.formatErrorMessage_(error);
+    LoggerService.logDeveloperError(`${label} failed`, error);
+    ui.alert(`${label}に失敗しました:\n${message}`);
+    throw error;
+  }
+}
+
+function reissueSelectedStudentTokenFromMenu() {
+  const label = '選択行のトークンを再発行';
+  const selected = getSelectedTokenManagementRowForMenuAction_(label);
+  const studentLabel = formatSelectedTokenStudentLabel_(selected);
+  return runMenuOperation_(
+    label,
+    'MENU_REISSUE_SELECTED_STUDENT_TOKEN',
+    () => AdminService.withAdminActionLock('reissueSelectedStudentTokenFromMenu', () => TokenService.reissueStudentToken(selected.rosterKey, {})),
+    (updated) => `選択行のトークンを再発行しました。\n対象: ${studentLabel}\n新しいURL:\n${updated.studentUrl}\n\nClassroom投稿は自動では更新されません。必要に応じて先生が新URLを扱ってください。`,
+    {
+      confirmMessage: `対象: ${studentLabel}\n\nこの生徒のトークンを再発行します。古いURLは使わない運用になります。\nClassroom投稿は自動では更新されません。必要に応じて新URLを先生が扱ってください。`,
+      summarizeResult: () => ({ processedCount: 1, successCount: 1, errorCount: 0, skippedCount: 0, nextAction: 'DONE' })
+    }
+  );
+}
+
+function revokeSelectedStudentTokenFromMenu() {
+  const label = '選択行のURLを無効化';
+  const ui = SpreadsheetApp.getUi();
+  const selected = getSelectedTokenManagementRowForMenuAction_(label);
+  const studentLabel = formatSelectedTokenStudentLabel_(selected);
+  if (selected.token === '') {
+    const message = '選択行の token が空です。先に ②-1 トークンを発行 を実行してください。';
+    ui.alert(`${label}に失敗しました:\n${message}`);
+    throw new Error(message);
+  }
+  if (selected.revoked) {
+    ui.alert(label, `対象: ${studentLabel}\n\nこのURLはすでに無効化済みです。`, ui.ButtonSet.OK);
+    return null;
+  }
+  return runMenuOperation_(
+    label,
+    'MENU_REVOKE_SELECTED_STUDENT_TOKEN',
+    () => AdminService.withAdminActionLock('revokeSelectedStudentTokenFromMenu', () => TokenService.revokeStudentToken(selected.rosterKey)),
+    () => `選択行のURLを無効化しました。\n対象: ${studentLabel}\n\nClassroom投稿自体は削除していません。投稿も消したい場合は、トークン管理の 投稿削除 に 1 を入力して ③ 投稿・URL取消 を使ってください。`,
+    {
+      confirmMessage: `対象: ${studentLabel}\n\nこのURLを無効化します。生徒はこのURLで入れなくなります。\nClassroom投稿自体は削除しません。Classroom投稿も消したい場合は、トークン管理の 投稿削除 に 1 を入力して ③ 投稿・URL取消 を使ってください。`,
+      summarizeResult: () => ({ processedCount: 1, successCount: 1, errorCount: 0, skippedCount: 0, nextAction: 'DONE' })
+    }
+  );
 }
 
 function setupSheets() {
@@ -5653,12 +7149,252 @@ function runMenuOperation_(label, operationName, callback, formatSuccessMessage,
   }
 }
 
+function readAdminSettingsForMenu_() {
+  SheetRepository.assertManagementSheetsReady();
+  return AdminService.readAdminSettings_();
+}
+
+function promptMenuText_(label, message) {
+  const ui = SpreadsheetApp.getUi();
+  const response = ui.prompt(label, message, ui.ButtonSet.OK_CANCEL);
+  if (!response || response.getSelectedButton() !== ui.Button.OK) {
+    ui.alert(`${label}をキャンセルしました。`);
+    return null;
+  }
+  return String(response.getResponseText() == null ? '' : response.getResponseText()).trim();
+}
+
+function parseMenuBoolean_(value, label) {
+  const normalized = String(value == null ? '' : value).trim().toLowerCase();
+  if (['true', '1', 'yes', 'y', 'on', 'はい', '有効', 'オン', 'する'].includes(normalized)) {
+    return true;
+  }
+  if (['false', '0', 'no', 'n', 'off', 'いいえ', '無効', 'オフ', 'しない'].includes(normalized)) {
+    return false;
+  }
+  throw new Error(`${label} は true または false で入力してください。`);
+}
+
+function promptMenuBoolean_(label, settingLabel, currentValue, description) {
+  const text = promptMenuText_(
+    label,
+    `${description}\n現在値: ${currentValue ? 'true' : 'false'}\ntrue または false で入力してください。空欄なら現在値のままです。`
+  );
+  if (text === null) {
+    return null;
+  }
+  return text === '' ? currentValue === true : parseMenuBoolean_(text, settingLabel);
+}
+
+function promptMenuBatchSize_(label, currentValue) {
+  const text = promptMenuText_(
+    label,
+    `Classroom URL配付の1回あたり最大件数を入力してください。\n現在値: ${currentValue}\n1から100の整数を入力してください。空欄なら現在値のままです。`
+  );
+  if (text === null) {
+    return null;
+  }
+  if (text === '') {
+    return currentValue;
+  }
+  const numeric = Number(text);
+  if (!Number.isFinite(numeric) || numeric <= 0) {
+    throw new Error('1回あたり最大件数は1から100の数値で入力してください。');
+  }
+  return AdminService.normalizeBatchSize_(numeric, MOL_DRILL_DEFAULT_CLASSROOM_SEND_BATCH_SIZE);
+}
+
+function promptMenuPositiveNumber_(label, settingLabel, currentValue, description) {
+  const currentValueText = formatMenuNumberForDisplay_(currentValue);
+  const text = promptMenuText_(
+    label,
+    `${description}\n現在値: ${currentValueText}\n正の数で入力してください。例: 6.02×10^23, 6.02x10^23, 0.01\n空欄なら現在値のままです。`
+  );
+  if (text === null) {
+    return null;
+  }
+  if (text === '') {
+    return currentValue;
+  }
+  const numeric = MolProblemService.normalizeNumericInput(text);
+  if (!Number.isFinite(numeric) || numeric <= 0) {
+    throw new Error(`${settingLabel} は正の数で入力してください。`);
+  }
+  return numeric;
+}
+
+function formatMenuNumberForDisplay_(value) {
+  const numeric = Number(value);
+  if (Number.isFinite(numeric) && Math.abs(numeric) >= 1e6) {
+    return MolProblemService.formatScientific_(numeric, 3);
+  }
+  return String(value == null ? '' : value);
+}
+
+function normalizeMenuPostText_(text) {
+  return String(text || '').replace(/\\n/g, '\n');
+}
+
 function setupSheetsFromMenu() {
   return runMenuOperation_(
     '管理シートを作成・補修',
     'MENU_SETUP_SHEETS',
     () => setupSheets(),
     (result) => result.message || '管理シートを作成・補修しました。'
+  );
+}
+
+function configureWebAppUrlFromMenu() {
+  const settings = readAdminSettingsForMenu_();
+  const text = promptMenuText_(
+    'WebアプリURLを設定',
+    `生徒が開くWebアプリのURLを入力してください。\n現在値: ${settings.webAppUrl || '(未設定)'}\n空欄なら現在値のままです。`
+  );
+  if (text === null) {
+    return null;
+  }
+  const webAppUrl = text === '' ? settings.webAppUrl : text;
+  return runMenuOperation_(
+    'WebアプリURLを設定',
+    'MENU_CONFIGURE_WEB_APP_URL',
+    () => AdminService.saveSettingsFromMenu({ webAppUrl }),
+    () => 'WebアプリURLを設定しました。'
+  );
+}
+
+function configureClassroomPostTextFromMenu() {
+  const settings = readAdminSettingsForMenu_();
+  const text = promptMenuText_(
+    'Classroom投稿文を設定',
+    `Classroomへ投稿する本文テンプレートを入力してください。\n改行は \\n と入力できます。{{studentUrl}} は生徒URLに置き換わります。\n現在値:\n${String(settings.postTextTemplate || '').replace(/\n/g, '\\n')}\n空欄なら現在値のままです。`
+  );
+  if (text === null) {
+    return null;
+  }
+  const postTextTemplate = text === '' ? settings.postTextTemplate : normalizeMenuPostText_(text);
+  return runMenuOperation_(
+    'Classroom投稿文を設定',
+    'MENU_CONFIGURE_CLASSROOM_POST_TEXT',
+    () => {
+      if (!/\{\{\s*studentUrl\s*\}\}/.test(postTextTemplate)) {
+        throw new Error('設定シートの POST_TEXT_TEMPLATE に {{studentUrl}} を含めてください。');
+      }
+      return AdminService.saveSettingsFromMenu({ postTextTemplate });
+    },
+    () => 'Classroom投稿文を設定しました。'
+  );
+}
+
+function configureDistributionSettingsFromMenu() {
+  const settings = readAdminSettingsForMenu_();
+  const dryRun = promptMenuBoolean_(
+    '配付設定を変更: DRY_RUN',
+    'DRY_RUN',
+    settings.dryRun,
+    'true の場合、Classroom投稿を作成せず配付ログだけ記録します。'
+  );
+  if (dryRun === null) {
+    return null;
+  }
+  const batchSize = promptMenuBatchSize_('配付設定を変更: 1回の最大配付件数', settings.batchSize);
+  if (batchSize === null) {
+    return null;
+  }
+  const enableDistributionLog = promptMenuBoolean_(
+    '配付設定を変更: 配付ログ',
+    '配付ログ',
+    settings.enableDistributionLog,
+    'true の場合、配付結果を配付ログへ記録します。'
+  );
+  if (enableDistributionLog === null) {
+    return null;
+  }
+  return runMenuOperation_(
+    '配付設定を変更',
+    'MENU_CONFIGURE_DISTRIBUTION_SETTINGS',
+    () => AdminService.saveSettingsFromMenu({ dryRun, batchSize, enableDistributionLog }),
+    () => '配付設定を変更しました。'
+  );
+}
+
+function configureProblemSettingsFromMenu() {
+  const settings = readAdminSettingsForMenu_();
+  const adaptiveProblemSelection = promptMenuBoolean_(
+    '出題・採点設定を変更: 適応出題',
+    '適応出題',
+    settings.adaptiveProblemSelection,
+    'true の場合、生徒ごとの問題タイプ別キャッシュを使って出題タイプを調整します。'
+  );
+  if (adaptiveProblemSelection === null) {
+    return null;
+  }
+  const beginnerAvogadroConstant = promptMenuPositiveNumber_(
+    '出題・採点設定を変更: 初級アボガドロ定数',
+    '初級アボガドロ定数',
+    settings.beginnerAvogadroConstant,
+    '初級レベルの問題生成と採点に使うアボガドロ定数です。'
+  );
+  if (beginnerAvogadroConstant === null) {
+    return null;
+  }
+  const beginnerTolerance = promptMenuPositiveNumber_(
+    '出題・採点設定を変更: 初級許容誤差',
+    '初級許容誤差',
+    settings.beginnerTolerance,
+    '初級レベルの数値解答に使う相対許容誤差です。'
+  );
+  if (beginnerTolerance === null) {
+    return null;
+  }
+  const intermediateAvogadroConstant = promptMenuPositiveNumber_(
+    '出題・採点設定を変更: 中級アボガドロ定数',
+    '中級アボガドロ定数',
+    settings.intermediateAvogadroConstant,
+    '中級レベルの問題生成と採点に使うアボガドロ定数です。'
+  );
+  if (intermediateAvogadroConstant === null) {
+    return null;
+  }
+  const intermediateTolerance = promptMenuPositiveNumber_(
+    '出題・採点設定を変更: 中級許容誤差',
+    '中級許容誤差',
+    settings.intermediateTolerance,
+    '中級レベルの数値解答に使う相対許容誤差です。'
+  );
+  if (intermediateTolerance === null) {
+    return null;
+  }
+  const advancedAvogadroConstant = promptMenuPositiveNumber_(
+    '出題・採点設定を変更: 上級アボガドロ定数',
+    '上級アボガドロ定数',
+    settings.advancedAvogadroConstant,
+    '上級レベルの問題生成と採点に使うアボガドロ定数です。'
+  );
+  if (advancedAvogadroConstant === null) {
+    return null;
+  }
+  const advancedTolerance = promptMenuPositiveNumber_(
+    '出題・採点設定を変更: 上級許容誤差',
+    '上級許容誤差',
+    settings.advancedTolerance,
+    '上級レベルの数値解答に使う相対許容誤差です。'
+  );
+  if (advancedTolerance === null) {
+    return null;
+  }
+  return runMenuOperation_(
+    '出題・採点設定を変更',
+    'MENU_CONFIGURE_PROBLEM_SETTINGS',
+    () => AdminService.saveSettingsFromMenu({
+      adaptiveProblemSelection,
+      beginnerAvogadroConstant,
+      beginnerTolerance,
+      intermediateAvogadroConstant,
+      intermediateTolerance,
+      advancedAvogadroConstant,
+      advancedTolerance
+    }),
+    () => '出題・採点設定を変更しました。'
   );
 }
 
@@ -5719,6 +7455,15 @@ function refreshClassroomListFromMenu() {
     () => AdminService.withAdminActionLock('refreshClassroomListFromMenu', () => refreshClassroomListCore_()),
     (courses) => `Classroom一覧を取得しました: ${courses.length}件`
   );
+}
+
+function showCourseSyncSelectionHelpFromMenu() {
+  const message = `Classroom一覧シートの「同期対象」列で、今回使うClassroomだけに 1 を入力してください。
+
+同期対象にしたClassroomだけ、生徒名簿取得、トークン発行、URL配付の対象になります。
+使わないClassroomは空欄にします。`;
+  SpreadsheetApp.getUi().alert(message);
+  return message;
 }
 
 function refreshStudentsForCheckedCoursesCore_() {
@@ -5863,6 +7608,64 @@ function retryFailedStudentUrlDistributionsFromMenu() {
   );
 }
 
+function deleteRequestedClassroomUrlPosts(authToken, options) {
+  AdminService.assertAdminAccess(authToken);
+  return AdminService.withAdminActionLock('deleteRequestedClassroomUrlPosts', () => DistributionService.deleteRequestedClassroomUrlPosts(options || {}));
+}
+
+function deleteRequestedClassroomUrlPostsFromMenu() {
+  const label = '投稿削除=1 のURLを無効化してClassroom投稿を削除';
+  const confirmMessage = `トークン管理 シートの 投稿削除 列に 1 が入力されている生徒だけを対象にします。
+
+対象生徒のURLを無効化します。
+対応するClassroom投稿を削除します。
+解答ログや集計データは削除しません。
+実行後、revoked は 済 になります。
+投稿削除に成功した行は、投稿削除 が 済 になります。
+失敗した行は、投稿削除 が 失敗 になります。
+対応するClassroom投稿が見つからない行は、投稿削除 が 対象なし になります。
+再実行したい場合は、投稿削除 を再度 1 にしてください。
+投稿削除は元に戻せない可能性があります。
+
+実行しますか？`;
+  return runMenuOperation_(
+    label,
+    'MENU_DELETE_REQUESTED_CLASSROOM_URL_POSTS',
+    () => AdminService.withAdminActionLock('deleteRequestedClassroomUrlPostsFromMenu', () => DistributionService.deleteRequestedClassroomUrlPosts()),
+    (result) => result.message || `投稿削除=1 のURL無効化とClassroom投稿削除を実行しました: 対象 ${result.targetStudents || 0}人 / 無効化 ${result.revokedCount || 0}件 / 投稿削除成功 ${result.success || 0}件 / 投稿削除失敗 ${result.error || 0}件 / スキップ ${(result.skipped || 0) + (result.noTarget || 0)}件`,
+    { confirmMessage }
+  );
+}
+
+function deleteLatestClassroomUrlDistribution(authToken, options) {
+  AdminService.assertAdminAccess(authToken);
+  return AdminService.withAdminActionLock('deleteLatestClassroomUrlDistribution', () => DistributionService.deleteLatestClassroomUrlDistribution(options || {}));
+}
+
+function deleteClassroomUrlDistributionByRunId(authToken, runId, options) {
+  AdminService.assertAdminAccess(authToken);
+  return AdminService.withAdminActionLock('deleteClassroomUrlDistributionByRunId', () => DistributionService.deleteClassroomUrlDistributionByRunId(runId, options || {}));
+}
+
+function deleteLatestClassroomUrlDistributionFromMenu() {
+  const label = '直近のClassroom URL配付投稿を削除';
+  const confirmMessage = `直近の本送信URL配付投稿をClassroomから削除します。
+
+この操作で削除するのは、配付ログにClassroom投稿IDが残っている直近runの投稿だけです。
+生徒のトークンや解答ログは削除しません。
+投稿削除は元に戻せない可能性があります。
+誤配付時や配付取り消し時だけ使う保守操作です。
+
+実行しますか？`;
+  return runMenuOperation_(
+    label,
+    'MENU_DELETE_LATEST_CLASSROOM_URL_DISTRIBUTION',
+    () => AdminService.withAdminActionLock('deleteLatestClassroomUrlDistributionFromMenu', () => DistributionService.deleteLatestClassroomUrlDistribution()),
+    (result) => result.message || `直近のClassroom URL配付投稿を削除しました: 元runId ${result.sourceRunId || '(対象なし)'} / 処理 ${result.processed || 0}件 / 成功 ${result.success || 0}件 / 失敗 ${result.error || 0}件`,
+    { confirmMessage }
+  );
+}
+
 function getDistributionLogs(authToken) {
   AdminService.assertAdminAccess(authToken);
   return SheetRepository.readDistributionLogs();
@@ -5876,13 +7679,316 @@ function rebuildAggregateCache(authToken) {
   ));
 }
 
+function summarizeAggregateMonitorCacheResult_(result) {
+  const source = result && typeof result === 'object' ? result : {};
+  const updated = Number(source.updated || 0);
+  const problemTypeUpdated = Number(source.problemTypeUpdated || 0);
+  const processedCount = (Number.isFinite(updated) ? updated : 0) + (Number.isFinite(problemTypeUpdated) ? problemTypeUpdated : 0);
+  return {
+    processedCount,
+    successCount: processedCount,
+    errorCount: Number(source.error || source.errorCount || 0),
+    skippedCount: Number(source.skipped || source.skippedCount || 0),
+    nextAction: String(source.nextAction || 'DONE')
+  };
+}
+
+function rebuildAggregateAndMonitorCacheCore_() {
+  const result = AggregationService.rebuildAggregateCache();
+  const snapshot = MonitorSnapshotService.writeDashboardSnapshot();
+  const monitorSnapshotUpdatedAt = snapshot && snapshot.generatedAt ? snapshot.generatedAt : '';
+  return {
+    ...result,
+    monitorSnapshotUpdatedAt,
+    nextAction: monitorSnapshotUpdatedAt
+      ? `MONITOR_CACHE_UPDATED:${monitorSnapshotUpdatedAt}; PROBLEM_TYPE_ROWS:${result.problemTypeUpdated || 0}`
+      : `MONITOR_CACHE_UPDATE_SKIPPED; PROBLEM_TYPE_ROWS:${result.problemTypeUpdated || 0}`
+  };
+}
+
 function rebuildAggregateCacheFromMenu() {
   return runMenuOperation_(
     '集計キャッシュを更新',
     'MENU_REBUILD_AGGREGATE_CACHE',
-    () => AdminService.withAdminActionLock('rebuildAggregateCacheFromMenu', () => AggregationService.rebuildAggregateCache()),
-    (result) => `集計キャッシュを更新しました: ${result.updated || 0}人 / 問題タイプ別 ${result.problemTypeUpdated || 0}行`
+    () => AdminService.withAdminActionLock('rebuildAggregateCacheFromMenu', () => rebuildAggregateAndMonitorCacheCore_()),
+    (result) => `集計キャッシュを更新しました: ${result.updated || 0}人 / 問題タイプ別 ${result.problemTypeUpdated || 0}行 / モニターキャッシュ ${result.monitorSnapshotUpdatedAt || '未更新'}`,
+    { summarizeResult: summarizeAggregateMonitorCacheResult_ }
   );
+}
+
+function formatMonitorRebuildCacheResponse_(result) {
+  const source = result && typeof result === 'object' ? result : {};
+  const problemTypeRows = Number(source.problemTypeUpdated != null
+    ? source.problemTypeUpdated
+    : (Array.isArray(source.problemTypeRows) ? source.problemTypeRows.length : 0));
+  return {
+    ok: true,
+    updated: Number(source.updated || 0),
+    problemTypeRows: Number.isFinite(problemTypeRows) ? problemTypeRows : 0,
+    monitorSnapshotUpdatedAt: String(source.monitorSnapshotUpdatedAt || ''),
+    message: '集計キャッシュとモニターキャッシュを更新しました。'
+  };
+}
+
+function summarizeMonitorSnapshotRebuildResult_(result) {
+  const source = result && typeof result === 'object' ? result : {};
+  const rows = Array.isArray(source.progressRows) ? source.progressRows : [];
+  const rowCount = rows.length;
+  const monitorSnapshotUpdatedAt = String(source.generatedAt || source.snapshotGeneratedAt || '');
+  return {
+    processedCount: rowCount,
+    successCount: rowCount,
+    errorCount: Number(source.error || source.errorCount || 0),
+    skippedCount: Number(source.skipped || source.skippedCount || 0),
+    nextAction: monitorSnapshotUpdatedAt
+      ? `MONITOR_SNAPSHOT_UPDATED:${monitorSnapshotUpdatedAt}; ROWS:${rowCount}`
+      : `MONITOR_SNAPSHOT_UPDATE_SKIPPED; ROWS:${rowCount}`
+  };
+}
+
+function formatMonitorSnapshotRebuildResponse_(result) {
+  const source = result && typeof result === 'object' ? result : {};
+  const rows = Array.isArray(source.progressRows) ? source.progressRows : [];
+  return {
+    ok: true,
+    monitorSnapshotUpdatedAt: String(source.generatedAt || source.snapshotGeneratedAt || ''),
+    rowCount: rows.length,
+    requiresFullRebuild: false,
+    recommendedAction: 'none',
+    message: 'モニター表示用キャッシュを更新しました。'
+  };
+}
+
+function rebuildMonitorSnapshotFromMonitor() {
+  try {
+    MonitorService.assertMonitorAccess();
+    const result = AdminService.runLoggedOperation(
+      'MONITOR_REBUILD_MONITOR_SNAPSHOT',
+      () => AdminService.withAdminActionLock(
+        'rebuildMonitorSnapshotFromMonitor',
+        () => MonitorSnapshotService.writeDashboardSnapshot()
+      ),
+      summarizeMonitorSnapshotRebuildResult_
+    );
+    return formatMonitorSnapshotRebuildResponse_(result);
+  } catch (error) {
+    const message = AdminService.formatErrorMessage_(error);
+    if (message === MOL_DRILL_ADMIN_ACTION_LOCK_ERROR_MESSAGE) {
+      return {
+        ok: false,
+        requiresFullRebuild: false,
+        recommendedAction: 'retry',
+        message: message || '別の処理が実行中です。少し待ってから再実行してください。'
+      };
+    }
+    if (message !== MOL_DRILL_ADMIN_ACTION_LOCK_ERROR_MESSAGE) {
+      LoggerService.logDeveloperError('Webモニターからのモニター表示用キャッシュ更新 failed', error);
+    }
+    return {
+      ok: false,
+      requiresFullRebuild: true,
+      recommendedAction: 'full-rebuild',
+      message: 'モニターだけ更新では復旧できませんでした。集計から完全更新を実行してください。'
+    };
+  }
+}
+
+function rebuildAggregateAndMonitorCacheFromMonitor() {
+  try {
+    MonitorService.assertMonitorAccess();
+    const result = AdminService.runLoggedOperation(
+      'MONITOR_REBUILD_AGGREGATE_MONITOR_CACHE',
+      () => AdminService.withAdminActionLock(
+        'rebuildAggregateAndMonitorCacheFromMonitor',
+        () => rebuildAggregateAndMonitorCacheCore_()
+      ),
+      summarizeAggregateMonitorCacheResult_
+    );
+    return formatMonitorRebuildCacheResponse_(result);
+  } catch (error) {
+    const message = AdminService.formatErrorMessage_(error);
+    if (message !== MOL_DRILL_ADMIN_ACTION_LOCK_ERROR_MESSAGE) {
+      LoggerService.logDeveloperError('Webモニターからの集計・モニターキャッシュ更新 failed', error);
+    }
+    return {
+      ok: false,
+      message: message || '集計キャッシュとモニターキャッシュの更新に失敗しました。'
+    };
+  }
+}
+
+function rebuildAggregateAndMonitorCacheForTrigger() {
+  if (!isAutoRebuildCacheEnabled_()) {
+    return AdminService.runLoggedOperation(
+      'AUTO_REBUILD_AGGREGATE_MONITOR_CACHE_SKIPPED',
+      () => ({
+        skipped: true,
+        reason: 'disabled',
+        nextAction: 'AUTO_REBUILD_SKIPPED_DISABLED'
+      }),
+      summarizeAggregateMonitorCacheResult_
+    );
+  }
+  return AdminService.runLoggedOperation(
+    'AUTO_REBUILD_AGGREGATE_MONITOR_CACHE',
+    () => AdminService.withAdminActionLock(
+      'rebuildAggregateAndMonitorCacheForTrigger',
+      () => rebuildAggregateAndMonitorCacheCore_()
+    ),
+    summarizeAggregateMonitorCacheResult_
+  );
+}
+
+function getAggregateMonitorAutoRefreshTriggers_() {
+  if (typeof ScriptApp === 'undefined' || !ScriptApp.getProjectTriggers) {
+    return [];
+  }
+  return ScriptApp.getProjectTriggers()
+    .filter((trigger) => {
+      try {
+        return trigger
+          && typeof trigger.getHandlerFunction === 'function'
+          && trigger.getHandlerFunction() === MOL_DRILL_AUTO_REBUILD_TRIGGER_HANDLER;
+      } catch (_ignored) {
+        return false;
+      }
+    });
+}
+
+function deleteAggregateMonitorAutoRefreshTriggers_() {
+  const triggers = getAggregateMonitorAutoRefreshTriggers_();
+  if (typeof ScriptApp === 'undefined' || !ScriptApp.deleteTrigger) {
+    return 0;
+  }
+  triggers.forEach((trigger) => {
+    ScriptApp.deleteTrigger(trigger);
+  });
+  return triggers.length;
+}
+
+function createAggregateMonitorAutoRefreshTrigger_(intervalMinutes) {
+  if (typeof ScriptApp === 'undefined' || !ScriptApp.newTrigger) {
+    throw new Error('Apps Script の時間トリガーを作成できません。Apps Script 環境で実行してください。');
+  }
+  const builder = ScriptApp.newTrigger(MOL_DRILL_AUTO_REBUILD_TRIGGER_HANDLER).timeBased();
+  if (intervalMinutes === 60 && typeof builder.everyHours === 'function') {
+    return builder.everyHours(1).create();
+  }
+  if (!builder || typeof builder.everyMinutes !== 'function') {
+    throw new Error('Apps Script の分単位トリガーを作成できません。');
+  }
+  return builder.everyMinutes(intervalMinutes).create();
+}
+
+function readAutoRebuildCacheIntervalMinutes_() {
+  try {
+    return normalizeAutoRebuildCacheIntervalMinutes_(
+      SheetRepository.getSettingValue(MOL_DRILL_AUTO_REBUILD_CACHE_INTERVAL_MINUTES_SETTING_KEY)
+    );
+  } catch (_ignored) {
+    return 5;
+  }
+}
+
+function writeAutoRebuildCacheSettings_(enabled, intervalMinutes) {
+  const settings = [{
+    key: MOL_DRILL_AUTO_REBUILD_CACHE_ENABLED_SETTING_KEY,
+    value: String(enabled === true),
+    description: MOL_DRILL_SETTING_DESCRIPTIONS.AUTO_REBUILD_CACHE_ENABLED
+  }];
+  if (intervalMinutes != null) {
+    settings.push({
+      key: MOL_DRILL_AUTO_REBUILD_CACHE_INTERVAL_MINUTES_SETTING_KEY,
+      value: String(intervalMinutes),
+      description: MOL_DRILL_SETTING_DESCRIPTIONS.AUTO_REBUILD_CACHE_INTERVAL_MINUTES
+    });
+  }
+  SheetRepository.setSettingValues_(settings);
+}
+
+function installAggregateMonitorAutoRefreshTriggerFromMenu() {
+  return runMenuOperation_(
+    '集計・モニター自動更新を有効化',
+    'MENU_INSTALL_AGGREGATE_MONITOR_AUTO_REFRESH',
+    () => AdminService.withAdminActionLock('installAggregateMonitorAutoRefreshTriggerFromMenu', () => {
+      SheetRepository.assertManagementSheetsReady();
+      const intervalMinutes = readAutoRebuildCacheIntervalMinutes_();
+      const deletedTriggers = deleteAggregateMonitorAutoRefreshTriggers_();
+      createAggregateMonitorAutoRefreshTrigger_(intervalMinutes);
+      writeAutoRebuildCacheSettings_(true, intervalMinutes);
+      return {
+        intervalMinutes,
+        deletedTriggers,
+        createdTriggers: 1,
+        processed: 1,
+        success: 1,
+        nextAction: `AUTO_REBUILD_ON_${intervalMinutes}_MIN`
+      };
+    }),
+    (result) => `集計・モニター自動更新をONにしました。\n${result.intervalMinutes || 5}分ごとに集計キャッシュ、問題タイプ別キャッシュ、モニターキャッシュを更新します。\n生徒画面の採点速度には影響しません。集計・モニター反映を別実行で更新します。`,
+    { summarizeResult: () => ({ processedCount: 1, successCount: 1, errorCount: 0, skippedCount: 0, nextAction: 'AUTO_REBUILD_ON' }) }
+  );
+}
+
+function uninstallAggregateMonitorAutoRefreshTriggerFromMenu() {
+  return runMenuOperation_(
+    '集計・モニター自動更新を停止',
+    'MENU_UNINSTALL_AGGREGATE_MONITOR_AUTO_REFRESH',
+    () => AdminService.withAdminActionLock('uninstallAggregateMonitorAutoRefreshTriggerFromMenu', () => {
+      SheetRepository.assertManagementSheetsReady();
+      const deletedTriggers = deleteAggregateMonitorAutoRefreshTriggers_();
+      writeAutoRebuildCacheSettings_(false, null);
+      return {
+        deletedTriggers,
+        processed: deletedTriggers,
+        success: deletedTriggers,
+        nextAction: 'AUTO_REBUILD_OFF'
+      };
+    }),
+    (result) => `集計・モニター自動更新を停止しました。\n削除したトリガー: ${result.deletedTriggers || 0}件`,
+    { summarizeResult: (result) => ({ processedCount: result.deletedTriggers || 0, successCount: result.deletedTriggers || 0, errorCount: 0, skippedCount: 0, nextAction: 'AUTO_REBUILD_OFF' }) }
+  );
+}
+
+function buildAggregateMonitorAutoRefreshStatus_() {
+  SheetRepository.assertManagementSheetsReady();
+  const enabled = isAutoRebuildCacheEnabled_();
+  const intervalMinutes = readAutoRebuildCacheIntervalMinutes_();
+  const triggers = getAggregateMonitorAutoRefreshTriggers_();
+  const monitorCacheRow = SheetRepository.readMonitorCacheRow(MOL_DRILL_MONITOR_DASHBOARD_CACHE_KEY);
+  return {
+    enabled,
+    intervalMinutes,
+    triggerCount: triggers.length,
+    monitorSnapshotUpdatedAt: monitorCacheRow && monitorCacheRow.updatedAt ? monitorCacheRow.updatedAt : '',
+    studentRuntime: 'fast'
+  };
+}
+
+function showAggregateMonitorAutoRefreshStatusFromMenu() {
+  const ui = SpreadsheetApp.getUi();
+  try {
+    const status = buildAggregateMonitorAutoRefreshStatus_();
+    ui.alert([
+      '集計・モニター自動更新の状態',
+      '',
+      `AUTO_REBUILD_CACHE_ENABLED: ${status.enabled}`,
+      `AUTO_REBUILD_CACHE_INTERVAL_MINUTES: ${status.intervalMinutes}`,
+      `実際のトリガー数: ${status.triggerCount}`,
+      `最後のモニターキャッシュ更新: ${status.monitorSnapshotUpdatedAt || '未更新'}`,
+      `生徒API: 常時高速ルート (${status.studentRuntime})`,
+      '',
+      '採点直後のモニター反映は遅れることがあります。',
+      '自動更新がONなら、指定間隔で集計・モニター反映を更新します。',
+      'すぐ反映したい場合は ⑨ 集計キャッシュを更新 を使ってください。'
+    ].join('\n'));
+    return status;
+  } catch (error) {
+    const message = AdminService.formatErrorMessage_(error);
+    LoggerService.logDeveloperError('集計・モニター自動更新の状態表示 failed', error);
+    ui.alert(`集計・モニター自動更新の状態表示に失敗しました:\n${message}`);
+    throw error;
+  }
 }
 
 function rebuildProblemTypeStatsCache(authToken) {
@@ -5902,36 +8008,24 @@ function rebuildProblemTypeStatsCacheFromMenu() {
   );
 }
 
-function saveAdminSettings(authToken, settings) {
-  return AdminService.saveAdminSettings(authToken, settings || {});
-}
-
-function getAdminSettings(authToken) {
-  return AdminService.getAdminSettings(authToken);
-}
-
-function saveCourseSyncSelection(authToken, selectedCourseIds) {
-  return AdminService.saveCourseSyncSelection(authToken, selectedCourseIds || []);
-}
-
-function buildAdminDashboardOverview_(authToken) {
-  SheetRepository.assertManagementSchemaReady();
+function buildMonitorDashboardData_() {
+  SheetRepository.assertManagementSheetsReady();
   const courses = SheetRepository.readCourseRows();
-  const students = SheetRepository.readStudentRows();
-  const summaries = SheetRepository.readAggregateCache();
-  const tokens = SheetRepository.readTokenRows();
-  const distributionStatusRows = SheetRepository.readDistributionStatusRows();
+  const students = SheetRepository.readStudentRows()
+    .filter((row) => !TokenService.isTeacherTestStudentRosterKey(row.rosterKey));
+  const summaries = SheetRepository.readAggregateCache()
+    .filter((row) => !TokenService.isTeacherTestStudentRosterKey(row.rosterKey));
+  const tokens = SheetRepository.readTokenRows()
+    .filter((row) => !TokenService.isTeacherTestStudentRosterKey(row.rosterKey));
+  const distributionStatusRows = SheetRepository.readDistributionStatusRows()
+    .filter((row) => !TokenService.isTeacherTestStudentRosterKey(row.rosterKey));
   const progressRows = AggregationService.buildAdminProgressRows(students, summaries, tokens, distributionStatusRows);
-  const latestRunLogs = SheetRepository.readLatestRunLogs(1);
   const activeStudents = students.filter((row) => row.status !== '退籍').length;
-  const activeTokens = tokens.filter((row) => row.token && !row.revoked).length;
-  const failedDistributionCount = progressRows.filter((row) => row.distributionStatus === '配付失敗').length;
+  const activeTokens = tokens.filter((row) => row.token && !SheetRepository.isFlagEnabled_(row.revoked)).length;
   return {
     appName: MOL_DRILL_APP_NAME,
     appVersion: MOL_DRILL_APP_VERSION,
-    schemaVersion: MOL_DRILL_EXPECTED_SCHEMA_VERSION,
-    settings: AdminService.readAdminSettings_(),
-    courses,
+    generatedAt: new Date().toISOString(),
     courseOverview: {
       totalCount: courses.length,
       checkedCount: courses.filter((row) => row.checked).length
@@ -5944,28 +8038,76 @@ function buildAdminDashboardOverview_(authToken) {
     tokenOverview: {
       totalCount: tokens.length,
       activeCount: activeTokens,
-      revokedCount: tokens.filter((row) => row.revoked).length
+      revokedCount: tokens.filter((row) => SheetRepository.isFlagEnabled_(row.revoked)).length
     },
-    distributionOverview: {
-      failedCount: failedDistributionCount,
-      previewLoaded: false
-    },
-    summaries,
-    progressRows,
     dashboardMetrics: AggregationService.buildAdminDashboardMetrics(progressRows),
-    latestRunLog: latestRunLogs.length > 0 ? latestRunLogs[0] : null,
-    sheetLinks: AdminService.getSheetLinks()
+    progressRows
   };
 }
 
-function getAdminDashboardOverview(authToken) {
-  AdminService.assertAdminAccess(authToken);
-  return buildAdminDashboardOverview_(authToken);
+function buildMonitorMaintenanceLinks_() {
+  let spreadsheetUrl = '';
+  try {
+    const spreadsheet = SpreadsheetApp.getActiveSpreadsheet();
+    spreadsheetUrl = spreadsheet && typeof spreadsheet.getUrl === 'function'
+      ? String(spreadsheet.getUrl() || '')
+      : '';
+  } catch (_ignored) {
+    spreadsheetUrl = '';
+  }
+  return {
+    spreadsheetUrl
+  };
 }
 
-function getStudentAnswerHistory(authToken, rosterKey, limit) {
-  AdminService.assertAdminAccess(authToken);
-  SheetRepository.assertManagementSchemaReady();
+function attachMonitorMaintenanceLinks_(data) {
+  return {
+    ...(data || {}),
+    maintenanceLinks: buildMonitorMaintenanceLinks_()
+  };
+}
+
+function getMonitorDashboardData() {
+  const startedAtMs = Date.now();
+  const metrics = MonitorSnapshotService.createReadMetrics_();
+  let response = null;
+  try {
+    MonitorService.assertMonitorAccess();
+    const snapshot = MonitorSnapshotService.readDashboardSnapshot(metrics);
+    response = attachMonitorMaintenanceLinks_(snapshot || buildMonitorDashboardSnapshotMissingResponse_());
+    return response;
+  } finally {
+    const source = response && response.source ? response.source : 'error';
+    const snapshotMode = response && response.snapshotMode ? response.snapshotMode : '';
+    const rows = response && Array.isArray(response.progressRows) ? response.progressRows : [];
+    const snapshotGeneratedAt = response && response.snapshotGeneratedAt
+      ? response.snapshotGeneratedAt
+      : (metrics.snapshotGeneratedAt || '');
+    LoggerService.logDeveloperInfo(`getMonitorDashboardData elapsedMs=${Date.now() - startedAtMs} source=${source} snapshotMode=${snapshotMode} cacheReadElapsedMs=${metrics.cacheReadElapsedMs} sheetReadElapsedMs=${metrics.sheetReadElapsedMs} jsonParseElapsedMs=${metrics.jsonParseElapsedMs} rowCount=${rows.length} payloadBytes=${metrics.payloadBytes} snapshotGeneratedAt=${snapshotGeneratedAt} liveFallback=false`);
+  }
+}
+
+function buildMonitorDashboardSnapshotMissingResponse_() {
+  return {
+    appName: MOL_DRILL_APP_NAME,
+    appVersion: MOL_DRILL_APP_VERSION,
+    generatedAt: new Date().toISOString(),
+    source: 'snapshot-missing',
+    snapshotMode: 'snapshot-missing',
+    snapshotMissing: true,
+    snapshotGeneratedAt: '',
+    courseOverview: { totalCount: 0, checkedCount: 0 },
+    studentOverview: { totalCount: 0, activeCount: 0, retiredCount: 0 },
+    tokenOverview: { totalCount: 0, activeCount: 0, revokedCount: 0 },
+    dashboardMetrics: AggregationService.buildAdminDashboardMetrics([]),
+    progressRows: [],
+    message: 'モニターキャッシュが未作成です。\nまず強調表示されている「モニターだけ更新」を押してください。\nそれでも表示できない場合や、人数・集計が古い場合は「集計から完全更新」を実行してください。\n必要に応じて管理スプレッドシートを開いて確認してください。'
+  };
+}
+
+function getMonitorStudentAnswerHistory(rosterKey, limit) {
+  MonitorService.assertMonitorAccess();
+  SheetRepository.assertManagementSheetsReady();
   const normalizedRosterKey = String(rosterKey || '').trim();
   const defaultLimit = 20;
   const rawLimit = limit == null || limit === '' ? defaultLimit : Number(limit);
@@ -5998,9 +8140,9 @@ function getStudentAnswerHistory(authToken, rosterKey, limit) {
     }));
 }
 
-function getStudentProblemTypeStats(authToken, rosterKey) {
-  AdminService.assertAdminAccess(authToken);
-  SheetRepository.assertManagementSchemaReady();
+function getMonitorStudentProblemTypeStats(rosterKey) {
+  MonitorService.assertMonitorAccess();
+  SheetRepository.assertManagementSheetsReady();
   const normalizedRosterKey = String(rosterKey || '').trim();
   if (normalizedRosterKey === '') {
     return [];
@@ -6026,69 +8168,6 @@ function getStudentProblemTypeStats(authToken, rosterKey) {
       lastIsCorrect: row.lastIsCorrect,
       lastElapsedMs: row.lastElapsedMs
     }));
-}
-
-function getAdminLogData(authToken) {
-  AdminService.assertAdminAccess(authToken);
-  SheetRepository.assertManagementSchemaReady();
-  const runLogs = SheetRepository.readLatestRunLogs(MOL_DRILL_ADMIN_LOG_LIMIT).reverse();
-  return {
-    answerLogs: SheetRepository.readLatestAnswerLogs(MOL_DRILL_ADMIN_LOG_LIMIT).reverse(),
-    distributionLogs: SheetRepository.readLatestDistributionLogs(MOL_DRILL_ADMIN_LOG_LIMIT).reverse(),
-    runLogs,
-    latestRunLog: runLogs.length > 0 ? runLogs[0] : null,
-    sheetLinks: AdminService.getSheetLinks()
-  };
-}
-
-function getAdminDistributionPreviewData(authToken, options) {
-  AdminService.assertAdminAccess(authToken);
-  SheetRepository.assertManagementSchemaReady();
-  return {
-    distributionPreview: DistributionService.getDistributionTargetsPreview(options || {}),
-    distributionLogs: SheetRepository.readLatestDistributionLogs(MOL_DRILL_ADMIN_LOG_LIMIT).reverse()
-  };
-}
-
-function getAdminRosterData(authToken) {
-  AdminService.assertAdminAccess(authToken);
-  SheetRepository.assertManagementSchemaReady();
-  return {
-    courses: SheetRepository.readCourseRows(),
-    students: SheetRepository.readStudentRows(),
-    tokens: SheetRepository.readTokenRows()
-  };
-}
-
-function getAdminDashboardData(authToken) {
-  AdminService.assertAdminAccess(authToken);
-  SheetRepository.ensureSheets();
-  const overview = buildAdminDashboardOverview_(authToken);
-  const students = SheetRepository.readStudentRows();
-  const summaries = SheetRepository.readAggregateCache();
-  const tokens = SheetRepository.readTokenRows();
-  const distributionLogs = SheetRepository.readDistributionLogs();
-  const progressRows = AggregationService.buildAdminProgressRows(students, summaries, tokens, distributionLogs);
-  const latestDistributionLogs = SheetRepository.readLatestDistributionLogs(MOL_DRILL_ADMIN_LOG_LIMIT).reverse();
-  const latestRunLogs = SheetRepository.readLatestRunLogs(MOL_DRILL_ADMIN_LOG_LIMIT).reverse();
-  return {
-    ...overview,
-    students,
-    tokens,
-    summaries,
-    progressRows,
-    dashboardMetrics: AggregationService.buildAdminDashboardMetrics(progressRows),
-    distributionPreview: DistributionService.getDistributionTargetsPreview({}),
-    distributionLogs: latestDistributionLogs,
-    answerLogs: SheetRepository.readLatestAnswerLogs(MOL_DRILL_ADMIN_LOG_LIMIT).reverse(),
-    runLogs: latestRunLogs,
-    latestRunLog: latestRunLogs.length > 0 ? latestRunLogs[0] : null,
-    sheetLinks: AdminService.getSheetLinks()
-  };
-}
-
-function getAdminDashboardState(authToken) {
-  return getAdminDashboardData(authToken);
 }
 
 function getStudentState(token) {

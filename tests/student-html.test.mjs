@@ -74,6 +74,15 @@ test('student screen uses encouraging result titles with advanced-only significa
   assert.match(html, /elements\.resultTitle\.textContent = buildResultTitle\(data, correct\)/);
 });
 
+test('student screen examples use times-ten notation without e notation', async () => {
+  const html = await loadStudentHtml();
+
+  assert.match(html, /6\.0×10\^23、6\.0x10\^23/);
+  assert.doesNotMatch(html, /6\.0e23/i);
+  assert.doesNotMatch(html, /6\.02e23/i);
+  assert.doesNotMatch(html, /E\+23/);
+});
+
 test('student screen reads token from URL params and uses Apps Script server functions', async () => {
   const html = await loadStudentHtml();
 
@@ -128,17 +137,55 @@ test('student screen prevents double submit and keeps a retryable error path', a
   assert.match(html, /token不正/);
 });
 
-test('student screen advances to prefetched next problem with Enter after grading', async () => {
+test('student screen prefetches one next problem and prefers it after grading', async () => {
   const html = await loadStudentHtml();
   const keydownBody = html.slice(html.indexOf("elements.answerInput.addEventListener('keydown'"), html.indexOf('selectLevel(state.selectedLevel)'));
 
+  assert.match(html, /prefetchedProblem: null/);
+  assert.match(html, /prefetchedLevel: ''/);
+  assert.match(html, /isPrefetching: false/);
+  assert.match(html, /prefetchRequestId: 0/);
+  assert.match(html, /function startPrefetchForCurrentLevel/);
+  assert.match(html, /function hasUsablePrefetchedProblem/);
+  assert.match(html, /function takePrefetchedProblem/);
   assert.match(html, /function canShowPrefetchedProblem/);
   assert.match(html, /showNextProblem\(\)/);
+  assert.match(html, /state\.prefetchPromise = runServer\(method, args\)/);
+  assert.match(html, /skipNextProblem: hasUsablePrefetchedProblem\(state\.selectedLevel\)/);
+  assert.match(html, /state\.pendingProblem = takePrefetchedProblem\(state\.selectedLevel\) \|\| response\.nextProblem \|\| null/);
   assert.match(keydownBody, /if \(canShowPrefetchedProblem\(\)\)/);
   assert.match(keydownBody, /showNextProblem\(\)/);
   assert.match(keydownBody, /submitAnswer\(\)/);
-  assert.match(html, /state\.pendingProblem = response\.nextProblem \|\| null/);
+  assert.match(html, /startPrefetchForCurrentLevel\(\)/);
   assert.match(html, /elements\.answerInput\.focus\(\)/);
+});
+
+test('student screen invalidates prefetched problems on level changes and falls back when prefetch fails', async () => {
+  const html = await loadStudentHtml();
+  const levelClickBody = html.slice(html.indexOf('elements.levelButtons.forEach'), html.indexOf('elements.submitButton.addEventListener'));
+  const showNextBody = html.slice(html.indexOf('async function showNextProblem'), html.indexOf('function retryLastAction'));
+  const prefetchBody = html.slice(html.indexOf('function startPrefetchForCurrentLevel'), html.indexOf('async function initialize'));
+
+  assert.match(html, /function clearPrefetchedProblem/);
+  assert.match(levelClickBody, /clearPrefetchedProblem\(\)/);
+  assert.match(prefetchBody, /state\.prefetchRequestId !== requestId/);
+  assert.match(prefetchBody, /state\.prefetchLevel !== state\.selectedLevel/);
+  assert.match(prefetchBody, /console\.warn\('prefetchProblem failed'/);
+  assert.match(showNextBody, /await state\.prefetchPromise/);
+  assert.match(showNextBody, /fetchProblem\(\)/);
+});
+
+test('student screen does not advance to a prefetched problem before the current answer is graded', async () => {
+  const html = await loadStudentHtml();
+  const updateButtonStatesBody = html.slice(html.indexOf('function updateButtonStates'), html.indexOf('function setMetaElement'));
+  const showNextBody = html.slice(html.indexOf('async function showNextProblem'), html.indexOf('function retryLastAction'));
+  const keydownBody = html.slice(html.indexOf("elements.answerInput.addEventListener('keydown'"), html.indexOf('selectLevel(state.selectedLevel)'));
+
+  assert.match(updateButtonStatesBody, /nextProblemButton\.disabled = busy \|\| !state\.answerLocked/);
+  assert.doesNotMatch(updateButtonStatesBody, /hasUsablePrefetchedProblem\(state\.selectedLevel\)/);
+  assert.match(showNextBody, /if \(!state\.answerLocked\) {\s*return;\s*}/);
+  assert.match(showNextBody, /if \(state\.isSubmitting \|\| state\.isInitializing\) {\s*return;\s*}/);
+  assert.match(keydownBody, /if \(canShowPrefetchedProblem\(\)\) {\s*showNextProblem\(\);\s*return;\s*}\s*submitAnswer\(\)/);
 });
 
 test('student screen renders given values between question text and answer input', async () => {

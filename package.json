@@ -1,6 +1,6 @@
 {
   "name": "mol-calculation-generator",
-  "version": "1.0.0",
+  "version": "2.0.0",
   "description": "Google Apps Script classroom-linked mole calculation practice app.",
   "private": true,
   "scripts": {

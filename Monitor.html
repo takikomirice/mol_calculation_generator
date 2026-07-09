@@ -1,0 +1,1513 @@
+<!doctype html>
+<html>
+<head>
+  <base target="_top">
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>もるくえ！ モニター</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --bg: #eef2f7;
+      --panel: #ffffff;
+      --line: #d7dee8;
+      --line-soft: #edf1f6;
+      --text: #1f2937;
+      --muted: #667085;
+      --accent: #0f766e;
+      --accent-dark: #0b5f59;
+      --info-bg: #e8f2ff;
+      --info-text: #155e9f;
+      --good-bg: #e9f7ef;
+      --good-text: #11633d;
+      --warn-bg: #fff4df;
+      --warn-text: #9a5b00;
+      --danger-bg: #fff0ed;
+      --danger-text: #b42318;
+      --neutral-bg: #f2f4f7;
+      --neutral-text: #475467;
+      --number-column-width: 70px;
+      --name-column-width: 150px;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--text);
+      font-family: Arial, "Helvetica Neue", sans-serif;
+      font-size: 13px;
+      letter-spacing: 0;
+    }
+
+    button,
+    input,
+    select {
+      font: inherit;
+    }
+
+    button {
+      min-height: 30px;
+      border: 1px solid var(--line);
+      border-radius: 5px;
+      background: #ffffff;
+      color: var(--text);
+      padding: 0 10px;
+      cursor: pointer;
+      white-space: nowrap;
+    }
+
+    button.primary {
+      background: var(--accent);
+      border-color: var(--accent);
+      color: #ffffff;
+      font-weight: 700;
+    }
+
+    button.attention {
+      background: var(--warn-bg);
+      border-color: #f1d198;
+      color: var(--warn-text);
+      font-weight: 700;
+    }
+
+    button.compact {
+      min-height: 26px;
+      padding: 0 8px;
+      font-size: 12px;
+    }
+
+    button:disabled {
+      cursor: wait;
+      opacity: 0.65;
+    }
+
+    .page {
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .topbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      padding: 8px 14px;
+      background: #ffffff;
+      border-bottom: 1px solid var(--line);
+    }
+
+    .title-block {
+      display: flex;
+      align-items: baseline;
+      gap: 10px;
+      min-width: 0;
+    }
+
+    h1 {
+      margin: 0;
+      font-size: 18px;
+      line-height: 1.2;
+      white-space: nowrap;
+    }
+
+    .version {
+      color: var(--muted);
+      font-size: 11px;
+      white-space: nowrap;
+    }
+
+    .toolbar {
+      display: flex;
+      align-items: center;
+      justify-content: flex-end;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+
+    .timestamp {
+      color: var(--muted);
+      font-size: 12px;
+      white-space: nowrap;
+    }
+
+    .toggle-field {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      color: var(--muted);
+      font-size: 12px;
+      white-space: nowrap;
+    }
+
+    .toggle-field input,
+    .check-field input {
+      width: 14px;
+      height: 14px;
+      margin: 0;
+    }
+
+    .status-line {
+      min-height: 26px;
+      padding: 5px 14px;
+      color: var(--muted);
+      border-bottom: 1px solid var(--line);
+      background: #fbfcfe;
+    }
+
+    .status-line.error {
+      color: var(--danger-text);
+      background: #fff7f5;
+    }
+
+    .kpi-bar {
+      display: grid;
+      grid-template-columns: repeat(7, minmax(104px, 1fr));
+      gap: 1px;
+      background: var(--line);
+      border-bottom: 1px solid var(--line);
+      overflow-x: auto;
+    }
+
+    .kpi-item {
+      min-width: 104px;
+      background: #ffffff;
+      padding: 6px 10px;
+      display: flex;
+      align-items: baseline;
+      justify-content: space-between;
+      gap: 8px;
+    }
+
+    .kpi-label {
+      color: var(--muted);
+      font-size: 11px;
+      white-space: nowrap;
+    }
+
+    .kpi-value {
+      font-size: 16px;
+      font-weight: 700;
+      white-space: nowrap;
+    }
+
+    .filters {
+      display: grid;
+      grid-template-columns: minmax(170px, 1.2fr) minmax(132px, 0.85fr) minmax(112px, 0.75fr) minmax(112px, 0.72fr) auto auto;
+      gap: 7px;
+      padding: 7px 14px;
+      background: #ffffff;
+      border-bottom: 1px solid var(--line);
+      align-items: end;
+    }
+
+    .field {
+      display: grid;
+      gap: 3px;
+    }
+
+    .field label,
+    .check-field {
+      color: var(--muted);
+      font-size: 11px;
+      line-height: 1.35;
+    }
+
+    .field input,
+    .field select {
+      width: 100%;
+      min-height: 28px;
+      border: 1px solid var(--line);
+      border-radius: 5px;
+      background: #ffffff;
+      color: var(--text);
+      padding: 0 8px;
+    }
+
+    .check-field {
+      min-height: 28px;
+      display: flex;
+      align-items: center;
+      gap: 5px;
+      white-space: nowrap;
+    }
+
+    .table-wrap {
+      flex: 1;
+      min-height: 0;
+      overflow: auto;
+      background: #ffffff;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      min-width: 980px;
+    }
+
+    th,
+    td {
+      padding: 6px 8px;
+      border-bottom: 1px solid var(--line-soft);
+      text-align: left;
+      vertical-align: middle;
+    }
+
+    th {
+      position: sticky;
+      top: 0;
+      z-index: 1;
+      background: #f8fafc;
+      color: #475467;
+      font-size: 11px;
+      font-weight: 700;
+      white-space: nowrap;
+    }
+
+    .sort-header {
+      min-height: 0;
+      border: 0;
+      border-radius: 0;
+      background: transparent;
+      color: inherit;
+      padding: 0;
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      font-size: inherit;
+      font-weight: 700;
+      cursor: pointer;
+    }
+
+    .sort-header:hover {
+      color: var(--accent-dark);
+      text-decoration: underline;
+    }
+
+    .sort-indicator {
+      display: inline-block;
+      min-width: 1em;
+      color: var(--accent-dark);
+      font-size: 10px;
+      text-align: center;
+    }
+
+    td {
+      background: #ffffff;
+      line-height: 1.35;
+    }
+
+    tbody tr.follow-row td {
+      background: #fffdf7;
+    }
+
+    .sticky-number {
+      position: sticky;
+      left: 0;
+      width: var(--number-column-width);
+      min-width: var(--number-column-width);
+      max-width: var(--number-column-width);
+      z-index: 2;
+      background: #ffffff;
+    }
+
+    .sticky-name {
+      position: sticky;
+      left: var(--number-column-width);
+      width: var(--name-column-width);
+      min-width: var(--name-column-width);
+      max-width: var(--name-column-width);
+      z-index: 2;
+      background: #ffffff;
+    }
+
+    th.sticky-number,
+    th.sticky-name {
+      z-index: 4;
+      background: #f8fafc;
+    }
+
+    tbody tr.follow-row td.sticky-number,
+    tbody tr.follow-row td.sticky-name {
+      background: #fffdf7;
+    }
+
+    .num {
+      text-align: right;
+      white-space: nowrap;
+    }
+
+    .nowrap {
+      white-space: nowrap;
+    }
+
+    .student-name {
+      font-weight: 700;
+      white-space: nowrap;
+    }
+
+    .level-summary {
+      white-space: nowrap;
+      font-size: 12px;
+    }
+
+    .status-badge,
+    .mini-badge {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 22px;
+      border-radius: 999px;
+      padding: 0 8px;
+      background: var(--neutral-bg);
+      color: var(--neutral-text);
+      font-size: 11px;
+      font-weight: 700;
+      white-space: nowrap;
+      border: 1px solid transparent;
+    }
+
+    .mini-badge {
+      min-height: 20px;
+      padding: 0 7px;
+      font-size: 11px;
+      font-weight: 600;
+    }
+
+    .status-undistributed {
+      background: var(--neutral-bg);
+      color: var(--neutral-text);
+      border-color: #d0d5dd;
+    }
+
+    .status-distribution-failed,
+    .status-follow,
+    .status-speed-drop {
+      background: var(--danger-bg);
+      color: var(--danger-text);
+      border-color: #f8c9c1;
+    }
+
+    .status-not-accessed,
+    .status-not-started {
+      background: var(--warn-bg);
+      color: var(--warn-text);
+      border-color: #f1d198;
+    }
+
+    .status-active {
+      background: var(--info-bg);
+      color: var(--info-text);
+      border-color: #b9d7fb;
+    }
+
+    .status-good,
+    .status-advanced,
+    .status-distributed,
+    .status-accessed {
+      background: var(--good-bg);
+      color: var(--good-text);
+      border-color: #b7e4c7;
+    }
+
+    .muted {
+      color: var(--muted);
+    }
+
+    .empty {
+      color: var(--muted);
+      text-align: center;
+      padding: 22px;
+    }
+
+    .modal-backdrop {
+      position: fixed;
+      inset: 0;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+      background: rgba(15, 23, 42, 0.45);
+      z-index: 10;
+    }
+
+    .modal-backdrop.open {
+      display: flex;
+    }
+
+    .modal {
+      width: min(1080px, 94vw);
+      max-height: 86vh;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+      background: #ffffff;
+      border-radius: 8px;
+      box-shadow: 0 24px 60px rgba(15, 23, 42, 0.28);
+    }
+
+    .modal-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 12px 14px;
+      border-bottom: 1px solid var(--line);
+    }
+
+    .modal-header h2 {
+      margin: 0;
+      font-size: 16px;
+    }
+
+    .modal-body {
+      overflow: auto;
+      padding: 12px 14px 14px;
+    }
+
+    .modal-status {
+      min-height: 24px;
+      padding: 0 0 8px;
+      color: var(--muted);
+    }
+
+    .modal-status.error {
+      color: var(--danger-text);
+    }
+
+    .split {
+      display: grid;
+      grid-template-columns: minmax(360px, 0.9fr) minmax(520px, 1.4fr);
+      gap: 14px;
+      align-items: start;
+    }
+
+    .history-section h3 {
+      margin: 0 0 8px;
+      font-size: 13px;
+    }
+
+    .history-table {
+      min-width: 0;
+    }
+
+    .history-table th,
+    .history-table td {
+      padding: 6px 7px;
+    }
+
+    .question-cell {
+      max-width: 240px;
+    }
+
+    @media (max-width: 980px) {
+      .topbar,
+      .toolbar {
+        align-items: flex-start;
+        flex-direction: column;
+      }
+
+      .filters {
+        grid-template-columns: 1fr 1fr;
+      }
+
+      .split {
+        grid-template-columns: 1fr;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="page">
+    <header class="topbar">
+      <div class="title-block">
+        <h1>もるくえ！ モニター</h1>
+        <span id="versionLabel" class="version"></span>
+      </div>
+      <div class="toolbar">
+        <span id="lastUpdatedAt" class="timestamp">最終更新時刻: -</span>
+        <label class="toggle-field"><input id="autoRefreshToggle" type="checkbox"> 自動更新</label>
+        <button id="refreshButton" class="primary" type="button">更新</button>
+        <button id="rebuildMonitorSnapshotButton" type="button">モニターだけ更新</button>
+        <button id="rebuildCachesButton" type="button">集計から完全更新</button>
+        <button id="openSpreadsheetButton" type="button">管理スプレッドシートを開く</button>
+        <button id="downloadCsvButton" type="button">表示中一覧CSV</button>
+      </div>
+    </header>
+
+    <div id="statusLine" class="status-line">読み込み中...</div>
+
+    <section id="kpiBar" class="kpi-bar" aria-label="KPIバー">
+      <div class="kpi-item"><span class="kpi-label">配付済み</span><span id="kpiDistributed" class="kpi-value">-</span></div>
+      <div class="kpi-item"><span class="kpi-label">アクセス済み</span><span id="kpiAccessed" class="kpi-value">-</span></div>
+      <div class="kpi-item"><span class="kpi-label">解答済み</span><span id="kpiAnswered" class="kpi-value">-</span></div>
+      <div class="kpi-item"><span class="kpi-label">未実施</span><span id="kpiNotStarted" class="kpi-value">-</span></div>
+      <div class="kpi-item"><span class="kpi-label">要フォロー</span><span id="kpiFollow" class="kpi-value">-</span></div>
+      <div class="kpi-item"><span class="kpi-label">総解答</span><span id="kpiTotalAnswers" class="kpi-value">-</span></div>
+      <div class="kpi-item"><span class="kpi-label">直近正答率</span><span id="kpiRecentAccuracy" class="kpi-value">-</span></div>
+    </section>
+
+    <section class="filters" aria-label="フィルター">
+      <div class="field">
+        <label for="searchInput">検索</label>
+        <input id="searchInput" type="search" placeholder="氏名・番号">
+      </div>
+      <div class="field">
+        <label for="courseFilter">Classroom</label>
+        <select id="courseFilter"></select>
+      </div>
+      <div class="field">
+        <label for="statusFilter">状態</label>
+        <select id="statusFilter">
+          <option value="">すべて</option>
+        </select>
+      </div>
+      <div class="field">
+        <label for="viewModeSelect">表示</label>
+        <select id="viewModeSelect">
+          <option value="standard" selected>標準</option>
+          <option value="follow">フォロー</option>
+          <option value="detail">詳細</option>
+          <option value="distribution">配付確認</option>
+        </select>
+      </div>
+      <label class="check-field"><input id="followOnlyToggle" type="checkbox"> 要フォローのみ</label>
+      <label class="check-field"><input id="notStartedOnlyToggle" type="checkbox"> 未実施のみ</label>
+    </section>
+
+    <main class="table-wrap">
+      <table id="studentTable" aria-label="生徒一覧テーブル">
+        <thead id="studentHead"></thead>
+        <tbody id="studentBody">
+          <tr><td colspan="7" class="empty">読み込み中...</td></tr>
+        </tbody>
+      </table>
+    </main>
+  </div>
+
+  <div id="historyModal" class="modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="historyTitle">
+    <section class="modal">
+      <div class="modal-header">
+        <h2 id="historyTitle">生徒別履歴</h2>
+        <button id="closeHistoryButton" type="button">閉じる</button>
+      </div>
+      <div class="modal-body">
+        <div id="historyStatus" class="modal-status">読み込み中...</div>
+        <div class="split">
+          <section class="history-section">
+            <h3>問題タイプ別</h3>
+            <table class="history-table">
+              <thead><tr><th>レベル</th><th>問題タイプ</th><th class="num">解答</th><th class="num">正答</th><th class="num">正答率</th><th class="num">直近正答率</th></tr></thead>
+              <tbody id="problemTypeStatsBody"><tr><td colspan="6" class="empty">未読込</td></tr></tbody>
+            </table>
+          </section>
+          <section class="history-section">
+            <h3>直近履歴</h3>
+            <table class="history-table">
+              <thead><tr><th>日時</th><th>レベル</th><th>問題タイプ</th><th>結果</th><th>生徒解答</th><th>問題</th></tr></thead>
+              <tbody id="answerHistoryBody"><tr><td colspan="6" class="empty">未読込</td></tr></tbody>
+            </table>
+          </section>
+        </div>
+      </div>
+    </section>
+  </div>
+
+  <script>
+    const AUTO_REFRESH_INTERVAL_MS = 60000;
+    const AUTO_REFRESH_STORAGE_KEY = 'molMonitorAutoRefresh';
+    const DEFAULT_VIEW_MODE = 'standard';
+    const SNAPSHOT_MISSING_MESSAGE = 'モニターキャッシュが未作成です。\nまず強調表示されている「モニターだけ更新」を押してください。\nそれでも表示できない場合や、人数・集計が古い場合は「集計から完全更新」を実行してください。\n必要に応じて管理スプレッドシートを開いて確認してください。';
+    const SNAPSHOT_MISSING_STATUS = 'まず「モニターだけ更新」を押してください。それでも人数や集計が古い場合は「集計から完全更新」を実行してください。';
+    const MONITOR_REBUILD_FAILED_MESSAGE = 'モニターだけ更新では復旧できませんでした。\n強調表示されている「集計から完全更新」を実行してください。';
+    const MONITOR_SNAPSHOT_STILL_MISSING_MESSAGE = 'モニターキャッシュを作成できませんでした。「集計から完全更新」を実行してください。';
+
+    const VIEW_MODE_COLUMNS = {
+      standard: ['number', 'name', 'status', 'attempts', 'recentAccuracy', 'lastAnsweredAt', 'history'],
+      follow: ['number', 'name', 'status', 'followReason', 'attempts', 'recentAccuracy', 'lastAnsweredAt', 'history'],
+      detail: ['number', 'name', 'status', 'distribution', 'access', 'attempts', 'recentAccuracy', 'levelSummary', 'lastAnsweredAt', 'history'],
+      distribution: ['courseName', 'number', 'name', 'distribution', 'access', 'history']
+    };
+
+    const state = {
+      data: null,
+      rows: [],
+      loading: false,
+      maintenanceRunning: false,
+      fullRebuildRecommended: false,
+      monitorSnapshotRebuildRecommended: false,
+      autoRefreshTimer: null,
+      viewMode: DEFAULT_VIEW_MODE,
+      sortKey: '',
+      sortDirection: ''
+    };
+
+    const elements = {
+      refreshButton: document.getElementById('refreshButton'),
+      rebuildMonitorSnapshotButton: document.getElementById('rebuildMonitorSnapshotButton'),
+      rebuildCachesButton: document.getElementById('rebuildCachesButton'),
+      openSpreadsheetButton: document.getElementById('openSpreadsheetButton'),
+      downloadCsvButton: document.getElementById('downloadCsvButton'),
+      autoRefreshToggle: document.getElementById('autoRefreshToggle'),
+      lastUpdatedAt: document.getElementById('lastUpdatedAt'),
+      statusLine: document.getElementById('statusLine'),
+      versionLabel: document.getElementById('versionLabel'),
+      studentHead: document.getElementById('studentHead'),
+      studentBody: document.getElementById('studentBody'),
+      searchInput: document.getElementById('searchInput'),
+      courseFilter: document.getElementById('courseFilter'),
+      statusFilter: document.getElementById('statusFilter'),
+      viewModeSelect: document.getElementById('viewModeSelect'),
+      followOnlyToggle: document.getElementById('followOnlyToggle'),
+      notStartedOnlyToggle: document.getElementById('notStartedOnlyToggle'),
+      historyModal: document.getElementById('historyModal'),
+      historyTitle: document.getElementById('historyTitle'),
+      historyStatus: document.getElementById('historyStatus'),
+      problemTypeStatsBody: document.getElementById('problemTypeStatsBody'),
+      answerHistoryBody: document.getElementById('answerHistoryBody')
+    };
+
+    const COLUMN_DEFINITIONS = [
+      {
+        key: 'courseName',
+        label: 'Classroom',
+        sortKey: null,
+        thClass: '',
+        tdClass: 'nowrap',
+        render: (row) => escapeHtml(row.courseName || '-')
+      },
+      {
+        key: 'number',
+        label: '番号',
+        sortKey: 'number',
+        thClass: 'sticky-number',
+        tdClass: 'nowrap num sticky-number',
+        render: (row) => escapeHtml(row.number || '-')
+      },
+      {
+        key: 'name',
+        label: '氏名',
+        sortKey: 'name',
+        thClass: 'sticky-name',
+        tdClass: 'sticky-name',
+        render: (row) => `<span class="student-name">${escapeHtml(row.name || '-')}</span>`
+      },
+      {
+        key: 'status',
+        label: '状態',
+        sortKey: 'status',
+        thClass: '',
+        tdClass: '',
+        render: (row) => renderBadge(row.statusLabel || '-')
+      },
+      {
+        key: 'distribution',
+        label: '配付',
+        sortKey: 'distribution',
+        thClass: '',
+        tdClass: '',
+        render: (row) => renderBadge(row.distributionStatus || '-')
+      },
+      {
+        key: 'access',
+        label: 'アクセス',
+        sortKey: 'access',
+        thClass: '',
+        tdClass: '',
+        render: (row) => renderBadge(row.accessStatus || '-')
+      },
+      {
+        key: 'attempts',
+        label: '解答',
+        sortKey: 'attempts',
+        thClass: 'num',
+        tdClass: 'num',
+        render: (row) => String(Number(row.totalAttempts || 0))
+      },
+      {
+        key: 'recentAccuracy',
+        label: '直近正答率',
+        sortKey: 'recentAccuracy',
+        thClass: 'num',
+        tdClass: 'num',
+        render: (row) => escapeHtml(formatPercent(row.recent10Accuracy))
+      },
+      {
+        key: 'levelSummary',
+        label: 'レベル別',
+        sortKey: null,
+        thClass: '',
+        tdClass: 'level-summary',
+        render: (row) => escapeHtml(levelSummary(row))
+      },
+      {
+        key: 'lastAnsweredAt',
+        label: '最終解答',
+        sortKey: 'lastAnsweredAt',
+        thClass: '',
+        tdClass: 'nowrap',
+        render: (row) => escapeHtml(formatDateTime(row.lastAnsweredAt))
+      },
+      {
+        key: 'followReason',
+        label: '要フォロー理由',
+        sortKey: null,
+        thClass: '',
+        tdClass: '',
+        render: (row) => escapeHtml(followReason(row))
+      },
+      {
+        key: 'history',
+        label: '履歴',
+        sortKey: null,
+        thClass: '',
+        tdClass: '',
+        render: (row) => `<button class="compact" type="button" data-history="${escapeHtml(row.rosterKey)}" data-name="${escapeHtml(row.name || '')}">履歴</button>`
+      }
+    ];
+
+    const COLUMN_DEFINITION_MAP = COLUMN_DEFINITIONS.reduce((map, column) => {
+      map[column.key] = column;
+      return map;
+    }, {});
+
+    const CSV_COLUMNS = [
+      { header: 'Classroom', value: (row) => row.courseName || '' },
+      { header: '出席番号', value: (row) => row.number || '' },
+      { header: '氏名', value: (row) => row.name || '' },
+      { header: '状態', value: (row) => row.statusLabel || '' },
+      { header: '配付', value: (row) => row.distributionStatus || '' },
+      { header: 'アクセス', value: (row) => row.accessStatus || '' },
+      { header: '解答数', value: (row) => Number(row.totalAttempts || 0) },
+      { header: '直近10問正答率', value: (row) => formatPercent(row.recent10Accuracy) },
+      { header: '初級', value: (row) => formatLevelCsv(row, 'beginner') },
+      { header: '中級', value: (row) => formatLevelCsv(row, 'intermediate') },
+      { header: '上級', value: (row) => formatLevelCsv(row, 'advanced') },
+      { header: '最終解答', value: (row) => row.lastAnsweredAt || '' },
+      { header: '要フォロー理由', value: (row) => followReason(row) }
+    ];
+
+    function escapeHtml(value) {
+      return String(value == null ? '' : value)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+    }
+
+    function stripHtml(value) {
+      return String(value || '').replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim();
+    }
+
+    function compactText(value, maxLength) {
+      const text = String(value || '').replace(/\s+/g, ' ').trim();
+      if (text === '') return '-';
+      if (text.length <= maxLength) return text;
+      return `${text.slice(0, maxLength - 1)}…`;
+    }
+
+    function formatPercent(value) {
+      if (value == null || value === '') return '-';
+      const numeric = Number(value);
+      if (!Number.isFinite(numeric)) return '-';
+      return `${Math.round(numeric * 100)}%`;
+    }
+
+    function formatDateTime(value) {
+      const text = String(value || '').trim();
+      if (text === '') return '-';
+      const date = new Date(text);
+      if (Number.isNaN(date.getTime())) return text;
+      return date.toLocaleString('ja-JP', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' });
+    }
+
+    function formatLevelCsv(row, level) {
+      const correct = Number(row[`${level}Correct`] || 0);
+      const attempts = Number(row[`${level}Attempts`] || 0);
+      const accuracy = formatPercent(row[`${level}Accuracy`]);
+      return `${correct}/${attempts}${accuracy === '-' ? '' : ` (${accuracy})`}`;
+    }
+
+    function formatLevel(level) {
+      const text = String(level || '').trim();
+      if (text === '' || text.toLowerCase() === 'undefined' || text.toLowerCase() === 'null') return '-';
+      const labels = {
+        beginner: '初級',
+        intermediate: '中級',
+        advanced: '上級'
+      };
+      return labels[text] || text || '-';
+    }
+
+    function formatProblemType(problemType) {
+      const text = String(problemType || '').trim();
+      if (text === '' || text.toLowerCase() === 'undefined' || text.toLowerCase() === 'null') return '-';
+      const labels = {
+        '1': 'mol→質量',
+        '2': '質量→mol',
+        '3': 'mol→粒子数',
+        '4': '粒子数→mol',
+        '5': 'mol→気体体積',
+        '6': '気体体積→mol',
+        '7': '質量→粒子数',
+        '8': '粒子数→質量',
+        '9': '質量→気体体積',
+        '10': '気体体積→質量',
+        '11': '気体体積→粒子数',
+        '12': '粒子数→気体体積',
+        '13': '原子量→原子1個の質量',
+        '14': '質量→モル質量推定',
+        mol_to_mass: 'mol→質量',
+        mass_to_mol: '質量→mol',
+        mol_to_particles: 'mol→粒子数',
+        particles_to_mol: '粒子数→mol',
+        mol_to_gas_volume: 'mol→気体体積',
+        gas_volume_to_mol: '気体体積→mol',
+        mass_to_particles: '質量→粒子数',
+        particles_to_mass: '粒子数→質量',
+        mass_to_gas_volume: '質量→気体体積',
+        gas_volume_to_mass: '気体体積→質量',
+        gas_volume_to_particles: '気体体積→粒子数',
+        particles_to_gas_volume: '粒子数→気体体積',
+        atomic_mass_to_atom_mass: '原子量→原子1個の質量',
+        mass_to_molar_mass_estimate: '質量→モル質量推定'
+      };
+      return labels[text] || text || '-';
+    }
+
+    function setStatus(message, isError) {
+      elements.statusLine.textContent = message;
+      elements.statusLine.classList.toggle('error', isError === true);
+    }
+
+    function setHistoryStatus(message, isError) {
+      elements.historyStatus.textContent = message;
+      elements.historyStatus.classList.toggle('error', isError === true);
+    }
+
+    function getFriendlyErrorMessage(error) {
+      const message = error && error.message ? error.message : String(error || '');
+      if (/許可|権限|認証|ログイン/.test(message)) {
+        return '認証エラー: Webモニターを見る権限がありません。許可された教師アカウントで開き直してください。';
+      }
+      if (/タイムアウト|timeout/i.test(message)) {
+        return '読み込みがタイムアウトしました。少し待ってから更新してください。';
+      }
+      return `読み込みに失敗しました: ${message || '不明なエラー'}`;
+    }
+
+    function runServer(functionName, args) {
+      return new Promise((resolve, reject) => {
+        google.script.run
+          .withSuccessHandler(resolve)
+          .withFailureHandler(reject)[functionName](...(args || []));
+      });
+    }
+
+    function getTimingNow() {
+      return window.performance && typeof window.performance.now === 'function'
+        ? performance.now()
+        : Date.now();
+    }
+
+    function formatSnapshotMode(mode) {
+      if (mode === 'snapshot') return 'snapshot';
+      if (mode === 'snapshot-missing') return 'snapshot-missing';
+      return mode || 'unknown';
+    }
+
+    async function loadDashboard(options) {
+      if (state.loading) return;
+      const silent = options && options.silent === true;
+      state.loading = true;
+      elements.refreshButton.disabled = true;
+      updateMaintenanceControls();
+      if (!silent) {
+        setStatus('生徒一覧を読み込み中です...', false);
+      }
+      try {
+        const serverStartedAt = getTimingNow();
+        const data = await runServer('getMonitorDashboardData');
+        const serverElapsedMs = Math.round(getTimingNow() - serverStartedAt);
+        state.data = data || {};
+        state.rows = Array.isArray(state.data.progressRows) ? state.data.progressRows.slice() : [];
+        const renderStartedAt = getTimingNow();
+        renderDashboard();
+        const renderElapsedMs = Math.round(getTimingNow() - renderStartedAt);
+        console.log('getMonitorDashboardData', {
+          elapsedMs: serverElapsedMs,
+          snapshotMode: state.data.snapshotMode || '',
+          snapshotGeneratedAt: state.data.snapshotGeneratedAt || '',
+          rowCount: state.rows.length
+        });
+        console.log('renderDashboard', {
+          elapsedMs: renderElapsedMs,
+          rowCount: state.rows.length,
+          viewMode: state.viewMode
+        });
+        state.monitorSnapshotRebuildRecommended = state.data.snapshotMissing === true;
+        state.fullRebuildRecommended = false;
+        if (state.data.snapshotMissing === true) {
+          setStatus(`${SNAPSHOT_MISSING_STATUS}\n${state.data.message || SNAPSHOT_MISSING_MESSAGE}`, true);
+        } else {
+          state.monitorSnapshotRebuildRecommended = false;
+          state.fullRebuildRecommended = false;
+          setStatus(`生徒一覧を表示しています: ${state.rows.length}人`, false);
+        }
+      } catch (error) {
+        const message = getFriendlyErrorMessage(error);
+        setStatus(message, true);
+        elements.studentBody.innerHTML = `<tr><td colspan="${getVisibleColumnCount()}" class="empty">生徒一覧を読み込めませんでした。更新を押して再試行できます。</td></tr>`;
+      } finally {
+        state.loading = false;
+        elements.refreshButton.disabled = false;
+        updateMaintenanceControls();
+      }
+    }
+
+    function renderDashboard() {
+      const metrics = state.data.dashboardMetrics || {};
+      document.getElementById('kpiDistributed').textContent = metrics.distributedCount ?? 0;
+      document.getElementById('kpiAccessed').textContent = metrics.accessedCount ?? 0;
+      document.getElementById('kpiAnswered').textContent = metrics.answeredCount ?? 0;
+      document.getElementById('kpiNotStarted').textContent = metrics.notStartedCount ?? 0;
+      document.getElementById('kpiFollow').textContent = metrics.followUpStudentCount ?? 0;
+      document.getElementById('kpiTotalAnswers').textContent = metrics.totalAnswers ?? 0;
+      document.getElementById('kpiRecentAccuracy').textContent = formatPercent(metrics.recent10AverageAccuracy);
+      elements.versionLabel.textContent = state.data.appVersion ? `v${state.data.appVersion}` : '';
+      elements.lastUpdatedAt.textContent = `表示データ更新: ${formatDateTime(state.data.snapshotGeneratedAt || state.data.generatedAt || new Date().toISOString())} / ${formatSnapshotMode(state.data.snapshotMode)}`;
+      renderFilterOptions();
+      renderRows();
+      updateMaintenanceControls();
+    }
+
+    function renderFilterOptions() {
+      const currentCourse = elements.courseFilter.value;
+      const currentStatus = elements.statusFilter.value;
+      const courses = Array.from(new Set(state.rows.map((row) => row.courseName).filter(Boolean))).sort((a, b) => a.localeCompare(b, 'ja'));
+      const statuses = Array.from(new Set(state.rows.map((row) => row.statusLabel).filter(Boolean))).sort((a, b) => a.localeCompare(b, 'ja'));
+      elements.courseFilter.innerHTML = '<option value="">すべて</option>' + courses.map((course) => `<option value="${escapeHtml(course)}">${escapeHtml(course)}</option>`).join('');
+      elements.statusFilter.innerHTML = '<option value="">すべて</option>' + statuses.map((status) => `<option value="${escapeHtml(status)}">${escapeHtml(status)}</option>`).join('');
+      elements.courseFilter.value = courses.includes(currentCourse) ? currentCourse : '';
+      elements.statusFilter.value = statuses.includes(currentStatus) ? currentStatus : '';
+    }
+
+    function getFilteredRows() {
+      const query = elements.searchInput.value.trim().toLowerCase();
+      const course = elements.courseFilter.value;
+      const status = elements.statusFilter.value;
+      let rows = state.rows.filter((row) => {
+        const haystack = `${row.courseName || ''} ${row.number || ''} ${row.name || ''}`.toLowerCase();
+        if (query && !haystack.includes(query)) return false;
+        if (course && row.courseName !== course) return false;
+        if (status && row.statusLabel !== status) return false;
+        if (elements.followOnlyToggle.checked && row.followUp !== true) return false;
+        if (elements.notStartedOnlyToggle.checked && Number(row.totalAttempts || 0) > 0) return false;
+        return true;
+      });
+      rows = rows.slice();
+      rows.sort(compareRowsForCurrentSort);
+      return rows;
+    }
+
+    function getMaintenanceSpreadsheetUrl() {
+      const links = state.data && state.data.maintenanceLinks ? state.data.maintenanceLinks : {};
+      return String(links.spreadsheetUrl || '').trim();
+    }
+
+    function recommendFullRebuildFromMonitorSnapshotFailure() {
+      state.fullRebuildRecommended = true;
+      state.monitorSnapshotRebuildRecommended = false;
+      updateMaintenanceControls();
+    }
+
+    function clearMaintenanceRecommendations() {
+      state.fullRebuildRecommended = false;
+      state.monitorSnapshotRebuildRecommended = false;
+      updateMaintenanceControls();
+    }
+
+    function updateMaintenanceControls() {
+      elements.rebuildMonitorSnapshotButton.disabled = state.loading || state.maintenanceRunning;
+      elements.rebuildMonitorSnapshotButton.classList.toggle('attention', state.monitorSnapshotRebuildRecommended === true);
+      elements.rebuildCachesButton.disabled = state.loading || state.maintenanceRunning;
+      elements.rebuildCachesButton.classList.toggle('attention', state.fullRebuildRecommended === true);
+      elements.openSpreadsheetButton.disabled = getMaintenanceSpreadsheetUrl() === '';
+      elements.downloadCsvButton.disabled = state.loading || state.data === null;
+    }
+
+    async function rebuildMonitorSnapshotFromMonitor() {
+      if (state.maintenanceRunning) return;
+      const confirmed = window.confirm('既存の集計キャッシュを使って、Webモニター表示用キャッシュだけ更新します。通常はこちらを使ってください。実行しますか？');
+      if (!confirmed) return;
+      state.maintenanceRunning = true;
+      updateMaintenanceControls();
+      setStatus('更新中...', false);
+      try {
+        const result = await runServer('rebuildMonitorSnapshotFromMonitor');
+        if (!result || result.ok !== true) {
+          if (result && (result.requiresFullRebuild === true || result.recommendedAction === 'full-rebuild')) {
+            recommendFullRebuildFromMonitorSnapshotFailure();
+            setStatus(MONITOR_REBUILD_FAILED_MESSAGE, true);
+          } else {
+            state.fullRebuildRecommended = false;
+            state.monitorSnapshotRebuildRecommended = state.data && state.data.snapshotMissing === true;
+            updateMaintenanceControls();
+            setStatus(result && result.message ? result.message : 'モニター表示用キャッシュの更新に失敗しました。少し待ってから再試行してください。', true);
+          }
+          return;
+        }
+        await loadDashboard({ silent: true });
+        if (state.data && state.data.snapshotMissing === true) {
+          recommendFullRebuildFromMonitorSnapshotFailure();
+          setStatus(MONITOR_SNAPSHOT_STILL_MISSING_MESSAGE, true);
+        } else {
+          clearMaintenanceRecommendations();
+          setStatus(`${result.message || 'モニター表示用キャッシュを更新しました。'} 生徒一覧を表示しています: ${state.rows.length}人。人数や集計が古い場合は「集計から完全更新」を実行してください。`, false);
+        }
+      } catch (error) {
+        recommendFullRebuildFromMonitorSnapshotFailure();
+        setStatus(getFriendlyErrorMessage(error), true);
+      } finally {
+        state.maintenanceRunning = false;
+        updateMaintenanceControls();
+      }
+    }
+
+    async function rebuildCachesFromMonitor() {
+      if (state.maintenanceRunning) return;
+      const confirmed = window.confirm('解答ログから集計キャッシュ、問題タイプ別キャッシュ、モニターキャッシュをすべて作り直します。時間がかかることがあります。実行しますか？');
+      if (!confirmed) return;
+      state.maintenanceRunning = true;
+      updateMaintenanceControls();
+      setStatus('更新中...', false);
+      try {
+        const result = await runServer('rebuildAggregateAndMonitorCacheFromMonitor');
+        if (!result || result.ok !== true) {
+          setStatus(result && result.message ? result.message : '集計・モニターの更新に失敗しました。', true);
+          return;
+        }
+        await loadDashboard({ silent: true });
+        clearMaintenanceRecommendations();
+        setStatus(`${result.message || '集計キャッシュとモニターキャッシュを更新しました。'} 生徒一覧を表示しています: ${state.rows.length}人`, false);
+      } catch (error) {
+        setStatus(getFriendlyErrorMessage(error), true);
+      } finally {
+        state.maintenanceRunning = false;
+        updateMaintenanceControls();
+      }
+    }
+
+    function openMaintenanceSpreadsheet() {
+      const url = getMaintenanceSpreadsheetUrl();
+      if (!url) {
+        setStatus('管理スプレッドシートURLを取得できませんでした。更新してから再試行してください。', true);
+        return;
+      }
+      window.open(url, '_blank', 'noopener');
+    }
+
+    function escapeCsvValue(value) {
+      const text = String(value == null ? '' : value);
+      if (!/[",\r\n]/.test(text)) return text;
+      return `"${text.replace(/"/g, '""')}"`;
+    }
+
+    function buildVisibleRowsCsvText(rows) {
+      const headerLine = CSV_COLUMNS.map((column) => escapeCsvValue(column.header)).join(',');
+      const bodyLines = (rows || []).map((row) => CSV_COLUMNS
+        .map((column) => escapeCsvValue(column.value(row)))
+        .join(','));
+      return [headerLine, ...bodyLines].join('\r\n');
+    }
+
+    function formatCsvTimestamp(date) {
+      const source = date instanceof Date ? date : new Date();
+      const pad = (value) => String(value).padStart(2, '0');
+      return [
+        source.getFullYear(),
+        pad(source.getMonth() + 1),
+        pad(source.getDate()),
+        '-',
+        pad(source.getHours()),
+        pad(source.getMinutes()),
+        pad(source.getSeconds())
+      ].join('');
+    }
+
+    function openCsvFallback(csvText) {
+      const popup = window.open('', '_blank');
+      if (popup && popup.document) {
+        popup.document.open();
+        popup.document.write(`<pre>${escapeHtml(csvText)}</pre>`);
+        popup.document.close();
+        setStatus('CSVテキストを新しいタブに表示しました。', false);
+        return;
+      }
+      setStatus('CSVのダウンロードを開始できませんでした。ブラウザ設定を確認してください。', true);
+    }
+
+    function downloadVisibleRowsCsv() {
+      const rows = getFilteredRows();
+      if (rows.length === 0) {
+        const confirmed = window.confirm('表示中の生徒が0件です。ヘッダーだけのCSVを保存しますか？');
+        if (!confirmed) return;
+      }
+      const csvText = buildVisibleRowsCsvText(rows);
+      const content = '\ufeff' + csvText;
+      const filename = `molque-monitor-${formatCsvTimestamp(new Date())}.csv`;
+      try {
+        const blob = new Blob([content], { type: 'text/csv;charset=utf-8' });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = filename;
+        link.style.display = 'none';
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        if (URL.revokeObjectURL) {
+          setTimeout(() => URL.revokeObjectURL(url), 0);
+        }
+        setStatus(`表示中一覧CSVを保存しました: ${rows.length}件`, false);
+      } catch (_error) {
+        openCsvFallback(content);
+      }
+    }
+
+    function compareCourseNumber(a, b) {
+      return compareText(a.courseName, b.courseName) || compareNumberLike(a.number, b.number) || compareText(a.name, b.name);
+    }
+
+    function compareRowsForCurrentSort(a, b) {
+      if (!state.sortKey || !state.sortDirection) {
+        return compareCourseNumber(a, b);
+      }
+      const sorted = compareBySortKey(a, b, state.sortKey, state.sortDirection);
+      return sorted || compareCourseNumber(a, b);
+    }
+
+    function compareBySortKey(a, b, sortKey, direction) {
+      if (sortKey === 'lastAnsweredAt') {
+        return compareDateTimeWithEmptyLast(a.lastAnsweredAt, b.lastAnsweredAt, direction);
+      }
+
+      let result = 0;
+      if (sortKey === 'number') {
+        result = compareNumberLike(a.number, b.number);
+      } else if (sortKey === 'name') {
+        result = compareText(a.name, b.name);
+      } else if (sortKey === 'status') {
+        result = compareText(a.statusLabel, b.statusLabel);
+      } else if (sortKey === 'distribution') {
+        result = compareText(a.distributionStatus, b.distributionStatus);
+      } else if (sortKey === 'access') {
+        result = compareText(a.accessStatus, b.accessStatus);
+      } else if (sortKey === 'attempts') {
+        result = compareNumeric(a.totalAttempts, b.totalAttempts);
+      } else if (sortKey === 'recentAccuracy') {
+        result = compareNumeric(a.recent10Accuracy, b.recent10Accuracy);
+      }
+
+      return direction === 'desc' ? result * -1 : result;
+    }
+
+    function compareText(a, b) {
+      return String(a || '').localeCompare(String(b || ''), 'ja');
+    }
+
+    function compareNumberLike(a, b) {
+      const textA = String(a == null ? '' : a).trim();
+      const textB = String(b == null ? '' : b).trim();
+      const numberA = Number(textA);
+      const numberB = Number(textB);
+      const numericA = textA !== '' && Number.isFinite(numberA);
+      const numericB = textB !== '' && Number.isFinite(numberB);
+      if (numericA && numericB) return numberA - numberB;
+      return textA.localeCompare(textB, 'ja', { numeric: true });
+    }
+
+    function compareNumeric(a, b) {
+      const numberA = Number(a);
+      const numberB = Number(b);
+      const safeA = Number.isFinite(numberA) ? numberA : 0;
+      const safeB = Number.isFinite(numberB) ? numberB : 0;
+      return safeA - safeB;
+    }
+
+    function compareDateTimeWithEmptyLast(a, b, direction) {
+      const timeA = parseSortDateTime(a);
+      const timeB = parseSortDateTime(b);
+      if (timeA == null && timeB == null) return 0;
+      if (timeA == null) return 1;
+      if (timeB == null) return -1;
+      const result = timeA - timeB;
+      return direction === 'desc' ? result * -1 : result;
+    }
+
+    function parseSortDateTime(value) {
+      const text = String(value || '').trim();
+      if (text === '') return null;
+      const time = new Date(text).getTime();
+      return Number.isNaN(time) ? null : time;
+    }
+
+    function getStatusBadgeClass(statusLabel) {
+      const status = String(statusLabel || '').trim();
+      if (status === '未配付') return 'status-badge status-undistributed';
+      if (status === '配付失敗') return 'status-badge status-distribution-failed';
+      if (status === '配付済み') return 'mini-badge status-distributed';
+      if (status === 'アクセス済み') return 'mini-badge status-accessed';
+      if (status === '未アクセス') return 'status-badge status-not-accessed';
+      if (status === '未実施') return 'status-badge status-not-started';
+      if (status === '要フォロー') return 'status-badge status-follow';
+      if (status === '速度上昇・正答率低下') return 'status-badge status-speed-drop';
+      if (status === '解答中') return 'status-badge status-active';
+      if (status === '順調') return 'status-badge status-good';
+      if (status === '上級挑戦中') return 'status-badge status-advanced';
+      return 'status-badge';
+    }
+
+    function renderBadge(label) {
+      const text = String(label || '-');
+      return `<span class="${getStatusBadgeClass(text)}">${escapeHtml(text)}</span>`;
+    }
+
+    function levelSummary(row) {
+      return [
+        `${formatLevel('beginner')} ${Number(row.beginnerCorrect || 0)}/${Number(row.beginnerAttempts || 0)}`,
+        `${formatLevel('intermediate')} ${Number(row.intermediateCorrect || 0)}/${Number(row.intermediateAttempts || 0)}`,
+        `${formatLevel('advanced')} ${Number(row.advancedCorrect || 0)}/${Number(row.advancedAttempts || 0)}`
+      ].join(' / ');
+    }
+
+    function followReason(row) {
+      if (row.followUp !== true) return '-';
+      if (row.distributionStatus === '配付失敗') return '配付失敗';
+      if (row.distributionStatus !== '配付済み') return '未配付';
+      if (row.accessStatus !== 'アクセス済み') return '未アクセス';
+      if (Number(row.totalAttempts || 0) === 0) return '未実施';
+      if (Number(row.recent10Attempts || 0) >= 10 && Number(row.recent10Accuracy || 0) < 0.7) return '直近正答率が低下';
+      if (Number(row.advancedAttempts || 0) === 0 && Number(row.totalAttempts || 0) >= 10) return '上級未実施';
+      return row.statusLabel || '要確認';
+    }
+
+    function getVisibleColumns() {
+      const mode = VIEW_MODE_COLUMNS[state.viewMode] ? state.viewMode : DEFAULT_VIEW_MODE;
+      return VIEW_MODE_COLUMNS[mode].map((key) => COLUMN_DEFINITION_MAP[key]).filter(Boolean);
+    }
+
+    function getVisibleColumnCount() {
+      return getVisibleColumns().length;
+    }
+
+    function renderTableHead() {
+      const headers = getVisibleColumns().map((column) => renderHeaderCell(column)).join('');
+      elements.studentHead.innerHTML = `<tr>${headers}</tr>`;
+    }
+
+    function renderHeaderCell(column) {
+      const classAttribute = column.thClass ? ` class="${escapeHtml(column.thClass)}"` : '';
+      if (!column.sortKey) {
+        return `<th${classAttribute}>${escapeHtml(column.label)}</th>`;
+      }
+      const active = state.sortKey === column.sortKey;
+      const indicator = active ? (state.sortDirection === 'asc' ? '▲' : '▼') : '';
+      const ariaSort = active ? (state.sortDirection === 'asc' ? 'ascending' : 'descending') : 'none';
+      return `<th${classAttribute} aria-sort="${ariaSort}"><button class="sort-header" type="button" data-sort-key="${escapeHtml(column.sortKey)}"><span>${escapeHtml(column.label)}</span><span class="sort-indicator">${indicator}</span></button></th>`;
+    }
+
+    function renderCell(column, row) {
+      const classAttribute = column.tdClass ? ` class="${escapeHtml(column.tdClass)}"` : '';
+      return `<td${classAttribute}>${column.render(row)}</td>`;
+    }
+
+    function renderRows() {
+      renderTableHead();
+      const columns = getVisibleColumns();
+      const rows = getFilteredRows();
+      if (rows.length === 0) {
+        elements.studentBody.innerHTML = `<tr><td colspan="${columns.length}" class="empty">条件に合う生徒はいません。</td></tr>`;
+        return;
+      }
+      elements.studentBody.innerHTML = rows.map((row) => `<tr class="${row.followUp === true ? 'follow-row' : ''}">
+        ${columns.map((column) => renderCell(column, row)).join('')}
+      </tr>`).join('');
+    }
+
+    function initializeViewMode() {
+      const selectedMode = elements.viewModeSelect.value || DEFAULT_VIEW_MODE;
+      state.viewMode = VIEW_MODE_COLUMNS[selectedMode] ? selectedMode : DEFAULT_VIEW_MODE;
+      elements.viewModeSelect.value = state.viewMode;
+      renderTableHead();
+      elements.studentBody.innerHTML = `<tr><td colspan="${getVisibleColumnCount()}" class="empty">読み込み中...</td></tr>`;
+    }
+
+    function handleViewModeChange() {
+      const selectedMode = elements.viewModeSelect.value || DEFAULT_VIEW_MODE;
+      state.viewMode = VIEW_MODE_COLUMNS[selectedMode] ? selectedMode : DEFAULT_VIEW_MODE;
+      elements.viewModeSelect.value = state.viewMode;
+      const visibleSortKeys = getVisibleColumns().map((column) => column.sortKey).filter(Boolean);
+      if (state.sortKey && !visibleSortKeys.includes(state.sortKey)) {
+        state.sortKey = '';
+        state.sortDirection = '';
+      }
+      renderRows();
+    }
+
+    function handleSortHeaderClick(sortKey) {
+      if (!sortKey) return;
+      if (state.sortKey !== sortKey) {
+        state.sortKey = sortKey;
+        state.sortDirection = 'asc';
+      } else if (state.sortDirection === 'asc') {
+        state.sortDirection = 'desc';
+      } else {
+        state.sortKey = '';
+        state.sortDirection = '';
+      }
+      renderRows();
+    }
+
+    async function openHistory(rosterKey, name) {
+      if (!rosterKey) return;
+      elements.historyTitle.textContent = `${name || '生徒'} の履歴`;
+      setHistoryStatus('読み込み中...', false);
+      elements.problemTypeStatsBody.innerHTML = '<tr><td colspan="6" class="empty">読み込み中...</td></tr>';
+      elements.answerHistoryBody.innerHTML = '<tr><td colspan="6" class="empty">読み込み中...</td></tr>';
+      elements.historyModal.classList.add('open');
+      try {
+        const [history, stats] = await Promise.all([
+          runServer('getMonitorStudentAnswerHistory', [rosterKey, 20]),
+          runServer('getMonitorStudentProblemTypeStats', [rosterKey])
+        ]);
+        renderHistory(history || []);
+        renderProblemTypeStats(stats || []);
+        setHistoryStatus('読み込みました。', false);
+      } catch (error) {
+        setHistoryStatus(getFriendlyErrorMessage(error), true);
+        elements.problemTypeStatsBody.innerHTML = '<tr><td colspan="6" class="empty">問題タイプ統計を読み込めませんでした。</td></tr>';
+        elements.answerHistoryBody.innerHTML = '<tr><td colspan="6" class="empty">履歴を読み込めませんでした。</td></tr>';
+      }
+    }
+
+    function renderHistory(rows) {
+      if (!rows.length) {
+        elements.answerHistoryBody.innerHTML = '<tr><td colspan="6" class="empty">直近履歴はありません。</td></tr>';
+        return;
+      }
+      elements.answerHistoryBody.innerHTML = rows.map((row) => {
+        const question = compactText(row.questionText || stripHtml(row.questionHtml), 42);
+        return `<tr>
+          <td class="nowrap">${escapeHtml(formatDateTime(row.timestamp))}</td>
+          <td>${escapeHtml(formatLevel(row.level))}</td>
+          <td>${escapeHtml(formatProblemType(row.problemType))}</td>
+          <td>${row.isCorrect === true ? '正解' : '不正解'}</td>
+          <td>${escapeHtml(compactText(row.submittedAnswer, 24))}</td>
+          <td class="question-cell">${escapeHtml(question)}</td>
+        </tr>`;
+      }).join('');
+    }
+
+    function renderProblemTypeStats(rows) {
+      if (!rows.length) {
+        elements.problemTypeStatsBody.innerHTML = '<tr><td colspan="6" class="empty">問題タイプ統計はありません。</td></tr>';
+        return;
+      }
+      elements.problemTypeStatsBody.innerHTML = rows.map((row) => `<tr>
+        <td>${escapeHtml(formatLevel(row.level))}</td>
+        <td>${escapeHtml(formatProblemType(row.problemType))}</td>
+        <td class="num">${Number(row.attempts || 0)}</td>
+        <td class="num">${Number(row.correct || 0)}</td>
+        <td class="num">${formatPercent(row.accuracy)}</td>
+        <td class="num">${formatPercent(row.recentAccuracy)}</td>
+      </tr>`).join('');
+    }
+
+    function refreshFromAutoRefresh() {
+      if (state.loading) return;
+      loadDashboard({ silent: true });
+    }
+
+    function startAutoRefresh() {
+      if (state.autoRefreshTimer !== null) return;
+      state.autoRefreshTimer = setInterval(refreshFromAutoRefresh, AUTO_REFRESH_INTERVAL_MS);
+    }
+
+    function stopAutoRefresh() {
+      if (state.autoRefreshTimer === null) return;
+      clearInterval(state.autoRefreshTimer);
+      state.autoRefreshTimer = null;
+    }
+
+    function saveAutoRefreshPreference(enabled) {
+      try {
+        window.localStorage.setItem(AUTO_REFRESH_STORAGE_KEY, enabled ? '1' : '0');
+      } catch (error) {
+        // LocalStorageが使えない環境でもモニター表示は継続する。
+      }
+    }
+
+    function restoreAutoRefreshPreference() {
+      try {
+        elements.autoRefreshToggle.checked = window.localStorage.getItem(AUTO_REFRESH_STORAGE_KEY) === '1';
+      } catch (error) {
+        elements.autoRefreshToggle.checked = false;
+      }
+      if (elements.autoRefreshToggle.checked) {
+        startAutoRefresh();
+      }
+    }
+
+    elements.refreshButton.addEventListener('click', () => loadDashboard());
+    elements.rebuildMonitorSnapshotButton.addEventListener('click', rebuildMonitorSnapshotFromMonitor);
+    elements.rebuildCachesButton.addEventListener('click', rebuildCachesFromMonitor);
+    elements.openSpreadsheetButton.addEventListener('click', openMaintenanceSpreadsheet);
+    elements.downloadCsvButton.addEventListener('click', downloadVisibleRowsCsv);
+    elements.autoRefreshToggle.addEventListener('change', () => {
+      if (elements.autoRefreshToggle.checked) {
+        startAutoRefresh();
+      } else {
+        stopAutoRefresh();
+      }
+      saveAutoRefreshPreference(elements.autoRefreshToggle.checked);
+    });
+    elements.searchInput.addEventListener('input', renderRows);
+    elements.courseFilter.addEventListener('change', renderRows);
+    elements.statusFilter.addEventListener('change', renderRows);
+    elements.viewModeSelect.addEventListener('change', handleViewModeChange);
+    elements.followOnlyToggle.addEventListener('change', renderRows);
+    elements.notStartedOnlyToggle.addEventListener('change', renderRows);
+    elements.studentHead.addEventListener('click', (event) => {
+      const target = event.target;
+      if (!target || !target.closest) return;
+      const button = target.closest('button[data-sort-key]');
+      if (!button) return;
+      handleSortHeaderClick(button.getAttribute('data-sort-key'));
+    });
+    document.getElementById('closeHistoryButton').addEventListener('click', () => elements.historyModal.classList.remove('open'));
+    elements.historyModal.addEventListener('click', (event) => {
+      if (event.target === elements.historyModal) {
+        elements.historyModal.classList.remove('open');
+      }
+    });
+    elements.studentBody.addEventListener('click', (event) => {
+      const target = event.target;
+      if (!target || !target.closest) return;
+      const button = target.closest('button[data-history]');
+      if (!button) return;
+      openHistory(button.getAttribute('data-history'), button.getAttribute('data-name'));
+    });
+    window.addEventListener('beforeunload', stopAutoRefresh);
+
+    initializeViewMode();
+    restoreAutoRefreshPreference();
+    loadDashboard();
+  </script>
+</body>
+</html>

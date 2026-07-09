@@ -3,6 +3,14 @@ import { readFile } from 'node:fs/promises';
 import vm from 'node:vm';
 import test from 'node:test';
 
+function legacyStudentRouteSettingKeyForTest() {
+  return ['STUDENT', 'FAST', 'MODE'].join('_');
+}
+
+function legacyMonitorEmailSettingKeyForTest() {
+  return ['MONITOR', 'ALLOWED', 'EMAILS'].join('_');
+}
+
 async function loadApi(extraSandbox = {}) {
   const code = await readFile('Code.gs', 'utf8');
   let uuidCounter = 0;
@@ -23,10 +31,12 @@ async function loadApi(extraSandbox = {}) {
     `${code}
 globalThis.__api = {
   MOL_DRILL_APP_NAME,
-  MOL_DRILL_ADMIN_APP_NAME,
+  MOL_DRILL_ADMIN_APP_NAME: typeof MOL_DRILL_ADMIN_APP_NAME === 'undefined' ? undefined : MOL_DRILL_ADMIN_APP_NAME,
   MOL_DRILL_FORMAL_DESCRIPTION,
   SheetRepository,
   AdminService,
+  MonitorService: typeof MonitorService === 'undefined' ? undefined : MonitorService,
+  MonitorSnapshotService: typeof MonitorSnapshotService === 'undefined' ? undefined : MonitorSnapshotService,
   TokenService,
   AdaptiveProblemService: typeof AdaptiveProblemService === 'undefined' ? undefined : AdaptiveProblemService,
   AggregationService,
@@ -51,12 +61,36 @@ globalThis.__api = {
   getAdminRosterData: typeof getAdminRosterData === 'undefined' ? undefined : getAdminRosterData,
   getAdminDashboardData: typeof getAdminDashboardData === 'undefined' ? undefined : getAdminDashboardData,
   getAdminDashboardState: typeof getAdminDashboardState === 'undefined' ? undefined : getAdminDashboardState,
+  getMonitorDashboardData: typeof getMonitorDashboardData === 'undefined' ? undefined : getMonitorDashboardData,
+  rebuildMonitorSnapshotFromMonitor: typeof rebuildMonitorSnapshotFromMonitor === 'undefined' ? undefined : rebuildMonitorSnapshotFromMonitor,
+  rebuildAggregateAndMonitorCacheFromMonitor: typeof rebuildAggregateAndMonitorCacheFromMonitor === 'undefined' ? undefined : rebuildAggregateAndMonitorCacheFromMonitor,
+  getMonitorStudentAnswerHistory: typeof getMonitorStudentAnswerHistory === 'undefined' ? undefined : getMonitorStudentAnswerHistory,
+  getMonitorStudentProblemTypeStats: typeof getMonitorStudentProblemTypeStats === 'undefined' ? undefined : getMonitorStudentProblemTypeStats,
   molDrillOnOpen: typeof molDrillOnOpen === 'undefined' ? undefined : molDrillOnOpen,
   openAdminDialog: typeof openAdminDialog === 'undefined' ? undefined : openAdminDialog,
   showAdminEntryUrlFromMenu: typeof showAdminEntryUrlFromMenu === 'undefined' ? undefined : showAdminEntryUrlFromMenu,
+  showMonitorWebAppUrlFromMenu: typeof showMonitorWebAppUrlFromMenu === 'undefined' ? undefined : showMonitorWebAppUrlFromMenu,
+  writeTeacherUrlsToSettingsFromMenu: typeof writeTeacherUrlsToSettingsFromMenu === 'undefined' ? undefined : writeTeacherUrlsToSettingsFromMenu,
+  rebuildAggregateCacheFromMenu: typeof rebuildAggregateCacheFromMenu === 'undefined' ? undefined : rebuildAggregateCacheFromMenu,
+  rebuildAggregateAndMonitorCacheCore_: typeof rebuildAggregateAndMonitorCacheCore_ === 'undefined' ? undefined : rebuildAggregateAndMonitorCacheCore_,
+  rebuildAggregateAndMonitorCacheForTrigger: typeof rebuildAggregateAndMonitorCacheForTrigger === 'undefined' ? undefined : rebuildAggregateAndMonitorCacheForTrigger,
+  installAggregateMonitorAutoRefreshTriggerFromMenu: typeof installAggregateMonitorAutoRefreshTriggerFromMenu === 'undefined' ? undefined : installAggregateMonitorAutoRefreshTriggerFromMenu,
+  uninstallAggregateMonitorAutoRefreshTriggerFromMenu: typeof uninstallAggregateMonitorAutoRefreshTriggerFromMenu === 'undefined' ? undefined : uninstallAggregateMonitorAutoRefreshTriggerFromMenu,
+  showAggregateMonitorAutoRefreshStatusFromMenu: typeof showAggregateMonitorAutoRefreshStatusFromMenu === 'undefined' ? undefined : showAggregateMonitorAutoRefreshStatusFromMenu,
   doGet: typeof doGet === 'undefined' ? undefined : doGet,
   reinitializeSheets: typeof reinitializeSheets === 'undefined' ? undefined : reinitializeSheets,
   reinitializeSheetsFromMenu: typeof reinitializeSheetsFromMenu === 'undefined' ? undefined : reinitializeSheetsFromMenu,
+  configureWebAppUrlFromMenu: typeof configureWebAppUrlFromMenu === 'undefined' ? undefined : configureWebAppUrlFromMenu,
+  configureClassroomPostTextFromMenu: typeof configureClassroomPostTextFromMenu === 'undefined' ? undefined : configureClassroomPostTextFromMenu,
+  configureDistributionSettingsFromMenu: typeof configureDistributionSettingsFromMenu === 'undefined' ? undefined : configureDistributionSettingsFromMenu,
+  configureProblemSettingsFromMenu: typeof configureProblemSettingsFromMenu === 'undefined' ? undefined : configureProblemSettingsFromMenu,
+  showCourseSyncSelectionHelpFromMenu: typeof showCourseSyncSelectionHelpFromMenu === 'undefined' ? undefined : showCourseSyncSelectionHelpFromMenu,
+  deleteRequestedClassroomUrlPostsFromMenu: typeof deleteRequestedClassroomUrlPostsFromMenu === 'undefined' ? undefined : deleteRequestedClassroomUrlPostsFromMenu,
+  deleteLatestClassroomUrlDistributionFromMenu: typeof deleteLatestClassroomUrlDistributionFromMenu === 'undefined' ? undefined : deleteLatestClassroomUrlDistributionFromMenu,
+  getSelectedTokenManagementRowFromMenu_: typeof getSelectedTokenManagementRowFromMenu_ === 'undefined' ? undefined : getSelectedTokenManagementRowFromMenu_,
+  showTeacherPreviewUrlForSelectedTokenRowFromMenu: typeof showTeacherPreviewUrlForSelectedTokenRowFromMenu === 'undefined' ? undefined : showTeacherPreviewUrlForSelectedTokenRowFromMenu,
+  reissueSelectedStudentTokenFromMenu: typeof reissueSelectedStudentTokenFromMenu === 'undefined' ? undefined : reissueSelectedStudentTokenFromMenu,
+  revokeSelectedStudentTokenFromMenu: typeof revokeSelectedStudentTokenFromMenu === 'undefined' ? undefined : revokeSelectedStudentTokenFromMenu,
   initializeTeacherPreviewSession: typeof initializeTeacherPreviewSession === 'undefined' ? undefined : initializeTeacherPreviewSession,
   getTeacherPreviewProblem: typeof getTeacherPreviewProblem === 'undefined' ? undefined : getTeacherPreviewProblem,
   submitTeacherPreviewAnswer: typeof submitTeacherPreviewAnswer === 'undefined' ? undefined : submitTeacherPreviewAnswer,
@@ -216,6 +250,18 @@ function createSpreadsheetMock(initialSheets) {
     getRow() {
       return this.row;
     }
+
+    getNumRows() {
+      return this.numRows;
+    }
+
+    getNumColumns() {
+      return this.numColumns;
+    }
+
+    getSheet() {
+      return this.sheet;
+    }
   }
 
   class MockTextFinder {
@@ -305,9 +351,22 @@ function createSpreadsheetMock(initialSheets) {
 
   const sheets = new Map(Object.entries(initialSheets).map(([name, rows]) => [name, new MockSheet(name, rows)]));
   const insertSheetCalls = [];
+  let activeSheetName = sheets.keys().next().value || '';
+  let activeRangeSpec = { row: 1, column: 1, numRows: 1, numColumns: 1 };
   const spreadsheet = {
     getSheetByName(name) {
       return sheets.get(name) || null;
+    },
+
+    getActiveSheet() {
+      return sheets.get(activeSheetName) || null;
+    },
+
+    getActiveRange() {
+      const sheet = this.getActiveSheet();
+      return sheet
+        ? new MockRange(sheet, activeRangeSpec.row, activeRangeSpec.column, activeRangeSpec.numRows, activeRangeSpec.numColumns)
+        : null;
     },
 
     insertSheet(name) {
@@ -334,7 +393,11 @@ function createSpreadsheetMock(initialSheets) {
     rangeCalls,
     checkboxCalls,
     setValueCalls,
-    setValuesCalls
+    setValuesCalls,
+    setActiveRange(sheetName, row, column = 1, numRows = 1, numColumns = 1) {
+      activeSheetName = sheetName;
+      activeRangeSpec = { row, column, numRows, numColumns };
+    }
   };
 }
 
@@ -375,6 +438,8 @@ function createUiMock() {
   const alerts = [];
   const dialogs = [];
   const menus = [];
+  const prompts = [];
+  const promptResponses = [];
 
   function createMenuMock(caption) {
     const menu = {
@@ -408,11 +473,92 @@ function createUiMock() {
       alerts.push(args);
       return this.Button.OK;
     },
+    prompt(...args) {
+      prompts.push(args);
+      const next = promptResponses.length > 0 ? promptResponses.shift() : { button: this.Button.OK, text: '' };
+      return {
+        getSelectedButton: () => next.button,
+        getResponseText: () => next.text
+      };
+    },
     showModalDialog(output, title) {
       dialogs.push({ output, title });
     }
   };
-  return { ui, alerts, dialogs, menus };
+  return {
+    ui,
+    alerts,
+    dialogs,
+    menus,
+    prompts,
+    queuePromptResponse(text, button = ui.Button.OK) {
+      promptResponses.push({ text, button });
+    }
+  };
+}
+
+function createScriptAppTriggerMock(initialHandlers = []) {
+  const triggers = [];
+  const createdTriggers = [];
+  const deletedTriggers = [];
+
+  function createTrigger(handlerFunction, schedule = null) {
+    return {
+      handlerFunction,
+      schedule,
+      getHandlerFunction() {
+        return this.handlerFunction;
+      }
+    };
+  }
+
+  for (const handler of initialHandlers) {
+    triggers.push(createTrigger(handler));
+  }
+
+  const ScriptApp = {
+    getProjectTriggers() {
+      return triggers.slice();
+    },
+    deleteTrigger(trigger) {
+      deletedTriggers.push(trigger);
+      const index = triggers.indexOf(trigger);
+      if (index !== -1) {
+        triggers.splice(index, 1);
+      }
+    },
+    newTrigger(handlerFunction) {
+      const builder = {
+        handlerFunction,
+        schedule: null,
+        timeBased() {
+          return this;
+        },
+        everyMinutes(interval) {
+          this.schedule = { unit: 'minutes', interval };
+          return this;
+        },
+        everyHours(interval) {
+          this.schedule = { unit: 'hours', interval };
+          return this;
+        },
+        create() {
+          const trigger = createTrigger(this.handlerFunction, this.schedule);
+          triggers.push(trigger);
+          createdTriggers.push(trigger);
+          return trigger;
+        }
+      };
+      return builder;
+    }
+  };
+
+  return {
+    ScriptApp,
+    triggers,
+    createdTriggers,
+    deletedTriggers
+  };
 }
 
 function createHtmlServiceMock() {
@@ -457,8 +603,13 @@ function createHtmlServiceMock() {
       createHtmlOutput(html) {
         const output = {
           html,
+          title: '',
           width: null,
           height: null,
+          setTitle(title) {
+            this.title = title;
+            return this;
+          },
           setWidth(width) {
             this.width = width;
             return this;
@@ -475,7 +626,7 @@ function createHtmlServiceMock() {
   };
 }
 
-test('management sheet definitions match the mol drill schema and exclude PDF sheets', async () => {
+test('management sheet definitions list required sheets and exclude PDF sheets', async () => {
   const { SheetRepository } = await loadApi();
   const definitions = SheetRepository.getSheetDefinitions();
   const names = definitions.map((definition) => definition.name);
@@ -489,11 +640,16 @@ test('management sheet definitions match the mol drill schema and exclude PDF sh
     '配付ログ',
     '集計キャッシュ',
     '問題タイプ別キャッシュ',
+    'モニターキャッシュ',
     '実行ログ'
   ]));
-  assert.equal(SheetRepository.getExpectedSchemaVersion(), '17');
-
   const byName = Object.fromEntries(definitions.map((definition) => [definition.name, definition]));
+  assert.equal(JSON.stringify(byName['モニターキャッシュ'].headers), JSON.stringify([
+    'key',
+    'json',
+    'updatedAt',
+    'note'
+  ]));
   assert.equal(JSON.stringify(byName['問題タイプ別キャッシュ'].headers), JSON.stringify([
     'updatedAt',
     'courseId',
@@ -541,8 +697,11 @@ test('management sheet definitions match the mol drill schema and exclude PDF sh
     'issuedAt',
     'lastAccessedAt',
     'revoked',
+    '投稿削除',
     'note'
   ]));
+  assert.ok(!(byName['トークン管理'].checkboxHeaders || []).includes('revoked'));
+  assert.ok(!(byName['トークン管理'].checkboxHeaders || []).includes('投稿削除'));
   for (const header of [
     'beginnerCorrect',
     'beginnerAccuracy',
@@ -573,20 +732,53 @@ test('management sheet definitions match the mol drill schema and exclude PDF sh
   assert.ok(!names.includes('Drive保存監査ログ'));
 });
 
-test('app display names use molque branding for student and admin surfaces', async () => {
+test('management sheet repair adds monitor cache headers without deleting existing snapshot rows', async () => {
+  const spreadsheetMock = createSpreadsheetMock({
+    モニターキャッシュ: [
+      ['key', 'json'],
+      ['dashboard', '{"old":true}']
+    ]
+  });
+  const { SheetRepository } = await loadApi({ SpreadsheetApp: spreadsheetMock.SpreadsheetApp });
+
+  const result = SheetRepository.ensureSheets();
+
+  assert.equal(result.ok, true);
+  const monitorRows = spreadsheetMock.sheets.get('モニターキャッシュ').rows;
+  assert.deepEqual(monitorRows[0], ['key', 'json', 'updatedAt', 'note']);
+  assert.equal(monitorRows[1][0], 'dashboard');
+  assert.equal(monitorRows[1][1], '{"old":true}');
+});
+
+test('app display names use molque branding without legacy admin surface name', async () => {
   const { MOL_DRILL_APP_NAME, MOL_DRILL_ADMIN_APP_NAME, MOL_DRILL_FORMAL_DESCRIPTION } = await loadApi();
 
   assert.equal(MOL_DRILL_APP_NAME, 'もるくえ！');
-  assert.equal(MOL_DRILL_ADMIN_APP_NAME, 'もるくえ！ 管理ダッシュボード');
+  assert.equal(MOL_DRILL_ADMIN_APP_NAME, undefined);
   assert.equal(MOL_DRILL_FORMAL_DESCRIPTION, 'Classroom連携型モル計算練習アプリ');
 });
 
-test('default settings include admin and classroom URL delivery controls', async () => {
+test('default settings include teacher URL outputs classroom URL delivery controls and no legacy runtime toggles', async () => {
   const { SheetRepository } = await loadApi();
   const settings = SheetRepository.getDefaultSettingsForTest();
   const keys = settings.map((setting) => setting.key);
+  const byKey = Object.fromEntries(settings.map((setting) => [setting.key, setting]));
+  const legacyStudentRouteSetting = legacyStudentRouteSettingKeyForTest();
+  const legacyMonitorEmailSetting = legacyMonitorEmailSettingKeyForTest();
 
-  for (const key of ['WEB_APP_URL', 'ADMIN_TOKEN', 'POST_TEXT_TEMPLATE', 'CLASSROOM_SEND_BATCH_SIZE', 'DRY_RUN', 'ENABLE_DISTRIBUTION_LOG', 'ENABLE_ADAPTIVE_PROBLEM_SELECTION']) {
+  for (const key of [
+    'WEB_APP_URL',
+    'MONITOR_URL',
+    'TEST_STUDENT_URL',
+    'ADMIN_TOKEN',
+    'POST_TEXT_TEMPLATE',
+    'CLASSROOM_SEND_BATCH_SIZE',
+    'DRY_RUN',
+    'ENABLE_DISTRIBUTION_LOG',
+    'ENABLE_ADAPTIVE_PROBLEM_SELECTION',
+    'AUTO_REBUILD_CACHE_ENABLED',
+    'AUTO_REBUILD_CACHE_INTERVAL_MINUTES'
+  ]) {
     assert.ok(keys.includes(key), `${key} should be defined`);
   }
   for (const key of [
@@ -599,10 +791,16 @@ test('default settings include admin and classroom URL delivery controls', async
   ]) {
     assert.ok(keys.includes(key), `${key} should be defined`);
   }
+  assert.ok(!keys.includes('schemaVersion'));
+  assert.ok(!keys.includes('SCHEMA_VERSION'));
   assert.ok(!keys.includes('AVOGADRO_CONSTANT'));
   assert.ok(!keys.includes('DEFAULT_TOLERANCE'));
+  assert.ok(!keys.includes(legacyStudentRouteSetting));
+  assert.ok(!keys.includes(legacyMonitorEmailSetting));
   assert.equal(settings.find((setting) => setting.key === 'CLASSROOM_SEND_BATCH_SIZE').value, '40');
   assert.equal(settings.find((setting) => setting.key === 'DRY_RUN').value, 'false');
+  assert.equal(settings.find((setting) => setting.key === 'AUTO_REBUILD_CACHE_ENABLED').value, 'false');
+  assert.equal(settings.find((setting) => setting.key === 'AUTO_REBUILD_CACHE_INTERVAL_MINUTES').value, '5');
   assert.equal(settings.find((setting) => setting.key === 'BEGINNER_AVOGADRO_CONSTANT').value, '6.0e23');
   assert.equal(settings.find((setting) => setting.key === 'INTERMEDIATE_AVOGADRO_CONSTANT').value, '6.0e23');
   assert.equal(settings.find((setting) => setting.key === 'ADVANCED_AVOGADRO_CONSTANT').value, '6.02e23');
@@ -611,13 +809,53 @@ test('default settings include admin and classroom URL delivery controls', async
   assert.equal(settings.find((setting) => setting.key === 'ADVANCED_TOLERANCE').value, '0.005');
   assert.doesNotMatch(
     settings.map((setting) => setting.description || '').join('\n'),
-    /基礎レベル|標準レベル|発展レベル/
+    /基礎レベル|標準レベル|発展レベル|スキーマ|schema/i
   );
   assert.match(
     settings.map((setting) => setting.description || '').join('\n'),
     /初級レベル[\s\S]*中級レベル[\s\S]*上級レベル/
   );
   assert.match(settings.find((setting) => setting.key === 'POST_TEXT_TEMPLATE').value, /もるくえ！\(モル計算ドリル\)の入場URLです。/);
+  assert.match(
+    byKey.AUTO_REBUILD_CACHE_ENABLED.description,
+    /自動更新[\s\S]*集計キャッシュ[\s\S]*問題タイプ別キャッシュ[\s\S]*モニターキャッシュ/
+  );
+  assert.match(
+    byKey.AUTO_REBUILD_CACHE_INTERVAL_MINUTES.description,
+    /自動更新[\s\S]*間隔[\s\S]*5分/
+  );
+  assert.equal(
+    byKey.WEB_APP_URL.description,
+    'Webアプリの元URL。生徒用URL、WebモニターURL、テスト生徒用URLの元になります。WebアプリをデプロイしたURLを入力してください。'
+  );
+  assert.equal(
+    byKey.MONITOR_URL.description,
+    'Webモニターを開く先生用URL。WEB_APP_URL から自動生成します。生徒には共有しないでください。'
+  );
+  assert.equal(
+    byKey.TEST_STUDENT_URL.description,
+    '先生が生徒画面をテストプレイするためのURL。自動生成します。Classroomには配付しないでください。'
+  );
+  assert.doesNotMatch(
+    settings.map((setting) => `${setting.key}\n${setting.description || ''}`).join('\n'),
+    new RegExp(`${legacyMonitorEmailSetting}|許可メール|教員メール`)
+  );
+  assert.equal(
+    byKey.POST_TEXT_TEMPLATE.description,
+    'Classroomに投稿する本文テンプレート。必ず {{studentUrl}} を含めてください。{{項目名}} の形で、生徒ごとの情報を差し込めます。デフォルトの値を参考に適宜変更してください。主な差し込み項目: {{氏名}}, {{出席番号}}, {{Classroom名}}, {{studentUrl}}'
+  );
+  assert.match(byKey.POST_TEXT_TEMPLATE.description, /必ず \{\{studentUrl\}\} を含めてください/);
+  for (const token of ['{{氏名}}', '{{出席番号}}', '{{Classroom名}}', '{{studentUrl}}']) {
+    assert.ok(byKey.POST_TEXT_TEMPLATE.description.includes(token), `${token} should be described`);
+  }
+  for (const internalToken of ['{{token}}', '{{studentId}}', '{{rosterKey}}', '{{courseId}}']) {
+    assert.ok(!byKey.POST_TEXT_TEMPLATE.description.includes(internalToken), `${internalToken} should not be described`);
+  }
+  assert.doesNotMatch(byKey.BEGINNER_AVOGADRO_CONSTANT.description, /6\.0e23|6\.02e23/i);
+  assert.doesNotMatch(byKey.INTERMEDIATE_AVOGADRO_CONSTANT.description, /6\.0e23|6\.02e23/i);
+  assert.doesNotMatch(byKey.ADVANCED_AVOGADRO_CONSTANT.description, /6\.0e23|6\.02e23/i);
+  assert.match(byKey.BEGINNER_AVOGADRO_CONSTANT.description, /6\.0×10\^23|6\.0x10\^23/);
+  assert.match(byKey.ADVANCED_AVOGADRO_CONSTANT.description, /6\.02×10\^23|6\.02x10\^23/);
 });
 
 test('problem profiles read level-specific constants from settings when available', async () => {
@@ -680,7 +918,7 @@ test('full management sheet reinitialization clears existing sheets without back
   const result = SheetRepository.reinitializeSheets();
 
   assert.equal(result.ok, true);
-  assert.equal(result.schemaVersion, SheetRepository.getExpectedSchemaVersion());
+  assert.equal(Object.hasOwn(result, 'schemaVersion'), false);
   assert.equal(result.message, '管理シートを全初期化しました。');
   assert.deepEqual(spreadsheetMock.insertSheetCalls, []);
   assert.equal(
@@ -698,7 +936,8 @@ test('full management sheet reinitialization clears existing sheets without back
 
   const settingsRows = spreadsheetMock.sheets.get('設定').rows.slice(1);
   const settingsByKey = Object.fromEntries(settingsRows.map((row) => [row[0], row[1]]));
-  assert.equal(settingsByKey.schemaVersion, SheetRepository.getExpectedSchemaVersion());
+  assert.equal(Object.hasOwn(settingsByKey, 'schemaVersion'), false);
+  assert.equal(Object.hasOwn(settingsByKey, 'SCHEMA_VERSION'), false);
   assert.equal(settingsByKey.WEB_APP_URL, '');
   assert.match(settingsByKey.ADMIN_TOKEN, /^adm_uuidfromtest/);
 });
@@ -720,7 +959,7 @@ test('public reinitializeSheets runs without confirmation text', async () => {
 test('course sync target column uses 1 or blank while reading legacy TRUE values', async () => {
   const spreadsheetMock = await createManagedSpreadsheetMock({
     設定: await buildManagedRows('設定', [
-      { キー: 'schemaVersion', 値: '17', 説明: 'schema' }
+      { キー: 'schemaVersion', 値: '17', 説明: 'legacy setting' }
     ]),
     Classroom一覧: await buildManagedRows('Classroom一覧', [
       { courseId: 'course-1', name: '化学A', courseState: 'ACTIVE', 同期対象: '1' },
@@ -765,7 +1004,37 @@ test('course list writes sync target as 1 or blank and does not add a checkbox t
   );
 });
 
-test('spreadsheet menu is grouped into submenus without the admin entry URL issuer', async () => {
+test('classroom announcement deletion validates ids and calls the advanced service remove API', async () => {
+  const removeCalls = [];
+  const { ClassroomService } = await loadApi({
+    Classroom: {
+      Courses: {
+        Announcements: {
+          remove(courseId, announcementId) {
+            removeCalls.push({ courseId, announcementId });
+            return {};
+          }
+        }
+      }
+    }
+  });
+
+  assert.throws(
+    () => ClassroomService.deleteStudentUrlAnnouncement('', 'ann-1'),
+    /Classroomお知らせ削除に必要な courseId\/announcementId が空です。/
+  );
+  assert.throws(
+    () => ClassroomService.deleteStudentUrlAnnouncement('course-1', ''),
+    /Classroomお知らせ削除に必要な courseId\/announcementId が空です。/
+  );
+
+  const result = ClassroomService.deleteStudentUrlAnnouncement(' course-1 ', ' ann-1 ');
+
+  assert.deepEqual(result, {});
+  assert.deepEqual(removeCalls, [{ courseId: 'course-1', announcementId: 'ann-1' }]);
+});
+
+test('spreadsheet menu is numbered by teacher workflow without legacy admin screen entries', async () => {
   const uiMock = createUiMock();
   const { molDrillOnOpen } = await loadApi({
     SpreadsheetApp: {
@@ -781,17 +1050,615 @@ test('spreadsheet menu is grouped into submenus without the admin entry URL issu
   assert.deepEqual(
     root.items.map((item) => item.type === 'submenu' ? `submenu:${item.menu.caption}` : `item:${item.label}`),
     [
-      'item:管理ダッシュボードを開く',
-      'item:集計キャッシュを更新',
-      'submenu:初期設定・同期',
-      'submenu:配付',
-      'submenu:保守'
+      'item:★ 先生用URLを設定シートに出力',
+      'item:⑨ 集計キャッシュを更新',
+      'submenu:⓪ 初期整備・保守',
+      'submenu:① Classroom同期',
+      'submenu:② 生徒URL',
+      'submenu:③ 投稿・URL取消',
+      'submenu:④ 個別対応',
+      'submenu:⑤ 自動更新'
+    ]
+  );
+  assert.deepEqual(
+    root.items[2].menu.items.map((item) => `item:${item.label}:${item.functionName}`),
+    [
+      'item:⓪-1 管理シートを作成・補修:setupSheetsFromMenu',
+      'item:⓪-2 管理データを全削除して初期状態に戻す:reinitializeSheetsFromMenu'
+    ]
+  );
+  assert.deepEqual(
+    root.items[3].menu.items.map((item) => `item:${item.label}:${item.functionName}`),
+    [
+      'item:①-1 Classroom一覧を取得:refreshClassroomListFromMenu',
+      'item:①-2 同期対象の説明を表示:showCourseSyncSelectionHelpFromMenu',
+      'item:①-3 生徒名簿を取得:refreshStudentsForCheckedCoursesFromMenu'
+    ]
+  );
+  assert.deepEqual(
+    root.items[4].menu.items.map((item) => `item:${item.label}:${item.functionName}`),
+    [
+      'item:②-1 トークンを発行:issueTokensForActiveStudentsFromMenu',
+      'item:②-2 配付対象を確認:previewDistributionTargetsFromMenu',
+      'item:②-3 DRY_RUNでURL配付確認:dryRunStudentUrlDistributionFromMenu',
+      'item:②-4 URLをClassroomに配付:distributeStudentUrlsForCheckedCoursesFromMenu',
+      'item:②-5 失敗分を再送:retryFailedStudentUrlDistributionsFromMenu'
+    ]
+  );
+  assert.deepEqual(
+    root.items[5].menu.items.map((item) => `item:${item.label}:${item.functionName}`),
+    [
+      'item:③-1 投稿削除=1 のURLを無効化してClassroom投稿を削除:deleteRequestedClassroomUrlPostsFromMenu'
+    ]
+  );
+  assert.deepEqual(
+    root.items[6].menu.items.map((item) => `item:${item.label}:${item.functionName}`),
+    [
+      'item:④-1 選択行の教師プレビューURLを表示:showTeacherPreviewUrlForSelectedTokenRowFromMenu',
+      'item:④-2 選択行のトークンを再発行:reissueSelectedStudentTokenFromMenu',
+      'item:④-3 選択行のURLを無効化:revokeSelectedStudentTokenFromMenu'
+    ]
+  );
+  assert.deepEqual(
+    root.items[7].menu.items.map((item) => `item:${item.label}:${item.functionName}`),
+    [
+      'item:⑤-1 集計・モニター自動更新を有効化:installAggregateMonitorAutoRefreshTriggerFromMenu',
+      'item:⑤-2 集計・モニター自動更新を停止:uninstallAggregateMonitorAutoRefreshTriggerFromMenu',
+      'item:⑤-3 自動更新の状態を表示:showAggregateMonitorAutoRefreshStatusFromMenu'
     ]
   );
   const serialized = JSON.stringify(root);
+  assert.ok(!root.items.some((item) => item.type === 'item' && item.label === '★ 管理ダッシュボードを開く'));
   assert.doesNotMatch(serialized, /管理画面URLを発行・表示|showAdminEntryUrlFromMenu/);
+  assert.doesNotMatch(serialized, /旧管理画面|旧管理ダッシュボード|openAdminDialog/);
+  assert.doesNotMatch(serialized, /★ WebモニターURLを表示|showMonitorWebAppUrlFromMenu/);
+  assert.doesNotMatch(JSON.stringify(root.items[4].menu), /削除|deleteRequestedClassroomUrlPostsFromMenu|deleteLatestClassroomUrlDistributionFromMenu/);
+  assert.doesNotMatch(serialized, /直近のClassroom URL配付投稿を削除|deleteLatestClassroomUrlDistributionFromMenu/);
+  assert.ok(
+    root.items.some((item) => item.label === '★ 先生用URLを設定シートに出力' && item.functionName === 'writeTeacherUrlsToSettingsFromMenu')
+  );
+  assert.ok(
+    root.items.some((item) => item.label === '⑨ 集計キャッシュを更新' && item.functionName === 'rebuildAggregateCacheFromMenu')
+  );
+  assert.doesNotMatch(serialized, /ADMIN_TOKEN|student-token|\\?t=/);
+  assert.doesNotMatch(serialized, /① 初期設定/);
+  assert.doesNotMatch(serialized, /WebアプリURLを設定/);
+  assert.doesNotMatch(serialized, /Classroom投稿文を設定/);
+  assert.doesNotMatch(serialized, /配付設定を変更/);
+  assert.doesNotMatch(serialized, /出題・採点設定を変更/);
   assert.match(serialized, /管理シートを作成・補修/);
   assert.match(serialized, /管理データを全削除して初期状態に戻す/);
+});
+
+test('selected token management row helper reads one selected row by header names', async () => {
+  const spreadsheetMock = createSpreadsheetMock({
+    トークン管理: [
+      ['氏名', 'studentUrl', 'rosterKey', 'token', 'revoked', '出席番号', 'courseId', 'courseName', 'studentId', 'メール', '投稿削除', 'note'],
+      ['山田 太郎', 'https://example.com/exec?t=old-token', 'course-1::student-1', 'old-token', '', '7', 'course-1', '化学A', 'student-1', 'taro@example.com', '', 'memo']
+    ]
+  });
+  spreadsheetMock.setActiveRange('トークン管理', 2);
+  const { getSelectedTokenManagementRowFromMenu_ } = await loadApi({
+    SpreadsheetApp: spreadsheetMock.SpreadsheetApp
+  });
+
+  const selected = getSelectedTokenManagementRowFromMenu_();
+
+  assert.equal(selected.rowIndex, 2);
+  assert.equal(selected.token, 'old-token');
+  assert.equal(selected.rosterKey, 'course-1::student-1');
+  assert.equal(selected.name, '山田 太郎');
+  assert.equal(selected.number, '7');
+  assert.equal(selected.studentUrl, 'https://example.com/exec?t=old-token');
+  assert.equal(selected.revoked, false);
+  assert.equal(selected.courseName, '化学A');
+  assert.equal(selected.email, 'taro@example.com');
+});
+
+test('selected token management row helper rejects wrong selections', async () => {
+  async function loadSelectedRowFor(initialSheets, activeRange) {
+    const spreadsheetMock = createSpreadsheetMock(initialSheets);
+    spreadsheetMock.setActiveRange(activeRange.sheetName, activeRange.row, 1, activeRange.numRows || 1, activeRange.numColumns || 1);
+    const { getSelectedTokenManagementRowFromMenu_ } = await loadApi({
+      SpreadsheetApp: spreadsheetMock.SpreadsheetApp
+    });
+    return getSelectedTokenManagementRowFromMenu_;
+  }
+
+  const tokenRows = [
+    ['token', 'rosterKey', '氏名', '出席番号', 'studentUrl', 'revoked'],
+    ['old-token', 'course-1::student-1', '山田 太郎', '7', 'https://example.com/exec?t=old-token', ''],
+    ['', '', '', '', '', '']
+  ];
+
+  assert.throws(
+    await loadSelectedRowFor({ 設定: [['キー', '値'], ['WEB_APP_URL', 'https://example.com/exec']], トークン管理: tokenRows }, { sheetName: '設定', row: 2 }),
+    /トークン管理 シートで対象生徒の行を1行だけ選択/
+  );
+  assert.throws(
+    await loadSelectedRowFor({ トークン管理: tokenRows }, { sheetName: 'トークン管理', row: 2, numRows: 2 }),
+    /1行だけ選択/
+  );
+  assert.throws(
+    await loadSelectedRowFor({ トークン管理: tokenRows }, { sheetName: 'トークン管理', row: 1 }),
+    /ヘッダー行ではなく/
+  );
+  assert.throws(
+    await loadSelectedRowFor({ トークン管理: tokenRows }, { sheetName: 'トークン管理', row: 3 }),
+    /空行/
+  );
+});
+
+test('selected row teacher preview menu builds nonce URL without exposing admin token', async () => {
+  const spreadsheetMock = await createManagedSpreadsheetMock({
+    設定: await buildManagedRows('設定', [
+      { キー: 'WEB_APP_URL', 値: 'https://example.com/exec' },
+      { キー: 'ADMIN_TOKEN', 値: 'admin-secret' }
+    ]),
+    トークン管理: await buildManagedRows('トークン管理', [
+      {
+        token: 'student-token',
+        courseId: 'course-1',
+        courseName: '化学A',
+        rosterKey: 'course-1::student-1',
+        studentId: 'student-1',
+        出席番号: '7',
+        氏名: '山田 太郎',
+        メール: 'taro@example.com',
+        studentUrl: 'https://example.com/exec?t=student-token',
+        revoked: '',
+        投稿削除: ''
+      }
+    ])
+  });
+  spreadsheetMock.setActiveRange('トークン管理', 2);
+  const uiMock = createUiMock();
+  const cacheMock = createScriptCacheMock();
+  const { showTeacherPreviewUrlForSelectedTokenRowFromMenu } = await loadApi({
+    console: { error() {}, log() {} },
+    SpreadsheetApp: {
+      ...spreadsheetMock.SpreadsheetApp,
+      getUi: () => uiMock.ui
+    },
+    PropertiesService: createScriptPropertiesMock({ MOL_DRILL_ADMIN_TOKEN: 'admin-secret' }).PropertiesService,
+    CacheService: cacheMock.CacheService
+  });
+
+  const previewUrl = showTeacherPreviewUrlForSelectedTokenRowFromMenu();
+  const parsed = new URL(previewUrl);
+
+  assert.equal(parsed.origin + parsed.pathname, 'https://example.com/exec');
+  assert.equal(parsed.searchParams.get('preview'), 'teacher');
+  assert.equal(parsed.searchParams.get('t'), 'student-token');
+  assert.equal(parsed.searchParams.has('admin'), false);
+  assert.match(parsed.searchParams.get('previewNonce') || '', /^tp_/);
+  assert.ok(cacheMock.store.has(`teacherPreviewNonce:${parsed.searchParams.get('previewNonce')}`));
+  assert.equal(uiMock.alerts.length, 1);
+  assert.match(uiMock.alerts[0][1], /山田 太郎/);
+  assert.match(uiMock.alerts[0][1], /先生用プレビューURL/);
+  assert.match(uiMock.alerts[0][1], /生徒には共有しない/);
+  assert.doesNotMatch(uiMock.alerts[0][1], /admin-secret|ADMIN_TOKEN|admin=/);
+});
+
+test('selected row teacher preview menu rejects revoked or missing token rows', async () => {
+  const spreadsheetMock = await createManagedSpreadsheetMock({
+    設定: await buildManagedRows('設定', [
+      { キー: 'WEB_APP_URL', 値: 'https://example.com/exec' },
+      { キー: 'ADMIN_TOKEN', 値: 'admin-secret' }
+    ]),
+    トークン管理: await buildManagedRows('トークン管理', [
+      {
+        token: 'student-token',
+        rosterKey: 'course-1::student-1',
+        出席番号: '7',
+        氏名: '山田 太郎',
+        studentUrl: 'https://example.com/exec?t=student-token',
+        revoked: '済'
+      }
+    ])
+  });
+  spreadsheetMock.setActiveRange('トークン管理', 2);
+  const uiMock = createUiMock();
+  const { showTeacherPreviewUrlForSelectedTokenRowFromMenu } = await loadApi({
+    console: { error() {}, log() {} },
+    SpreadsheetApp: {
+      ...spreadsheetMock.SpreadsheetApp,
+      getUi: () => uiMock.ui
+    },
+    PropertiesService: createScriptPropertiesMock({ MOL_DRILL_ADMIN_TOKEN: 'admin-secret' }).PropertiesService,
+    CacheService: createScriptCacheMock().CacheService
+  });
+
+  assert.throws(
+    () => showTeacherPreviewUrlForSelectedTokenRowFromMenu(),
+    /有効なURLの行を選択/
+  );
+  assert.match(uiMock.alerts[0][0], /教師プレビューURL/);
+  assert.match(uiMock.alerts[0][0], /失敗/);
+});
+
+test('selected row token reissue menu confirms and shows the new URL without classroom posting', async () => {
+  const spreadsheetMock = await createManagedSpreadsheetMock({
+    設定: await buildManagedRows('設定', [
+      { キー: 'WEB_APP_URL', 値: 'https://example.com/exec' }
+    ]),
+    トークン管理: await buildManagedRows('トークン管理', [
+      {
+        token: 'old-token',
+        courseId: 'course-1',
+        courseName: '化学A',
+        rosterKey: 'course-1::student-1',
+        studentId: 'student-1',
+        出席番号: '7',
+        氏名: '山田 太郎',
+        メール: 'taro@example.com',
+        studentUrl: 'https://example.com/exec?t=old-token',
+        revoked: '',
+        投稿削除: ''
+      }
+    ])
+  });
+  spreadsheetMock.setActiveRange('トークン管理', 2);
+  const uiMock = createUiMock();
+  const { reissueSelectedStudentTokenFromMenu } = await loadApi({
+    SpreadsheetApp: {
+      ...spreadsheetMock.SpreadsheetApp,
+      getUi: () => uiMock.ui
+    }
+  });
+
+  const updated = reissueSelectedStudentTokenFromMenu();
+
+  assert.equal(updated.rosterKey, 'course-1::student-1');
+  assert.notEqual(updated.token, 'old-token');
+  assert.match(updated.studentUrl, /^https:\/\/example\.com\/exec\?t=mdl_/);
+  assert.equal(spreadsheetMock.sheets.get('配付ログ').rows.length, 1, 'reissue should not append distribution success logs');
+  assert.equal(uiMock.alerts.length, 2);
+  assert.match(uiMock.alerts[0][1], /山田 太郎/);
+  assert.match(uiMock.alerts[0][1], /古いURL/);
+  assert.match(uiMock.alerts[0][1], /Classroom投稿は自動では更新されません/);
+  assert.match(uiMock.alerts[1][0], /トークンを再発行/);
+  assert.match(uiMock.alerts[1][0], /https:\/\/example\.com\/exec\?t=mdl_/);
+});
+
+test('selected row token revoke menu confirms and keeps classroom posts untouched', async () => {
+  const spreadsheetMock = await createManagedSpreadsheetMock({
+    トークン管理: await buildManagedRows('トークン管理', [
+      {
+        token: 'old-token',
+        courseId: 'course-1',
+        courseName: '化学A',
+        rosterKey: 'course-1::student-1',
+        studentId: 'student-1',
+        出席番号: '7',
+        氏名: '山田 太郎',
+        メール: 'taro@example.com',
+        studentUrl: 'https://example.com/exec?t=old-token',
+        revoked: '',
+        投稿削除: ''
+      }
+    ])
+  });
+  spreadsheetMock.setActiveRange('トークン管理', 2);
+  const uiMock = createUiMock();
+  const { revokeSelectedStudentTokenFromMenu } = await loadApi({
+    SpreadsheetApp: {
+      ...spreadsheetMock.SpreadsheetApp,
+      getUi: () => uiMock.ui
+    }
+  });
+
+  const updated = revokeSelectedStudentTokenFromMenu();
+
+  assert.equal(updated.rosterKey, 'course-1::student-1');
+  assert.equal(updated.revoked, true);
+  const tokenHeader = spreadsheetMock.sheets.get('トークン管理').rows[0];
+  const revokedColumn = tokenHeader.indexOf('revoked');
+  const postDeletionColumn = tokenHeader.indexOf('投稿削除');
+  assert.equal(spreadsheetMock.sheets.get('トークン管理').rows[1][revokedColumn], '済');
+  assert.equal(spreadsheetMock.sheets.get('トークン管理').rows[1][postDeletionColumn], '');
+  assert.equal(spreadsheetMock.sheets.get('配付ログ').rows.length, 1, 'revoke should not append classroom deletion logs');
+  assert.equal(uiMock.alerts.length, 2);
+  assert.match(uiMock.alerts[0][1], /山田 太郎/);
+  assert.match(uiMock.alerts[0][1], /Classroom投稿自体は削除しません/);
+  assert.match(uiMock.alerts[0][1], /投稿削除.*1/);
+  assert.match(uiMock.alerts[1][0], /URLを無効化/);
+});
+
+test('selected row token revoke menu reports already revoked rows without rewriting', async () => {
+  const spreadsheetMock = await createManagedSpreadsheetMock({
+    トークン管理: await buildManagedRows('トークン管理', [
+      {
+        token: 'old-token',
+        rosterKey: 'course-1::student-1',
+        出席番号: '7',
+        氏名: '山田 太郎',
+        studentUrl: 'https://example.com/exec?t=old-token',
+        revoked: '済'
+      }
+    ])
+  });
+  spreadsheetMock.setActiveRange('トークン管理', 2);
+  const uiMock = createUiMock();
+  const { revokeSelectedStudentTokenFromMenu } = await loadApi({
+    SpreadsheetApp: {
+      ...spreadsheetMock.SpreadsheetApp,
+      getUi: () => uiMock.ui
+    }
+  });
+
+  const result = revokeSelectedStudentTokenFromMenu();
+
+  assert.equal(result, null);
+  assert.equal(spreadsheetMock.setValuesCalls.length, 0);
+  assert.match(uiMock.alerts[0][1], /すでに無効化済み/);
+});
+
+test('web app URL can be configured from the spreadsheet menu', async () => {
+  const spreadsheetMock = await createManagedSpreadsheetMock({
+    設定: await buildManagedRows('設定', [
+      { キー: 'WEB_APP_URL', 値: 'https://old.example.com/exec' },
+      { キー: 'POST_TEXT_TEMPLATE', 値: 'old template {{studentUrl}}' }
+    ])
+  });
+  const uiMock = createUiMock();
+  uiMock.queuePromptResponse('https://new.example.com/exec');
+  const { configureWebAppUrlFromMenu, SheetRepository } = await loadApi({
+    SpreadsheetApp: {
+      ...spreadsheetMock.SpreadsheetApp,
+      getUi: () => uiMock.ui
+    }
+  });
+
+  const result = configureWebAppUrlFromMenu();
+
+  assert.equal(result.settings.webAppUrl, 'https://new.example.com/exec');
+  assert.equal(SheetRepository.getSettingValue('WEB_APP_URL'), 'https://new.example.com/exec');
+  assert.equal(SheetRepository.getSettingValue('POST_TEXT_TEMPLATE'), 'old template {{studentUrl}}');
+  assert.match(uiMock.alerts.at(-1)[0], /WebアプリURLを設定しました/);
+});
+
+test('teacher URL menu writes monitor and test student URLs to settings without showing long URLs', async () => {
+  const spreadsheetMock = await createManagedSpreadsheetMock({
+    設定: await buildManagedRows('設定', [
+      { キー: 'WEB_APP_URL', 値: 'https://example.com/exec' },
+      { キー: 'ADMIN_TOKEN', 値: 'secret' }
+    ])
+  });
+  const uiMock = createUiMock();
+  const classroomCalls = [];
+  const { writeTeacherUrlsToSettingsFromMenu, SheetRepository } = await loadApi({
+    SpreadsheetApp: {
+      ...spreadsheetMock.SpreadsheetApp,
+      getUi: () => uiMock.ui
+    },
+    Classroom: {
+      Courses: {
+        Announcements: {
+          create(...args) {
+            classroomCalls.push(args);
+            return { id: 'unexpected' };
+          }
+        }
+      }
+    }
+  });
+
+  const result = writeTeacherUrlsToSettingsFromMenu();
+
+  const alertText = uiMock.alerts.flat().join('\n');
+  assert.equal(SheetRepository.getSettingValue('MONITOR_URL'), 'https://example.com/exec?page=monitor');
+  assert.match(SheetRepository.getSettingValue('TEST_STUDENT_URL'), /^https:\/\/example\.com\/exec\?t=mdl_uuidfromtest\d+$/);
+  assert.doesNotMatch(SheetRepository.getSettingValue('TEST_STUDENT_URL'), /preview=teacher|teacherPreview/);
+  assert.equal(result.monitorUrl, 'https://example.com/exec?page=monitor');
+  assert.equal(result.testStudentUrl, SheetRepository.getSettingValue('TEST_STUDENT_URL'));
+  assert.equal(result.testStudent.rosterKey, '__TEST__::test-student');
+  assert.match(alertText, /設定シート/);
+  assert.match(alertText, /MONITOR_URL/);
+  assert.match(alertText, /TEST_STUDENT_URL/);
+  assert.doesNotMatch(alertText, /https:\/\/example\.com\/exec/);
+  assert.doesNotMatch(alertText, new RegExp(`secret|ADMIN_TOKEN|\\\\?t=|${legacyMonitorEmailSettingKeyForTest()}|教員メール|許可メール`));
+  assert.deepEqual(classroomCalls, []);
+
+  const tokenRows = spreadsheetMock.sheets.get('トークン管理').rows;
+  const header = tokenRows[0];
+  const row = tokenRows.slice(1).find((candidate) => candidate[header.indexOf('rosterKey')] === '__TEST__::test-student');
+  assert.ok(row, 'test student token row should be written');
+  assert.equal(row[header.indexOf('courseId')], '__TEST__');
+  assert.equal(row[header.indexOf('courseName')], 'テスト用');
+  assert.equal(row[header.indexOf('studentId')], 'test-student');
+  assert.equal(row[header.indexOf('出席番号')], 'TEST');
+  assert.equal(row[header.indexOf('氏名')], 'テスト生徒');
+  assert.equal(row[header.indexOf('メール')], '');
+  assert.match(row[header.indexOf('note')], /先生用テストプレイ。Classroomには配付しない。/);
+  assert.equal(spreadsheetMock.sheets.get('生徒名簿').rows.length, 1);
+  assert.equal(spreadsheetMock.sheets.get('配付ログ').rows.some((rowValues) => rowValues.includes('SUCCESS')), false);
+});
+
+test('teacher URL menu appends page=monitor with ampersand when WEB_APP_URL already has a query', async () => {
+  const spreadsheetMock = await createManagedSpreadsheetMock({
+    設定: await buildManagedRows('設定', [
+      { キー: 'WEB_APP_URL', 値: 'https://example.com/exec?x=1' }
+    ])
+  });
+  const uiMock = createUiMock();
+  const { writeTeacherUrlsToSettingsFromMenu, SheetRepository } = await loadApi({
+    SpreadsheetApp: {
+      ...spreadsheetMock.SpreadsheetApp,
+      getUi: () => uiMock.ui
+    }
+  });
+
+  writeTeacherUrlsToSettingsFromMenu();
+
+  assert.equal(SheetRepository.getSettingValue('MONITOR_URL'), 'https://example.com/exec?x=1&page=monitor');
+  assert.match(SheetRepository.getSettingValue('TEST_STUDENT_URL'), /^https:\/\/example\.com\/exec\?x=1&t=mdl_uuidfromtest\d+$/);
+});
+
+test('teacher URL menu asks for WEB_APP_URL when it is blank', async () => {
+  const spreadsheetMock = await createManagedSpreadsheetMock({
+    設定: await buildManagedRows('設定', [
+      { キー: 'WEB_APP_URL', 値: '' }
+    ])
+  });
+  const uiMock = createUiMock();
+  const { writeTeacherUrlsToSettingsFromMenu } = await loadApi({
+    console: { error() {}, log() {} },
+    SpreadsheetApp: {
+      ...spreadsheetMock.SpreadsheetApp,
+      getUi: () => uiMock.ui
+    }
+  });
+
+  assert.throws(
+    () => writeTeacherUrlsToSettingsFromMenu(),
+    /設定シートの WEB_APP_URL を先に設定してください。WebアプリをデプロイしたURLを入れてください。/
+  );
+
+  assert.match(uiMock.alerts.flat().join('\n'), /WEB_APP_URL/);
+});
+
+test('classroom post text can be configured from the spreadsheet menu with escaped newlines', async () => {
+  const spreadsheetMock = await createManagedSpreadsheetMock({
+    設定: await buildManagedRows('設定', [
+      { キー: 'WEB_APP_URL', 値: 'https://example.com/exec' },
+      { キー: 'POST_TEXT_TEMPLATE', 値: 'old template {{studentUrl}}' }
+    ])
+  });
+  const uiMock = createUiMock();
+  uiMock.queuePromptResponse('入口URLです。\\n{{氏名}} さん\\n{{studentUrl}}');
+  const { configureClassroomPostTextFromMenu, SheetRepository } = await loadApi({
+    SpreadsheetApp: {
+      ...spreadsheetMock.SpreadsheetApp,
+      getUi: () => uiMock.ui
+    }
+  });
+
+  const result = configureClassroomPostTextFromMenu();
+
+  assert.equal(result.settings.postTextTemplate, '入口URLです。\n{{氏名}} さん\n{{studentUrl}}');
+  assert.equal(SheetRepository.getSettingValue('POST_TEXT_TEMPLATE'), '入口URLです。\n{{氏名}} さん\n{{studentUrl}}');
+  assert.match(uiMock.alerts.at(-1)[0], /Classroom投稿文を設定しました/);
+});
+
+test('distribution settings can be configured from the spreadsheet menu', async () => {
+  const spreadsheetMock = await createManagedSpreadsheetMock({
+    設定: await buildManagedRows('設定', [
+      { キー: 'WEB_APP_URL', 値: 'https://example.com/exec' },
+      { キー: 'POST_TEXT_TEMPLATE', 値: 'template {{studentUrl}}' },
+      { キー: 'CLASSROOM_SEND_BATCH_SIZE', 値: '40' },
+      { キー: 'DRY_RUN', 値: 'false' },
+      { キー: 'ENABLE_DISTRIBUTION_LOG', 値: 'true' }
+    ])
+  });
+  const uiMock = createUiMock();
+  uiMock.queuePromptResponse('true');
+  uiMock.queuePromptResponse('25');
+  uiMock.queuePromptResponse('false');
+  const { configureDistributionSettingsFromMenu, SheetRepository } = await loadApi({
+    SpreadsheetApp: {
+      ...spreadsheetMock.SpreadsheetApp,
+      getUi: () => uiMock.ui
+    }
+  });
+
+  const result = configureDistributionSettingsFromMenu();
+
+  assert.equal(result.settings.dryRun, true);
+  assert.equal(result.settings.batchSize, 25);
+  assert.equal(result.settings.enableDistributionLog, false);
+  assert.equal(SheetRepository.getSettingValue('DRY_RUN'), 'true');
+  assert.equal(SheetRepository.getSettingValue('CLASSROOM_SEND_BATCH_SIZE'), '25');
+  assert.equal(SheetRepository.getSettingValue('ENABLE_DISTRIBUTION_LOG'), 'false');
+  assert.match(uiMock.alerts.at(-1)[0], /配付設定を変更しました/);
+});
+
+test('problem generation and grading settings can be configured from the spreadsheet menu', async () => {
+  const spreadsheetMock = await createManagedSpreadsheetMock({
+    設定: await buildManagedRows('設定', [
+      { キー: 'WEB_APP_URL', 値: 'https://example.com/exec' },
+      { キー: 'POST_TEXT_TEMPLATE', 値: 'template {{studentUrl}}' },
+      { キー: 'ENABLE_ADAPTIVE_PROBLEM_SELECTION', 値: 'true' },
+      { キー: 'BEGINNER_AVOGADRO_CONSTANT', 値: '6.0e23' },
+      { キー: 'INTERMEDIATE_AVOGADRO_CONSTANT', 値: '6.0e23' },
+      { キー: 'ADVANCED_AVOGADRO_CONSTANT', 値: '6.02e23' },
+      { キー: 'BEGINNER_TOLERANCE', 値: '0.01' },
+      { キー: 'INTERMEDIATE_TOLERANCE', 値: '0.02' },
+      { キー: 'ADVANCED_TOLERANCE', 値: '0.005' }
+    ])
+  });
+  const uiMock = createUiMock();
+  uiMock.queuePromptResponse('false');
+  uiMock.queuePromptResponse('6.1x10^23');
+  uiMock.queuePromptResponse('0.03');
+  uiMock.queuePromptResponse('6.2e23');
+  uiMock.queuePromptResponse('0.04');
+  uiMock.queuePromptResponse('6.03e23');
+  uiMock.queuePromptResponse('0.006');
+  const { configureProblemSettingsFromMenu, SheetRepository } = await loadApi({
+    SpreadsheetApp: {
+      ...spreadsheetMock.SpreadsheetApp,
+      getUi: () => uiMock.ui
+    }
+  });
+
+  const result = configureProblemSettingsFromMenu();
+
+  assert.equal(result.settings.adaptiveProblemSelection, false);
+  assert.equal(Number(SheetRepository.getSettingValue('BEGINNER_AVOGADRO_CONSTANT')), 6.1e23);
+  assert.equal(SheetRepository.getSettingValue('BEGINNER_TOLERANCE'), '0.03');
+  assert.equal(Number(SheetRepository.getSettingValue('INTERMEDIATE_AVOGADRO_CONSTANT')), 6.2e23);
+  assert.equal(SheetRepository.getSettingValue('INTERMEDIATE_TOLERANCE'), '0.04');
+  assert.equal(Number(SheetRepository.getSettingValue('ADVANCED_AVOGADRO_CONSTANT')), 6.03e23);
+  assert.equal(SheetRepository.getSettingValue('ADVANCED_TOLERANCE'), '0.006');
+  assert.equal(SheetRepository.getSettingValue('ENABLE_ADAPTIVE_PROBLEM_SELECTION'), 'false');
+  assert.match(uiMock.alerts.at(-1)[0], /出題・採点設定を変更しました/);
+  const promptText = JSON.stringify(uiMock.prompts);
+  assert.doesNotMatch(promptText, /6\.02e23|6\.0e23|E\+23/i);
+  assert.match(promptText, /6\.02×10\^23/);
+  assert.match(promptText, /6\.02x10\^23/);
+});
+
+test('requested classroom URL post deletion menu confirms and cancels without calling Classroom', async () => {
+  const uiMock = createUiMock();
+  uiMock.ui.alert = (...args) => {
+    uiMock.alerts.push(args);
+    if (args[2] === uiMock.ui.ButtonSet.OK_CANCEL) {
+      return uiMock.ui.Button.CANCEL;
+    }
+    return uiMock.ui.Button.OK;
+  };
+  const deleteCalls = [];
+  const { deleteRequestedClassroomUrlPostsFromMenu } = await loadApi({
+    SpreadsheetApp: {
+      getUi: () => uiMock.ui
+    },
+    Classroom: {
+      Courses: {
+        Announcements: {
+          remove(courseId, announcementId) {
+            deleteCalls.push({ courseId, announcementId });
+            return {};
+          }
+        }
+      }
+    }
+  });
+
+  const result = deleteRequestedClassroomUrlPostsFromMenu();
+
+  assert.equal(result, null);
+  assert.equal(deleteCalls.length, 0);
+  assert.equal(uiMock.alerts[0][0], '投稿削除=1 のURLを無効化してClassroom投稿を削除');
+  assert.match(uiMock.alerts[0][1], /トークン管理 シートの 投稿削除 列に 1/);
+  assert.match(uiMock.alerts[0][1], /対象生徒のURLを無効化/);
+  assert.match(uiMock.alerts[0][1], /対応するClassroom投稿を削除/);
+  assert.match(uiMock.alerts[0][1], /解答ログや集計データは削除しません/);
+  assert.match(uiMock.alerts[0][1], /revoked は 済/);
+  assert.match(uiMock.alerts[0][1], /成功した行は.*投稿削除.*済/);
+  assert.match(uiMock.alerts[0][1], /失敗した行は.*投稿削除.*失敗/);
+  assert.match(uiMock.alerts[0][1], /再実行したい場合は.*投稿削除.*1/);
+  assert.match(uiMock.alerts[0][1], /元に戻せない/);
 });
 
 test('reinitialize menu uses OK_CANCEL alert and cancels without text prompt', async () => {
@@ -822,20 +1689,103 @@ test('reinitialize menu uses OK_CANCEL alert and cancels without text prompt', a
   assert.match(uiMock.alerts[0][1], /この操作は元に戻せません/);
 });
 
-test('setup refuses older schema instead of silently mutating existing management sheets', async () => {
-  const spreadsheetMock = await createManagedSpreadsheetMock({
-    設定: await buildManagedRows('設定', [
-      { キー: 'schemaVersion', 値: '15' },
-      { キー: 'AVOGADRO_CONSTANT', 値: '6.02e23' },
-      { キー: 'DEFAULT_TOLERANCE', 値: '0.01' }
-    ])
+test('setup repairs missing management columns while ignoring legacy version setting keys', async () => {
+  const spreadsheetMock = createSpreadsheetMock({
+    設定: [
+      ['キー', '値', '説明', '更新日時'],
+      ['schemaVersion', '15', 'legacy version value', '2026-05-21T00:00:00.000Z'],
+      ['SCHEMA_VERSION', 'older', 'legacy uppercase version value', '2026-05-21T00:00:00.000Z'],
+      ['WEB_APP_URL', 'https://old.example.com/exec', 'existing url', '2026-05-21T00:00:00.000Z']
+    ],
+    トークン管理: [
+      ['token', 'rosterKey'],
+      ['old-token', 'course-1::student-1']
+    ]
   });
   const { SheetRepository } = await loadApi({ SpreadsheetApp: spreadsheetMock.SpreadsheetApp });
 
-  assert.throws(
-    () => SheetRepository.ensureSheets(),
-    /管理シートのスキーマが古いです。schemaVersion=15、期待値=17/
+  const result = SheetRepository.ensureSheets();
+
+  assert.equal(result.ok, true);
+  assert.equal(Object.hasOwn(result, 'schemaVersion'), false);
+  assert.equal(result.message, 'もるくえ！の管理シートを作成・補修しました。');
+  assert.equal(spreadsheetMock.sheets.get('設定').rows[1][0], 'schemaVersion');
+  assert.equal(spreadsheetMock.sheets.get('設定').rows[1][1], '15');
+  assert.equal(spreadsheetMock.sheets.get('設定').rows[2][0], 'SCHEMA_VERSION');
+  assert.equal(spreadsheetMock.sheets.get('設定').rows[2][1], 'older');
+  assert.equal(spreadsheetMock.sheets.get('設定').rows[3][1], 'https://old.example.com/exec');
+  assert.equal(
+    spreadsheetMock.sheets.get('設定').rows.some((row) => row[0] === legacyMonitorEmailSettingKeyForTest()),
+    false,
+    'newly repaired settings should not seed the legacy monitor email setting'
   );
+
+  const tokenRows = spreadsheetMock.sheets.get('トークン管理').rows;
+  const tokenHeader = tokenRows[0];
+  assert.deepEqual(tokenHeader.slice(0, 2), ['token', 'rosterKey']);
+  for (const header of ['courseId', 'courseName', 'studentId', '出席番号', '氏名', 'メール', 'studentUrl', 'issuedAt', 'lastAccessedAt', 'revoked', '投稿削除', 'note']) {
+    assert.ok(tokenHeader.includes(header), `${header} should be appended`);
+  }
+  assert.deepEqual(tokenRows[1].slice(0, 2), ['old-token', 'course-1::student-1']);
+  assert.equal(
+    spreadsheetMock.checkboxCalls.some((call) => call.sheetName === 'トークン管理'),
+    false,
+    'token flags should use 1/blank values instead of checkboxes'
+  );
+});
+
+test('token flags read legacy values and write revoked as completed while preserving post deletion statuses', async () => {
+  const spreadsheetMock = createSpreadsheetMock({
+    トークン管理: [
+      ['token', 'rosterKey', 'courseId', 'studentId', 'revoked', '投稿削除', 'note'],
+      ['token-1', 'course-1::student-1', 'course-1', 'student-1', '1', 'TRUE', ''],
+      ['token-2', 'course-1::student-2', 'course-1', 'student-2', true, true, ''],
+      ['token-3', 'course-1::student-3', 'course-1', 'student-3', '', '', ''],
+      ['token-4', 'course-1::student-4', 'course-1', 'student-4', '済', '済', ''],
+      ['token-5', 'course-1::student-5', 'course-1', 'student-5', '', '失敗', ''],
+      ['token-6', 'course-1::student-6', 'course-1', 'student-6', '', '対象なし', '']
+    ]
+  });
+  const { SheetRepository } = await loadApi({ SpreadsheetApp: spreadsheetMock.SpreadsheetApp });
+  SheetRepository.assertManagementSheetsReady = () => {};
+
+  const rows = SheetRepository.readTokenRows();
+
+  assert.equal(rows[0].revoked, true);
+  assert.equal(rows[0].postDeletionRequested, true);
+  assert.equal(rows[1].revoked, true);
+  assert.equal(rows[1].postDeletionRequested, true);
+  assert.equal(rows[2].revoked, false);
+  assert.equal(rows[2].postDeletionRequested, false);
+  assert.equal(rows[3].revoked, true);
+  assert.equal(rows[3].postDeletionRequested, false);
+  assert.equal(rows[3].postDeletionStatus, '済');
+  assert.equal(rows[4].postDeletionRequested, false);
+  assert.equal(rows[4].postDeletionStatus, '失敗');
+  assert.equal(rows[5].postDeletionRequested, false);
+  assert.equal(rows[5].postDeletionStatus, '対象なし');
+
+  SheetRepository.writeTokenRows([
+    { ...rows[0], revoked: true, postDeletionRequested: false, postDeletionStatus: '' },
+    { ...rows[2], revoked: false, postDeletionRequested: true, postDeletionStatus: '' },
+    { ...rows[3], revoked: true, postDeletionRequested: false, postDeletionStatus: '済' },
+    { ...rows[4], revoked: true, postDeletionRequested: false, postDeletionStatus: '失敗' },
+    { ...rows[5], revoked: true, postDeletionRequested: false, postDeletionStatus: '対象なし' }
+  ]);
+  const writtenRows = spreadsheetMock.sheets.get('トークン管理').rows;
+  const header = writtenRows[0];
+  const revokedColumn = header.indexOf('revoked');
+  const postDeletionColumn = header.indexOf('投稿削除');
+  assert.equal(writtenRows[1][revokedColumn], '済');
+  assert.equal(writtenRows[1][postDeletionColumn], '');
+  assert.equal(writtenRows[2][revokedColumn], '');
+  assert.equal(writtenRows[2][postDeletionColumn], '1');
+  assert.equal(writtenRows[3][revokedColumn], '済');
+  assert.equal(writtenRows[3][postDeletionColumn], '済');
+  assert.equal(writtenRows[4][revokedColumn], '済');
+  assert.equal(writtenRows[4][postDeletionColumn], '失敗');
+  assert.equal(writtenRows[5][revokedColumn], '済');
+  assert.equal(writtenRows[5][postDeletionColumn], '対象なし');
 });
 
 test('sheet row helpers read update find and append by header after columns are reordered', async () => {
@@ -847,7 +1797,7 @@ test('sheet row helpers read update find and append by header after columns are 
     ]
   });
   const { SheetRepository } = await loadApi({ SpreadsheetApp: spreadsheetMock.SpreadsheetApp });
-  SheetRepository.assertManagementSchemaReady = () => {};
+  SheetRepository.assertManagementSheetsReady = () => {};
 
   assert.equal(JSON.stringify(SheetRepository.readObjectAtRow_('トークン管理', 2)), JSON.stringify({
     氏名: '山田 太郎',
@@ -886,7 +1836,7 @@ test('readLatestRowsAsObjects reads only the trailing rows', async () => {
     ]
   });
   const { SheetRepository } = await loadApi({ SpreadsheetApp: spreadsheetMock.SpreadsheetApp });
-  SheetRepository.assertManagementSchemaReady = () => {};
+  SheetRepository.assertManagementSheetsReady = () => {};
 
   const latest = SheetRepository.readLatestRowsAsObjects_('解答ログ', 2);
 
@@ -905,28 +1855,20 @@ test('readLatestRowsAsObjects reads only the trailing rows', async () => {
   );
 });
 
-test('admin dashboard overview returns lightweight initial data without log scans or preview targets', async () => {
+test('monitor dashboard data requires monitor access and returns read-only lightweight data', async () => {
   const spreadsheetMock = await createManagedSpreadsheetMock({
     設定: await buildManagedRows('設定', [
-      { キー: 'schemaVersion', 値: '17', 説明: 'schema' },
       { キー: 'ADMIN_TOKEN', 値: 'secret', 説明: 'admin token' },
-      { キー: 'WEB_APP_URL', 値: 'https://example.com/exec' },
-      { キー: 'POST_TEXT_TEMPLATE', 値: 'Hello {{氏名}} {{studentUrl}}' },
-      { キー: 'CLASSROOM_SEND_BATCH_SIZE', 値: '20' },
-      { キー: 'DRY_RUN', 値: 'false' },
-      { キー: 'ENABLE_DISTRIBUTION_LOG', 値: 'true' }
+      { キー: 'WEB_APP_URL', 値: 'https://example.com/exec' }
     ]),
     Classroom一覧: await buildManagedRows('Classroom一覧', [
-      { courseId: 'course-1', name: '化学A', section: '1組', courseState: 'ACTIVE', 同期対象: true },
-      { courseId: 'course-2', name: '化学B', section: '2組', courseState: 'ACTIVE', 同期対象: false }
+      { courseId: 'course-1', name: '化学A', section: '1組', courseState: 'ACTIVE', 同期対象: true }
     ]),
     生徒名簿: await buildManagedRows('生徒名簿', [
-      { courseId: 'course-1', courseName: '化学A', rosterKey: 'course-1::student-1', studentId: 'student-1', 出席番号: '7', 氏名: '山田 太郎', メール: 'taro@example.com', 状態: '在籍' },
-      { courseId: 'course-1', courseName: '化学A', rosterKey: 'course-1::student-2', studentId: 'student-2', 出席番号: '8', 氏名: '佐藤 花子', メール: 'hanako@example.com', 状態: '退籍' }
+      { courseId: 'course-1', courseName: '化学A', rosterKey: 'course-1::student-1', studentId: 'student-1', 出席番号: '7', 氏名: '山田 太郎', メール: 'taro@example.com', 状態: '在籍' }
     ]),
     トークン管理: await buildManagedRows('トークン管理', [
-      { token: 'token-1', courseId: 'course-1', courseName: '化学A', rosterKey: 'course-1::student-1', studentId: 'student-1', 出席番号: '7', 氏名: '山田 太郎', メール: 'taro@example.com', studentUrl: 'https://example.com/exec?t=token-1', issuedAt: '2026-05-20T10:00:00.000Z', lastAccessedAt: '2026-05-20T11:00:00.000Z', revoked: false },
-      { token: 'token-2', courseId: 'course-1', courseName: '化学A', rosterKey: 'course-1::student-2', studentId: 'student-2', 出席番号: '8', 氏名: '佐藤 花子', メール: 'hanako@example.com', studentUrl: 'https://example.com/exec?t=token-2', issuedAt: '2026-05-20T10:00:00.000Z', revoked: true }
+      { token: 'token-1', courseId: 'course-1', courseName: '化学A', rosterKey: 'course-1::student-1', studentId: 'student-1', 出席番号: '7', 氏名: '山田 太郎', メール: 'taro@example.com', studentUrl: 'https://example.com/exec?t=token-1', issuedAt: '2026-05-20T10:00:00.000Z', lastAccessedAt: '2026-05-20T11:00:00.000Z', revoked: false }
     ]),
     集計キャッシュ: await buildManagedRows('集計キャッシュ', [
       { updatedAt: '2026-05-21T10:00:00.000Z', courseId: 'course-1', courseName: '化学A', rosterKey: 'course-1::student-1', studentId: 'student-1', 出席番号: '7', 氏名: '山田 太郎', totalAttempts: 10, totalCorrect: 8, totalAccuracy: 0.8, recent10Attempts: 10, recent10Correct: 8, recent10Accuracy: 0.8, beginnerAttempts: 4, beginnerCorrect: 3, intermediateAttempts: 3, intermediateCorrect: 2, advancedAttempts: 3, advancedCorrect: 3, lastAnsweredAt: '2026-05-21T09:59:00.000Z' }
@@ -934,120 +1876,445 @@ test('admin dashboard overview returns lightweight initial data without log scan
     配付ログ: await buildManagedRows('配付ログ', [
       { timestamp: '2026-05-21T09:00:00.000Z', runId: 'RUN_1', courseId: 'course-1', rosterKey: 'course-1::student-1', studentId: 'student-1', token: 'token-1', status: 'SUCCESS' }
     ]),
-    実行ログ: await buildManagedRows('実行ログ', [
-      { runId: 'RUNLOG_1', operation: 'REBUILD_AGGREGATE_CACHE', startedAt: '2026-05-21T09:00:00.000Z', finishedAt: '2026-05-21T09:01:00.000Z', processedCount: 1, successCount: 1, errorCount: 0, skippedCount: 0, nextAction: 'DONE' }
-    ]),
     解答ログ: await buildManagedRows('解答ログ', [
       { timestamp: '2026-05-21T09:00:00.000Z', attemptId: 'ATT_1', rosterKey: 'course-1::student-1' }
     ])
   });
-  const { SheetRepository, DistributionService, getAdminDashboardOverview } = await loadApi({ SpreadsheetApp: spreadsheetMock.SpreadsheetApp });
+  const { SheetRepository, DistributionService, MonitorSnapshotService, getMonitorDashboardData } = await loadApi({
+    SpreadsheetApp: spreadsheetMock.SpreadsheetApp,
+    Session: {
+      getActiveUser: () => {
+        throw new Error('monitor dashboard should not read the current user email');
+      }
+    }
+  });
+  MonitorSnapshotService.writeDashboardSnapshot();
   SheetRepository.readAnswerLogs = () => {
-    throw new Error('readAnswerLogs should not be used during dashboard overview');
+    throw new Error('readAnswerLogs should not be used during monitor dashboard data load');
   };
   SheetRepository.readDistributionLogs = () => {
-    throw new Error('readDistributionLogs should not be used during dashboard overview');
+    throw new Error('readDistributionLogs should not be used during monitor dashboard data load');
   };
   SheetRepository.readRunLogs = () => {
-    throw new Error('readRunLogs should not be used during dashboard overview');
+    throw new Error('readRunLogs should not be used during monitor dashboard data load');
   };
   DistributionService.getDistributionTargetsPreview = () => {
-    throw new Error('distribution preview should not be built during dashboard overview');
+    throw new Error('distribution preview should not be built during monitor dashboard data load');
   };
 
-  const overview = getAdminDashboardOverview('secret');
+  const data = getMonitorDashboardData();
 
-  assert.equal(overview.appName, 'もるくえ！');
-  assert.equal(overview.schemaVersion, '17');
-  assert.equal(overview.courseOverview.totalCount, 2);
-  assert.equal(overview.courseOverview.checkedCount, 1);
-  assert.equal(overview.studentOverview.activeCount, 1);
-  assert.equal(overview.studentOverview.retiredCount, 1);
-  assert.equal(overview.tokenOverview.activeCount, 1);
-  assert.equal(overview.tokenOverview.revokedCount, 1);
-  assert.equal(overview.progressRows.length, 1);
-  assert.equal(overview.dashboardMetrics.answeredCount, 1);
-  assert.equal(overview.latestRunLog.runId, 'RUNLOG_1');
-  assert.equal(Object.hasOwn(overview, 'students'), false);
-  assert.equal(Object.hasOwn(overview, 'tokens'), false);
-  assert.equal(Object.hasOwn(overview, 'answerLogs'), false);
-  assert.equal(Object.hasOwn(overview, 'distributionLogs'), false);
-  assert.equal(Object.hasOwn(overview, 'runLogs'), false);
-  assert.equal(Object.hasOwn(overview, 'distributionPreview'), false);
+  assert.equal(data.appName, 'もるくえ！');
+  assert.match(data.generatedAt, /^\d{4}-\d{2}-\d{2}T/);
+  assert.equal(data.source, 'monitor-snapshot');
+  assert.equal(data.snapshotMode, 'snapshot');
+  assert.equal(data.courseOverview.totalCount, 1);
+  assert.equal(data.progressRows.length, 1);
+  assert.equal(data.dashboardMetrics.answeredCount, 1);
+  for (const forbiddenKey of [
+    'settings',
+    'adminToken',
+    'students',
+    'tokens',
+    'summaries',
+    'answerLogs',
+    'distributionLogs',
+    'runLogs',
+    'latestRunLog',
+    'distributionPreview',
+    'sheetLinks'
+  ]) {
+    assert.equal(Object.hasOwn(data, forbiddenKey), false, `${forbiddenKey} should not be returned`);
+  }
 });
 
-test('admin log data reads only the latest 50 rows for each log sheet', async () => {
-  const logIndexes = Array.from({ length: 60 }, (_, index) => index + 1);
+test('monitor snapshot service writes dashboard JSON without teacher test student rows', async () => {
+  const spreadsheetMock = await createManagedSpreadsheetMock({
+    Classroom一覧: await buildManagedRows('Classroom一覧', [
+      { courseId: 'course-1', name: '化学A', section: '1組', courseState: 'ACTIVE', 同期対象: true }
+    ]),
+    生徒名簿: await buildManagedRows('生徒名簿', [
+      { courseId: 'course-1', courseName: '化学A', rosterKey: 'course-1::student-1', studentId: 'student-1', 出席番号: '7', 氏名: '山田 太郎', メール: 'taro@example.com', 状態: '在籍' },
+      { courseId: '__TEST__', courseName: '先生テスト', rosterKey: '__TEST__::test-student', studentId: 'test-student', 出席番号: 'T', 氏名: '先生テスト', 状態: '在籍' }
+    ]),
+    トークン管理: await buildManagedRows('トークン管理', [
+      { token: 'token-1', courseId: 'course-1', courseName: '化学A', rosterKey: 'course-1::student-1', studentId: 'student-1', 出席番号: '7', 氏名: '山田 太郎', studentUrl: 'https://example.com/exec?t=token-1', issuedAt: '2026-05-20T10:00:00.000Z', lastAccessedAt: '2026-05-20T11:00:00.000Z', revoked: false },
+      { token: 'teacher-test-token', courseId: '__TEST__', courseName: '先生テスト', rosterKey: '__TEST__::test-student', studentId: 'test-student', 出席番号: 'T', 氏名: '先生テスト', studentUrl: 'https://example.com/exec?t=teacher-test-token', revoked: false }
+    ]),
+    集計キャッシュ: await buildManagedRows('集計キャッシュ', [
+      { updatedAt: '2026-05-21T10:00:00.000Z', courseId: 'course-1', courseName: '化学A', rosterKey: 'course-1::student-1', studentId: 'student-1', 出席番号: '7', 氏名: '山田 太郎', totalAttempts: 3, totalCorrect: 2, totalAccuracy: 0.6667, recent10Attempts: 3, recent10Correct: 2, recent10Accuracy: 0.6667, beginnerAttempts: 3, beginnerCorrect: 2, lastAnsweredAt: '2026-05-21T09:59:00.000Z' },
+      { updatedAt: '2026-05-21T10:00:00.000Z', courseId: '__TEST__', courseName: '先生テスト', rosterKey: '__TEST__::test-student', studentId: 'test-student', 出席番号: 'T', 氏名: '先生テスト', totalAttempts: 99, totalCorrect: 99, totalAccuracy: 1 }
+    ]),
+    配付ログ: await buildManagedRows('配付ログ', [
+      { timestamp: '2026-05-21T09:00:00.000Z', runId: 'RUN_1', courseId: 'course-1', rosterKey: 'course-1::student-1', studentId: 'student-1', token: 'token-1', status: 'SUCCESS' }
+    ])
+  });
+  const { MonitorSnapshotService } = await loadApi({ SpreadsheetApp: spreadsheetMock.SpreadsheetApp });
+
+  const snapshot = MonitorSnapshotService.writeDashboardSnapshot();
+
+  assert.equal(snapshot.snapshotVersion, 1);
+  assert.equal(snapshot.source, 'monitor-snapshot');
+  assert.equal(snapshot.studentRuntime, 'fast');
+  assert.equal(snapshot.snapshotMode, 'snapshot');
+  assert.match(snapshot.generatedAt, /^\d{4}-\d{2}-\d{2}T/);
+  assert.ok(Array.isArray(snapshot.progressRows));
+  assert.equal(snapshot.progressRows.length, 1);
+  assert.equal(snapshot.progressRows[0].rosterKey, 'course-1::student-1');
+  assert.equal(snapshot.progressRows.some((row) => row.rosterKey === '__TEST__::test-student'), false);
+  assert.equal(snapshot.dashboardMetrics.answeredCount, 1);
+  const monitorRows = spreadsheetMock.sheets.get('モニターキャッシュ').rows;
+  const headers = monitorRows[0];
+  const dashboardRow = monitorRows.find((row) => row[headers.indexOf('key')] === 'dashboard');
+  assert.ok(dashboardRow, 'dashboard snapshot row should be written');
+  assert.equal(dashboardRow[headers.indexOf('updatedAt')], snapshot.generatedAt);
+  assert.equal(dashboardRow[headers.indexOf('note')], '自動生成。直接編集しない');
+  const parsed = JSON.parse(dashboardRow[headers.indexOf('json')]);
+  assert.equal(parsed.source, 'monitor-snapshot');
+  assert.equal(parsed.progressRows.length, 1);
+});
+
+test('monitor snapshot service ignores corrupted dashboard JSON', async () => {
+  const spreadsheetMock = await createManagedSpreadsheetMock({
+    モニターキャッシュ: await buildManagedRows('モニターキャッシュ', [
+      { key: 'dashboard', json: '{broken json', updatedAt: '2026-05-21T10:00:00.000Z' }
+    ])
+  });
+  const { MonitorSnapshotService } = await loadApi({ SpreadsheetApp: spreadsheetMock.SpreadsheetApp });
+
+  const snapshot = MonitorSnapshotService.readDashboardSnapshot();
+
+  assert.equal(snapshot, null);
+});
+
+test('getMonitorDashboardData returns usable snapshot without live dashboard reads', async () => {
+  const storedSnapshot = {
+    snapshotVersion: 1,
+    source: 'monitor-snapshot',
+    generatedAt: '2026-05-21T12:00:00.000Z',
+    studentRuntime: 'fast',
+    appName: 'もるくえ！',
+    appVersion: 'test-version',
+    courseOverview: { totalCount: 1, checkedCount: 1 },
+    studentOverview: { totalCount: 1, activeCount: 1, retiredCount: 0 },
+    tokenOverview: { totalCount: 1, activeCount: 1, revokedCount: 0 },
+    dashboardMetrics: { answeredCount: 1 },
+    progressRows: [{ rosterKey: 'course-1::student-1', name: '山田 太郎', totalAttempts: 3 }]
+  };
+  const spreadsheetMock = await createManagedSpreadsheetMock({
+    モニターキャッシュ: await buildManagedRows('モニターキャッシュ', [
+      { key: 'dashboard', json: JSON.stringify(storedSnapshot), updatedAt: storedSnapshot.generatedAt, note: '自動生成。直接編集しない' }
+    ])
+  });
+  const { SheetRepository, MonitorSnapshotService, getMonitorDashboardData } = await loadApi({
+    SpreadsheetApp: spreadsheetMock.SpreadsheetApp
+  });
+  SheetRepository.readCourseRows = () => {
+    throw new Error('snapshot-backed monitor dashboard should not read live course rows');
+  };
+  MonitorSnapshotService.writeDashboardSnapshot = () => {
+    throw new Error('monitor dashboard read path must not write snapshots');
+  };
+
+  const data = getMonitorDashboardData();
+
+  assert.equal(data.source, 'monitor-snapshot');
+  assert.equal(data.snapshotMode, 'snapshot');
+  assert.equal(data.snapshotGeneratedAt, storedSnapshot.generatedAt);
+  assert.equal(data.dashboardMetrics.answeredCount, 1);
+  assert.equal(data.progressRows.length, 1);
+});
+
+test('getMonitorDashboardData attaches maintenance spreadsheet link without storing it in snapshot JSON', async () => {
+  const spreadsheetMock = await createManagedSpreadsheetMock({
+    Classroom一覧: await buildManagedRows('Classroom一覧', [
+      { courseId: 'course-1', name: '化学A', section: '1組', courseState: 'ACTIVE', 同期対象: true }
+    ]),
+    生徒名簿: await buildManagedRows('生徒名簿', [
+      { courseId: 'course-1', courseName: '化学A', rosterKey: 'course-1::student-1', studentId: 'student-1', 出席番号: '7', 氏名: '山田 太郎', 状態: '在籍' }
+    ]),
+    トークン管理: await buildManagedRows('トークン管理', [
+      { token: 'secret-token', courseId: 'course-1', courseName: '化学A', rosterKey: 'course-1::student-1', studentId: 'student-1', 出席番号: '7', 氏名: '山田 太郎', studentUrl: 'https://example.com/exec?t=secret-token', revoked: false }
+    ]),
+    集計キャッシュ: await buildManagedRows('集計キャッシュ', [
+      { updatedAt: '2026-05-21T10:00:00.000Z', courseId: 'course-1', courseName: '化学A', rosterKey: 'course-1::student-1', studentId: 'student-1', 出席番号: '7', 氏名: '山田 太郎', totalAttempts: 3, totalCorrect: 2, totalAccuracy: 0.6667 }
+    ])
+  });
+  const spreadsheet = spreadsheetMock.SpreadsheetApp.getActiveSpreadsheet();
+  spreadsheet.getUrl = () => 'https://docs.google.com/spreadsheets/d/admin-sheet/edit';
+  const { MonitorSnapshotService, getMonitorDashboardData } = await loadApi({
+    SpreadsheetApp: spreadsheetMock.SpreadsheetApp
+  });
+
+  MonitorSnapshotService.writeDashboardSnapshot();
+  const monitorRows = spreadsheetMock.sheets.get('モニターキャッシュ').rows;
+  const headers = monitorRows[0];
+  const dashboardRow = monitorRows.find((row) => row[headers.indexOf('key')] === 'dashboard');
+  const snapshotJson = dashboardRow[headers.indexOf('json')];
+  const storedSnapshot = JSON.parse(snapshotJson);
+
+  assert.equal(Object.hasOwn(storedSnapshot, 'maintenanceLinks'), false);
+  assert.doesNotMatch(snapshotJson, /admin-sheet/);
+  assert.doesNotMatch(snapshotJson, /secret-token|studentUrl/);
+
+  const data = getMonitorDashboardData();
+
+  assert.deepEqual(Object.keys(data.maintenanceLinks).sort(), ['spreadsheetUrl']);
+  assert.equal(data.maintenanceLinks.spreadsheetUrl, 'https://docs.google.com/spreadsheets/d/admin-sheet/edit');
+  assert.equal(Object.hasOwn(data.maintenanceLinks, 'token'), false);
+  assert.equal(Object.hasOwn(data.maintenanceLinks, 'studentUrl'), false);
+});
+
+test('getMonitorDashboardData returns a lightweight snapshot-missing response without live dashboard reads', async () => {
+  const spreadsheetMock = await createManagedSpreadsheetMock({
+    モニターキャッシュ: await buildManagedRows('モニターキャッシュ', [
+      { key: 'dashboard', json: '', updatedAt: '', note: '' }
+    ])
+  });
+  const { SheetRepository, MonitorSnapshotService, getMonitorDashboardData } = await loadApi({
+    SpreadsheetApp: spreadsheetMock.SpreadsheetApp
+  });
+  SheetRepository.readCourseRows = () => {
+    throw new Error('missing monitor snapshot should not trigger live course reads');
+  };
+  MonitorSnapshotService.writeDashboardSnapshot = () => {
+    throw new Error('missing monitor snapshot should not write snapshots');
+  };
+
+  const data = getMonitorDashboardData();
+
+  assert.equal(data.source, 'snapshot-missing');
+  assert.equal(data.snapshotMode, 'snapshot-missing');
+  assert.equal(data.snapshotMissing, true);
+  assert.equal(data.snapshotGeneratedAt, '');
+  assert.equal(data.progressRows.length, 0);
+  assert.match(data.message, /モニターキャッシュが未作成です/);
+  assert.match(data.message, /モニターだけ更新/);
+  assert.match(data.message, /集計から完全更新/);
+  assert.equal(data.dashboardMetrics.answeredCount || 0, 0);
+  assert.equal(
+    spreadsheetMock.setValuesCalls.some((call) => call.sheetName === 'モニターキャッシュ'),
+    false,
+    'monitor dashboard missing response should remain read-only'
+  );
+});
+
+test('getMonitorDashboardData returns maintenance links even when the monitor snapshot is missing', async () => {
+  const spreadsheetMock = await createManagedSpreadsheetMock({
+    モニターキャッシュ: await buildManagedRows('モニターキャッシュ', [
+      { key: 'dashboard', json: '', updatedAt: '', note: '' }
+    ])
+  });
+  const spreadsheet = spreadsheetMock.SpreadsheetApp.getActiveSpreadsheet();
+  spreadsheet.getUrl = () => 'https://docs.google.com/spreadsheets/d/admin-sheet/edit';
+  const { getMonitorDashboardData } = await loadApi({
+    SpreadsheetApp: spreadsheetMock.SpreadsheetApp
+  });
+
+  const data = getMonitorDashboardData();
+
+  assert.equal(data.source, 'snapshot-missing');
+  assert.equal(data.maintenanceLinks.spreadsheetUrl, 'https://docs.google.com/spreadsheets/d/admin-sheet/edit');
+  assert.deepEqual(Object.keys(data.maintenanceLinks).sort(), ['spreadsheetUrl']);
+});
+
+test('getMonitorDashboardData returns snapshot-missing for corrupted JSON without live dashboard reads', async () => {
+  const spreadsheetMock = await createManagedSpreadsheetMock({
+    モニターキャッシュ: await buildManagedRows('モニターキャッシュ', [
+      { key: 'dashboard', json: '{broken json', updatedAt: '2026-05-21T10:00:00.000Z', note: '' }
+    ])
+  });
+  const { SheetRepository, getMonitorDashboardData } = await loadApi({
+    SpreadsheetApp: spreadsheetMock.SpreadsheetApp
+  });
+  SheetRepository.readCourseRows = () => {
+    throw new Error('corrupted monitor snapshot should not trigger live course reads');
+  };
+
+  const data = getMonitorDashboardData();
+
+  assert.equal(data.source, 'snapshot-missing');
+  assert.equal(data.snapshotMode, 'snapshot-missing');
+  assert.equal(data.progressRows.length, 0);
+  assert.match(data.message, /モニターだけ更新/);
+  assert.match(data.message, /集計から完全更新/);
+});
+
+test('monitor snapshot read uses CacheService before reading the sheet', async () => {
+  const cacheMock = createScriptCacheMock();
+  const storedSnapshot = {
+    snapshotVersion: 1,
+    source: 'monitor-snapshot',
+    generatedAt: '2026-05-21T12:00:00.000Z',
+    appName: 'もるくえ！',
+    appVersion: 'test-version',
+    courseOverview: { totalCount: 1, checkedCount: 1 },
+    studentOverview: { totalCount: 1, activeCount: 1, retiredCount: 0 },
+    tokenOverview: { totalCount: 1, activeCount: 1, revokedCount: 0 },
+    dashboardMetrics: { answeredCount: 1 },
+    progressRows: [{ rosterKey: 'course-1::student-1', name: '山田 太郎' }]
+  };
+  cacheMock.store.set('molDrill:monitorDashboardSnapshot:v1', JSON.stringify(storedSnapshot));
+  const { SheetRepository, MonitorSnapshotService } = await loadApi({
+    CacheService: cacheMock.CacheService
+  });
+  SheetRepository.readMonitorCacheRow = () => {
+    throw new Error('sheet snapshot should not be read when CacheService has a usable snapshot');
+  };
+
+  const snapshot = MonitorSnapshotService.readDashboardSnapshot();
+
+  assert.equal(snapshot.source, 'monitor-snapshot');
+  assert.equal(snapshot.snapshotMode, 'snapshot');
+  assert.equal(snapshot.progressRows.length, 1);
+});
+
+test('monitor snapshot write stores a short-lived CacheService copy when possible', async () => {
+  const cacheMock = createScriptCacheMock();
+  const spreadsheetMock = await createManagedSpreadsheetMock({
+    Classroom一覧: await buildManagedRows('Classroom一覧', [
+      { courseId: 'course-1', name: '化学A', section: '1組', courseState: 'ACTIVE', 同期対象: true }
+    ]),
+    生徒名簿: await buildManagedRows('生徒名簿', [
+      { courseId: 'course-1', courseName: '化学A', rosterKey: 'course-1::student-1', studentId: 'student-1', 出席番号: '7', 氏名: '山田 太郎', 状態: '在籍' }
+    ])
+  });
+  const { MonitorSnapshotService } = await loadApi({
+    SpreadsheetApp: spreadsheetMock.SpreadsheetApp,
+    CacheService: cacheMock.CacheService
+  });
+
+  const snapshot = MonitorSnapshotService.writeDashboardSnapshot();
+  const cached = JSON.parse(cacheMock.store.get('molDrill:monitorDashboardSnapshot:v1') || '{}');
+
+  assert.equal(cached.generatedAt, snapshot.generatedAt);
+  assert.equal(cached.source, 'monitor-snapshot');
+});
+
+test('monitor snapshot cache failures fall back to sheet reads without crashing', async () => {
+  const storedSnapshot = {
+    snapshotVersion: 1,
+    source: 'monitor-snapshot',
+    generatedAt: '2026-05-21T12:00:00.000Z',
+    appName: 'もるくえ！',
+    appVersion: 'test-version',
+    courseOverview: { totalCount: 1, checkedCount: 1 },
+    studentOverview: { totalCount: 1, activeCount: 1, retiredCount: 0 },
+    tokenOverview: { totalCount: 1, activeCount: 1, revokedCount: 0 },
+    dashboardMetrics: { answeredCount: 1 },
+    progressRows: [{ rosterKey: 'course-1::student-1', name: '山田 太郎' }]
+  };
+  const spreadsheetMock = await createManagedSpreadsheetMock({
+    モニターキャッシュ: await buildManagedRows('モニターキャッシュ', [
+      { key: 'dashboard', json: JSON.stringify(storedSnapshot), updatedAt: storedSnapshot.generatedAt, note: '自動生成。直接編集しない' }
+    ])
+  });
+  const CacheService = {
+    getScriptCache: () => ({
+      get() {
+        throw new Error('cache read unavailable');
+      },
+      put() {
+        throw new Error('cache write unavailable');
+      },
+      remove() {}
+    })
+  };
+  const { MonitorSnapshotService } = await loadApi({
+    SpreadsheetApp: spreadsheetMock.SpreadsheetApp,
+    CacheService
+  });
+
+  const snapshot = MonitorSnapshotService.readDashboardSnapshot();
+
+  assert.equal(snapshot.source, 'monitor-snapshot');
+  assert.equal(snapshot.progressRows.length, 1);
+});
+
+test('getMonitorDashboardData logs snapshot timing fields without live fallback', async () => {
+  const messages = [];
+  const spreadsheetMock = await createManagedSpreadsheetMock({
+    モニターキャッシュ: await buildManagedRows('モニターキャッシュ', [
+      { key: 'dashboard', json: '', updatedAt: '', note: '' }
+    ])
+  });
+  const { getMonitorDashboardData } = await loadApi({
+    SpreadsheetApp: spreadsheetMock.SpreadsheetApp,
+    Logger: {
+      log(message) {
+        messages.push(String(message || ''));
+      }
+    }
+  });
+
+  getMonitorDashboardData();
+
+  const output = messages.join('\n');
+  assert.match(output, /getMonitorDashboardData elapsedMs=\d+/);
+  assert.match(output, /source=snapshot-missing/);
+  assert.match(output, /snapshotMode=snapshot-missing/);
+  assert.match(output, /cacheReadElapsedMs=\d+/);
+  assert.match(output, /sheetReadElapsedMs=\d+/);
+  assert.match(output, /jsonParseElapsedMs=\d+/);
+  assert.match(output, /rowCount=0/);
+  assert.match(output, /payloadBytes=0/);
+  assert.match(output, /liveFallback=false/);
+  assert.doesNotMatch(output, /token-|active-token|studentUrl/);
+});
+
+test('monitor student history and problem type stats reuse optimized read-only readers without admin token', async () => {
   const spreadsheetMock = await createManagedSpreadsheetMock({
     設定: await buildManagedRows('設定', [
-      { キー: 'schemaVersion', 値: '17' },
       { キー: 'ADMIN_TOKEN', 値: 'secret' }
-    ]),
-    解答ログ: await buildManagedRows('解答ログ', logIndexes.map((index) => ({
-      timestamp: `2026-05-21T09:${String(index).padStart(2, '0')}:00.000Z`,
-      attemptId: `ATT_${index}`,
-      rosterKey: 'course-1::student-1',
-      氏名: `生徒${index}`,
-      level: 'beginner',
-      isCorrect: index % 2 === 0
-    }))),
-    配付ログ: await buildManagedRows('配付ログ', logIndexes.map((index) => ({
-      timestamp: `2026-05-21T10:${String(index).padStart(2, '0')}:00.000Z`,
-      runId: `DIST_${index}`,
-      courseId: 'course-1',
-      rosterKey: `course-1::student-${index}`,
-      studentId: `student-${index}`,
-      token: `token-${index}`,
-      status: index % 2 === 0 ? 'SUCCESS' : 'ERROR',
-      errorMessage: index % 2 === 0 ? '' : 'failed'
-    }))),
-    実行ログ: await buildManagedRows('実行ログ', logIndexes.map((index) => ({
-      runId: `RUNLOG_${index}`,
-      operation: 'TEST_OPERATION',
-      startedAt: `2026-05-21T11:${String(index).padStart(2, '0')}:00.000Z`,
-      finishedAt: `2026-05-21T11:${String(index).padStart(2, '0')}:10.000Z`,
-      processedCount: index,
-      successCount: index - 1,
-      errorCount: 1,
-      skippedCount: 0,
-      nextAction: 'DONE'
-    })))
+    ])
   });
-  const { SheetRepository, getAdminLogData } = await loadApi({ SpreadsheetApp: spreadsheetMock.SpreadsheetApp });
+  const {
+    MonitorService,
+    SheetRepository,
+    getMonitorStudentAnswerHistory,
+    getMonitorStudentProblemTypeStats
+  } = await loadApi({
+    SpreadsheetApp: spreadsheetMock.SpreadsheetApp,
+    Session: {
+      getActiveUser: () => {
+        throw new Error('monitor read APIs should not read the current user email');
+      }
+    }
+  });
+  let monitorAccessChecks = 0;
+  MonitorService.assertMonitorAccess = () => {
+    monitorAccessChecks += 1;
+  };
   SheetRepository.readAnswerLogs = () => {
-    throw new Error('readAnswerLogs should not be used for latest admin logs');
+    throw new Error('getMonitorStudentAnswerHistory should not scan all answer logs');
   };
-  SheetRepository.readDistributionLogs = () => {
-    throw new Error('readDistributionLogs should not be used for latest admin logs');
+  SheetRepository.readProblemTypeStatsRows = () => {
+    throw new Error('getMonitorStudentProblemTypeStats should not read the full problem type stats cache');
   };
-  SheetRepository.readRunLogs = () => {
-    throw new Error('readRunLogs should not be used for latest admin logs');
+  SheetRepository.readLatestAnswerLogsForRosterKey = (rosterKey, limit) => {
+    assert.equal(rosterKey, 'course-1::student-1');
+    assert.equal(limit, 2);
+    return [
+      { timestamp: '2026-05-21T09:00:00.000Z', attemptId: 'ATT_1', rosterKey, name: '山田 太郎', isCorrect: true }
+    ];
+  };
+  SheetRepository.readProblemTypeStatsForRosterKey = (rosterKey) => {
+    assert.equal(rosterKey, 'course-1::student-1');
+    return [
+      { rosterKey, name: '山田 太郎', level: 'beginner', problemType: 'type1', attempts: 3, correct: 2 }
+    ];
   };
 
-  const logs = getAdminLogData('secret');
+  const history = getMonitorStudentAnswerHistory('course-1::student-1', 2);
+  assert.equal(history.length, 1);
+  assert.equal(history[0].attemptId, 'ATT_1');
+  assert.equal(JSON.stringify(getMonitorStudentAnswerHistory('', 2)), JSON.stringify([]));
 
-  assert.equal(logs.answerLogs.length, 50);
-  assert.equal(logs.answerLogs[0].attemptId, 'ATT_60');
-  assert.equal(logs.answerLogs[49].attemptId, 'ATT_11');
-  assert.equal(logs.distributionLogs.length, 50);
-  assert.equal(logs.distributionLogs[0].runId, 'DIST_60');
-  assert.equal(logs.runLogs.length, 50);
-  assert.equal(logs.runLogs[0].runId, 'RUNLOG_60');
-  for (const sheetName of ['解答ログ', '配付ログ', '実行ログ']) {
-    assert.ok(
-      spreadsheetMock.rangeCalls.some((call) =>
-        call.sheetName === sheetName && call.row === 12 && call.column === 1 && call.numRows === 50
-      ),
-      `${sheetName} should read only the trailing 50 data rows`
-    );
-    assert.equal(
-      spreadsheetMock.rangeCalls.some((call) =>
-        call.sheetName === sheetName && call.row === 2 && call.numRows === 60
-      ),
-      false,
-      `${sheetName} should not read the full 60-row log body`
-    );
-  }
+  const stats = getMonitorStudentProblemTypeStats('course-1::student-1');
+  assert.equal(stats.length, 1);
+  assert.equal(stats[0].problemType, 'type1');
+  assert.equal(JSON.stringify(getMonitorStudentProblemTypeStats('')), JSON.stringify([]));
+  assert.equal(monitorAccessChecks, 4);
 });
 
 test('sheet row helpers fail safely when target rows or values are missing', async () => {
@@ -1058,7 +2325,7 @@ test('sheet row helpers fail safely when target rows or values are missing', asy
     ]
   });
   const { SheetRepository } = await loadApi({ SpreadsheetApp: spreadsheetMock.SpreadsheetApp });
-  SheetRepository.assertManagementSchemaReady = () => {};
+  SheetRepository.assertManagementSheetsReady = () => {};
 
   assert.equal(SheetRepository.findRowIndexByHeaderValue_('トークン管理', 'token', 'missing-token'), 0);
   assert.equal(SheetRepository.findRowIndexByHeaderValue_('トークン管理', 'missingHeader', 'tok-1'), 0);
@@ -1078,7 +2345,7 @@ test('findAnswerLogByAttemptId searches the attemptId column and adopts the matc
     ]
   });
   const { SheetRepository } = await loadApi({ SpreadsheetApp: spreadsheetMock.SpreadsheetApp });
-  SheetRepository.assertManagementSchemaReady = () => {};
+  SheetRepository.assertManagementSheetsReady = () => {};
   SheetRepository.readAnswerLogs = () => {
     throw new Error('readAnswerLogs should not be used for duplicate lookup');
   };
@@ -1115,7 +2382,7 @@ test('readAnswerLogsForRosterKey searches the rosterKey column and reads only ma
     ]
   });
   const { SheetRepository } = await loadApi({ SpreadsheetApp: spreadsheetMock.SpreadsheetApp });
-  SheetRepository.assertManagementSchemaReady = () => {};
+  SheetRepository.assertManagementSheetsReady = () => {};
   SheetRepository.readAnswerLogs = () => {
     throw new Error('readAnswerLogs should not be used for student summary lookup');
   };
@@ -1187,7 +2454,7 @@ test('upsertAggregateCacheRow updates only the matching cache row by header', as
     ]
   });
   const { SheetRepository } = await loadApi({ SpreadsheetApp: spreadsheetMock.SpreadsheetApp });
-  SheetRepository.assertManagementSchemaReady = () => {};
+  SheetRepository.assertManagementSheetsReady = () => {};
   SheetRepository.readAggregateCache = () => {
     throw new Error('readAggregateCache should not be used for one-row upsert');
   };
@@ -1264,7 +2531,7 @@ test('upsertAggregateCacheRow appends one row when the roster cache row is missi
     ]
   });
   const { SheetRepository } = await loadApi({ SpreadsheetApp: spreadsheetMock.SpreadsheetApp });
-  SheetRepository.assertManagementSchemaReady = () => {};
+  SheetRepository.assertManagementSheetsReady = () => {};
   SheetRepository.readAggregateCache = () => {
     throw new Error('readAggregateCache should not be used for append upsert');
   };
@@ -1340,7 +2607,7 @@ test('upsertProblemTypeStatsRow updates one level and problem type row without r
     ]
   });
   const { SheetRepository } = await loadApi({ SpreadsheetApp: spreadsheetMock.SpreadsheetApp });
-  SheetRepository.assertManagementSchemaReady = () => {};
+  SheetRepository.assertManagementSheetsReady = () => {};
   SheetRepository.readProblemTypeStatsRows = () => {
     throw new Error('readProblemTypeStatsRows should not be used for one-row upsert');
   };
@@ -1392,7 +2659,7 @@ test('upsertProblemTypeStatsRow updates one level and problem type row without r
   ]);
 });
 
-test('management schema assertion is cached within one execution and resettable', async () => {
+test('management sheet status assertion is cached within one execution and resettable', async () => {
   const spreadsheetMock = createSpreadsheetMock({
     トークン管理: [
       ['token'],
@@ -1401,12 +2668,10 @@ test('management schema assertion is cached within one execution and resettable'
   });
   const { SheetRepository } = await loadApi({ SpreadsheetApp: spreadsheetMock.SpreadsheetApp });
   let statusCalls = 0;
-  SheetRepository.getSchemaStatus = () => {
+  SheetRepository.getManagementSheetStatus = () => {
     statusCalls += 1;
     return {
       ok: true,
-      expectedSchemaVersion: '17',
-      schemaVersion: '17',
       missingSheets: [],
       missingHeadersBySheet: []
     };
@@ -1419,6 +2684,26 @@ test('management schema assertion is cached within one execution and resettable'
   SheetRepository.resetExecutionCaches_();
   SheetRepository.getManagedSheet_('トークン管理');
   assert.equal(statusCalls, 2);
+});
+
+test('student runtime sheet access bypasses full management sheet readiness checks', async () => {
+  const spreadsheetMock = createSpreadsheetMock({
+    トークン管理: [
+      ['token'],
+      ['tok-1']
+    ]
+  });
+  const { SheetRepository } = await loadApi({ SpreadsheetApp: spreadsheetMock.SpreadsheetApp });
+  let statusCalls = 0;
+  SheetRepository.assertManagementSheetsReady = () => {
+    statusCalls += 1;
+    throw new Error('student runtime access should not check every management sheet');
+  };
+
+  const sheet = SheetRepository.getStudentRuntimeSheet_('トークン管理');
+
+  assert.equal(sheet.getName(), 'トークン管理');
+  assert.equal(statusCalls, 0);
 });
 
 test('admin action lock uses script lock and reports contention', async () => {
@@ -1474,12 +2759,6 @@ test('dangerous admin entrypoints acquire admin action lock', async () => {
       `${functionName} should use the admin action lock`
     );
   }
-
-  assert.match(
-    code,
-    /static saveCourseSyncSelection\(authToken, selectedCourseIds\) \{[\s\S]*?withAdminActionLock\(/,
-    'saveCourseSyncSelection should use the admin action lock'
-  );
 });
 
 test('admin service recognizes admin routes and normalizes editable settings', async () => {
@@ -1520,224 +2799,33 @@ test('admin service recognizes admin routes and normalizes editable settings', a
   assert.equal(settings.advancedTolerance, 0.006);
 });
 
-test('admin dashboard opens from the spreadsheet menu and injects the internal auth token without URL issuance', async () => {
-  const spreadsheetMock = await createManagedSpreadsheetMock({
-    設定: await buildManagedRows('設定', [
-      { キー: 'WEB_APP_URL', 値: '' },
-      { キー: 'ADMIN_TOKEN', 値: '' }
-    ])
-  });
-  const scriptPropertiesMock = createScriptPropertiesMock();
-  const uiMock = createUiMock();
-  const htmlServiceMock = createHtmlServiceMock();
-  const { openAdminDialog, showAdminEntryUrlFromMenu } = await loadApi({
-    SpreadsheetApp: {
-      ...spreadsheetMock.SpreadsheetApp,
-      getUi: () => uiMock.ui
-    },
-    PropertiesService: scriptPropertiesMock.PropertiesService,
-    HtmlService: htmlServiceMock.HtmlService,
-    ScriptApp: { getService: () => ({ getUrl: () => '' }) }
-  });
+test('legacy admin dialog and Admin.html-only public APIs are not exported', async () => {
+  const code = await readFile('Code.gs', 'utf8');
+  const {
+    openAdminDialog,
+    showAdminEntryUrlFromMenu,
+    getAdminDashboardOverview,
+    getAdminLogData,
+    getAdminDistributionPreviewData,
+    getAdminRosterData,
+    getAdminDashboardData,
+    getAdminDashboardState,
+    getStudentAnswerHistory,
+    getStudentProblemTypeStats
+  } = await loadApi();
 
-  openAdminDialog();
-
+  assert.equal(openAdminDialog, undefined);
   assert.equal(showAdminEntryUrlFromMenu, undefined);
-  assert.equal(scriptPropertiesMock.store.MOL_DRILL_ADMIN_TOKEN, 'adm_uuidfromtest1');
-  const settingsByKey = Object.fromEntries(spreadsheetMock.sheets.get('設定').rows.slice(1).map((row) => [row[0], row[1]]));
-  assert.equal(settingsByKey.ADMIN_TOKEN, 'adm_uuidfromtest1');
-  assert.equal(uiMock.alerts.length, 0, 'dashboard open should not show alerts');
-  assert.equal(uiMock.dialogs.length, 1);
-  assert.equal(uiMock.dialogs[0].title, 'もるくえ！ 管理ダッシュボード');
-  assert.equal(htmlServiceMock.templates[0].name, 'Admin');
-  assert.equal(htmlServiceMock.templates[0].initialAdminToken, 'adm_uuidfromtest1');
-});
-
-test('student answer history requires admin access and returns latest rows for one roster only', async () => {
-  const spreadsheetMock = await createManagedSpreadsheetMock({
-    設定: await buildManagedRows('設定', [
-      { キー: 'schemaVersion', 値: '17' },
-      { キー: 'ADMIN_TOKEN', 値: 'secret' }
-    ]),
-    解答ログ: await buildManagedRows('解答ログ', [
-      {
-        timestamp: '2026-05-21T09:00:00.000Z',
-        attemptId: 'ATT_1',
-        courseName: '化学A',
-        rosterKey: 'course-1::student-1',
-        出席番号: '7',
-        氏名: '山田 太郎',
-        level: 'beginner',
-        problemType: 'mol_to_mass',
-        questionText: 'H2 1 mol は何 g ですか。',
-        expectedAnswer: '2',
-        submittedAnswer: '2',
-        normalizedSubmittedAnswer: '2',
-        unit: 'g',
-        isCorrect: true,
-        explanation: 'H2 のモル質量は 2 g/mol です。',
-        elapsedMs: 12000
-      },
-      {
-        timestamp: '2026-05-21T09:01:00.000Z',
-        attemptId: 'ATT_OTHER',
-        courseName: '化学A',
-        rosterKey: 'course-1::student-2',
-        氏名: '佐藤 花子',
-        level: 'beginner',
-        problemType: 'mass_to_mol',
-        questionText: 'O2 32 g は何 mol ですか。',
-        expectedAnswer: '1',
-        submittedAnswer: '2',
-        isCorrect: false
-      },
-      {
-        timestamp: '2026-05-21T09:02:00.000Z',
-        attemptId: 'ATT_2',
-        courseName: '化学A',
-        rosterKey: 'course-1::student-1',
-        出席番号: '7',
-        氏名: '山田 太郎',
-        level: 'intermediate',
-        problemType: 'mass_to_mol',
-        questionText: 'CO2 44 g は何 mol ですか。',
-        expectedAnswer: '1',
-        submittedAnswer: '0.5',
-        normalizedSubmittedAnswer: '0.5',
-        unit: 'mol',
-        isCorrect: false,
-        explanation: '質量をモル質量で割ります。',
-        elapsedMs: 21000
-      },
-      {
-        timestamp: '2026-05-21T09:03:00.000Z',
-        attemptId: 'ATT_3',
-        courseName: '化学A',
-        rosterKey: 'course-1::student-1',
-        出席番号: '7',
-        氏名: '山田 太郎',
-        level: 'advanced',
-        problemType: 'mol_to_particles',
-        questionText: 'H2O 2 mol は何個ですか。',
-        expectedAnswer: '1.2e24',
-        submittedAnswer: '1.2e24',
-        normalizedSubmittedAnswer: '1.2e24',
-        unit: '個',
-        isCorrect: true,
-        explanation: 'mol にアボガドロ定数を掛けます。',
-        elapsedMs: 18000
-      }
-    ])
-  });
-  const { getStudentAnswerHistory, SheetRepository } = await loadApi({ SpreadsheetApp: spreadsheetMock.SpreadsheetApp });
-  SheetRepository.readAnswerLogs = () => {
-    throw new Error('getStudentAnswerHistory should not scan all answer logs');
-  };
-
-  const history = getStudentAnswerHistory('secret', 'course-1::student-1', 2);
-
-  assert.equal(history.length, 2);
-  assert.equal(JSON.stringify(history.map((row) => row.attemptId)), JSON.stringify(['ATT_3', 'ATT_2']));
-  assert.equal(history[0].courseName, '化学A');
-  assert.equal(history[0].number, '7');
-  assert.equal(history[0].name, '山田 太郎');
-  assert.equal(history[0].problemType, 'mol_to_particles');
-  assert.equal(history[0].submittedAnswer, '1.2e24');
-  assert.equal(history[0].normalizedSubmittedAnswer, '1.2e24');
-  assert.equal(history[0].isCorrect, true);
-  assert.equal(history[0].elapsedMs, 18000);
-  assert.match(history[0].questionHtml, /H<sub>2<\/sub>O/);
-  assert.equal(history.some((row) => row.rosterKey === 'course-1::student-2'), false);
-  assert.throws(
-    () => getStudentAnswerHistory('wrong-secret', 'course-1::student-1', 2),
-    /管理ダッシュボードの内部認証が一致しません/
-  );
-});
-
-test('student problem type stats requires admin access and returns only one roster from the cache', async () => {
-  const spreadsheetMock = await createManagedSpreadsheetMock({
-    設定: await buildManagedRows('設定', [
-      { キー: 'schemaVersion', 値: '17' },
-      { キー: 'ADMIN_TOKEN', 値: 'secret' }
-    ]),
-    問題タイプ別キャッシュ: await buildManagedRows('問題タイプ別キャッシュ', [
-      {
-        updatedAt: '2026-05-21T09:00:00.000Z',
-        courseName: '化学A',
-        rosterKey: 'course-1::student-1',
-        出席番号: '7',
-        氏名: '山田 太郎',
-        level: 'beginner',
-        problemType: 'mol_to_mass',
-        attempts: 5,
-        correct: 2,
-        accuracy: 0.4,
-        recentAttempts: 5,
-        recentCorrect: 2,
-        recentAccuracy: 0.4,
-        averageElapsedMs: 3000,
-        elapsedCount: 5,
-        recentAverageElapsedMs: 3200,
-        lastAnsweredAt: '2026-05-21T09:10:00.000Z',
-        lastIsCorrect: false,
-        lastElapsedMs: 3400
-      },
-      {
-        updatedAt: '2026-05-21T09:01:00.000Z',
-        courseName: '化学A',
-        rosterKey: 'course-1::student-2',
-        氏名: '佐藤 花子',
-        level: 'beginner',
-        problemType: 'mass_to_mol',
-        attempts: 4,
-        correct: 4,
-        accuracy: 1
-      },
-      {
-        updatedAt: '2026-05-21T09:02:00.000Z',
-        courseName: '化学A',
-        rosterKey: 'course-1::student-1',
-        出席番号: '7',
-        氏名: '山田 太郎',
-        level: 'beginner',
-        problemType: 'mol_to_particles',
-        attempts: 4,
-        correct: 4,
-        accuracy: 1,
-        recentAttempts: 4,
-        recentCorrect: 4,
-        recentAccuracy: 1,
-        averageElapsedMs: 7000,
-        elapsedCount: 4,
-        recentAverageElapsedMs: 7500
-      }
-    ])
-  });
-  const { getStudentProblemTypeStats, SheetRepository } = await loadApi({ SpreadsheetApp: spreadsheetMock.SpreadsheetApp });
-  SheetRepository.readProblemTypeStatsRows = () => {
-    throw new Error('getStudentProblemTypeStats should not read the full problem type stats cache');
-  };
-
-  const rows = getStudentProblemTypeStats('secret', 'course-1::student-1');
-
-  assert.equal(rows.length, 2);
-  assert.equal(JSON.stringify(rows.map((row) => row.problemType)), JSON.stringify(['mol_to_mass', 'mol_to_particles']));
-  assert.equal(rows[0].attempts, 5);
-  assert.equal(rows[0].correct, 2);
-  assert.equal(rows[0].accuracy, 0.4);
-  assert.equal(rows[0].recentAccuracy, 0.4);
-  assert.equal(rows[0].averageElapsedMs, 3000);
-  assert.equal(rows[0].recentAverageElapsedMs, 3200);
-  assert.equal(rows.some((row) => row.rosterKey === 'course-1::student-2'), false);
-  assert.equal(getStudentProblemTypeStats('secret', 'course-1::student-missing').length, 0);
-  assert.throws(
-    () => getStudentProblemTypeStats('', 'course-1::student-1'),
-    /管理ダッシュボードの内部認証が一致しません/
-  );
-  assert.throws(
-    () => getStudentProblemTypeStats('wrong-secret', 'course-1::student-1'),
-    /管理ダッシュボードの内部認証が一致しません/
-  );
+  assert.equal(getAdminDashboardOverview, undefined);
+  assert.equal(getAdminLogData, undefined);
+  assert.equal(getAdminDistributionPreviewData, undefined);
+  assert.equal(getAdminRosterData, undefined);
+  assert.equal(getAdminDashboardData, undefined);
+  assert.equal(getAdminDashboardState, undefined);
+  assert.equal(getStudentAnswerHistory, undefined);
+  assert.equal(getStudentProblemTypeStats, undefined);
+  assert.doesNotMatch(code, /createTemplateFromFile\(['"]Admin['"]\)/);
+  assert.doesNotMatch(code, /function\s+openAdminDialog\s*\(/);
 });
 
 test('teacher preview URL builder requires admin access and protects preview with a short-lived nonce', async () => {
@@ -1845,6 +2933,124 @@ test('doGet routes valid teacher preview to Student template and rejects invalid
   assert.match(deniedAdminFallback.html, /一時認証|教師プレビューを開けません/);
 });
 
+test('doGet routes monitor after teacher preview and before student token route', async () => {
+  const spreadsheetMock = await createManagedSpreadsheetMock({
+    設定: await buildManagedRows('設定', [
+      { キー: 'ADMIN_TOKEN', 値: 'admin-secret' },
+      { キー: legacyMonitorEmailSettingKeyForTest(), 値: 'teacher@example.com' }
+    ])
+  });
+  const htmlServiceMock = createHtmlServiceMock();
+  const cacheMock = createScriptCacheMock();
+  const nonce = 'tp_monitor_priority';
+  cacheMock.store.set(`teacherPreviewNonce:${nonce}`, JSON.stringify({ authToken: 'admin-secret' }));
+  const { doGet } = await loadApi({
+    SpreadsheetApp: spreadsheetMock.SpreadsheetApp,
+    PropertiesService: createScriptPropertiesMock({ MOL_DRILL_ADMIN_TOKEN: 'admin-secret' }).PropertiesService,
+    HtmlService: htmlServiceMock.HtmlService,
+    CacheService: cacheMock.CacheService,
+    Session: {
+      getActiveUser: () => ({ getEmail: () => '' })
+    }
+  });
+
+  const teacherPreview = doGet({ parameter: { preview: 'teacher', page: 'monitor', previewNonce: nonce, t: 'student-token' } });
+  assert.equal(teacherPreview.title, 'もるくえ！');
+  assert.equal(htmlServiceMock.templates.at(-1).name, 'Student');
+  assert.equal(htmlServiceMock.templates.at(-1).initialTeacherPreview, true);
+
+  const monitorByPage = doGet({ parameter: { page: 'monitor', t: 'student-token' } });
+  assert.equal(monitorByPage.title, 'もるくえ！ モニター');
+  assert.equal(htmlServiceMock.templates.at(-1).name, 'Monitor');
+
+  const monitorByFlag = doGet({ parameter: { monitor: '1', t: 'student-token' } });
+  assert.equal(monitorByFlag.title, 'もるくえ！ モニター');
+  assert.equal(htmlServiceMock.templates.at(-1).name, 'Monitor');
+
+  const student = doGet({ parameter: { t: 'student-token' } });
+  assert.equal(student.title, 'もるくえ！');
+  assert.equal(htmlServiceMock.templates.at(-1).name, 'Student');
+  assert.equal(htmlServiceMock.templates.at(-1).initialToken, 'student-token');
+  assert.equal(htmlServiceMock.templates.at(-1).initialTeacherPreview, false);
+
+  const admin = doGet({ parameter: { page: 'admin' } });
+  assert.equal(admin.title, '旧管理画面は廃止されました');
+  assert.match(admin.html, /旧管理画面は廃止されました/);
+  assert.match(admin.html, /Webモニター/);
+  assert.match(admin.html, /もるくえ！/);
+  assert.equal(htmlServiceMock.templates.some((template) => template.name === 'Admin'), false);
+});
+
+test('MonitorService assertMonitorAccess only checks management sheets without current user email', async () => {
+  const spreadsheetMock = await createManagedSpreadsheetMock({
+    設定: await buildManagedRows('設定', [
+      { キー: legacyMonitorEmailSettingKeyForTest(), 値: '' }
+    ])
+  });
+  const { MonitorService, SheetRepository } = await loadApi({
+    SpreadsheetApp: spreadsheetMock.SpreadsheetApp,
+    Session: {
+      getActiveUser: () => {
+        throw new Error('Session.getActiveUser should not be called for monitor access');
+      }
+    }
+  });
+  let managementReadyChecks = 0;
+  const originalAssertManagementSheetsReady = SheetRepository.assertManagementSheetsReady.bind(SheetRepository);
+  SheetRepository.assertManagementSheetsReady = () => {
+    managementReadyChecks += 1;
+    return originalAssertManagementSheetsReady();
+  };
+
+  assert.equal(MonitorService.isMonitorRoute({ parameter: { page: 'monitor' } }), true);
+  assert.equal(MonitorService.isMonitorRoute({ parameter: { monitor: '1' } }), true);
+  assert.doesNotThrow(() => MonitorService.assertMonitorAccess());
+  assert.equal(managementReadyChecks, 1);
+});
+
+test('MonitorService ignores legacy monitor allowed emails when they remain in settings', async () => {
+  const spreadsheetMock = await createManagedSpreadsheetMock({
+    設定: await buildManagedRows('設定', [
+      { キー: legacyMonitorEmailSettingKeyForTest(), 値: 'teacher@example.com' }
+    ])
+  });
+  const htmlServiceMock = createHtmlServiceMock();
+  const { MonitorService, doGet } = await loadApi({
+    SpreadsheetApp: spreadsheetMock.SpreadsheetApp,
+    HtmlService: htmlServiceMock.HtmlService,
+    Session: {
+      getActiveUser: () => ({ getEmail: () => 'student@example.com' })
+    }
+  });
+
+  assert.doesNotThrow(() => MonitorService.assertMonitorAccess());
+
+  const monitor = doGet({ parameter: { page: 'monitor' } });
+  assert.equal(monitor.title, 'もるくえ！ モニター');
+  assert.equal(htmlServiceMock.templates.at(-1).name, 'Monitor');
+  assert.equal(htmlServiceMock.outputs.length, 0);
+});
+
+test('monitor access denied HTML is reserved for management sheet setup problems', async () => {
+  const spreadsheetMock = createSpreadsheetMock({});
+  const htmlServiceMock = createHtmlServiceMock();
+  const { doGet } = await loadApi({
+    SpreadsheetApp: spreadsheetMock.SpreadsheetApp,
+    HtmlService: htmlServiceMock.HtmlService,
+    Session: {
+      getActiveUser: () => {
+        throw new Error('Session.getActiveUser should not be called for monitor setup errors');
+      }
+    }
+  });
+
+  const denied = doGet({ parameter: { page: 'monitor' } });
+  assert.equal(denied.title, 'モニター画面を開けません');
+  assert.match(denied.html, /管理シート|作成・補修/);
+  assert.doesNotMatch(denied.html, new RegExp(`メールアドレス|許可メール|${legacyMonitorEmailSettingKeyForTest()}`));
+  assert.equal(htmlServiceMock.templates.length, 0);
+});
+
 test('admin entry URL menu function is not exposed because the dashboard opens from the spreadsheet menu', async () => {
   const spreadsheetMock = await createManagedSpreadsheetMock({
     設定: await buildManagedRows('設定', [
@@ -1909,7 +3115,7 @@ test('token rows use courseId::studentId roster keys and preserve active existin
       number: '8',
       name: '佐藤 花子',
       email: 'hanako@example.com',
-      status: '退籍'
+      status: '在籍'
     }
   ];
   const existing = [
@@ -1918,6 +3124,8 @@ test('token rows use courseId::studentId roster keys and preserve active existin
       rosterKey: 'course-1::student-1',
       studentUrl: 'https://script.google.com/macros/s/old/exec?t=existing-token',
       revoked: false,
+      postDeletionRequested: true,
+      postDeletionStatus: '',
       issuedAt: '2026-05-20T10:00:00.000Z',
       lastAccessedAt: '2026-05-20T10:30:00.000Z',
       note: 'keep'
@@ -1932,13 +3140,19 @@ test('token rows use courseId::studentId roster keys and preserve active existin
     () => 'new-token'
   );
 
-  assert.equal(rows.length, 1);
+  assert.equal(rows.length, 2);
   assert.equal(rows[0].rosterKey, 'course-1::student-1');
   assert.equal(rows[0].token, 'existing-token');
   assert.equal(rows[0].studentUrl, 'https://script.google.com/macros/s/deploy/exec?t=existing-token');
   assert.equal(rows[0].issuedAt, '2026-05-20T10:00:00.000Z');
   assert.equal(rows[0].lastAccessedAt, '2026-05-20T10:30:00.000Z');
   assert.equal(rows[0].revoked, false);
+  assert.equal(rows[0].postDeletionRequested, true);
+  assert.equal(rows[0].postDeletionStatus, '');
+  assert.equal(rows[1].token, 'new-token');
+  assert.equal(rows[1].revoked, false);
+  assert.equal(rows[1].postDeletionRequested, false);
+  assert.equal(rows[1].postDeletionStatus, '');
 });
 
 test('token rows can be reissued and revoked for a roster key', async () => {
@@ -1956,6 +3170,8 @@ test('token rows can be reissued and revoked for a roster key', async () => {
       studentUrl: 'https://example.com/exec?t=old-token',
       issuedAt: '2026-05-20T10:00:00.000Z',
       revoked: false,
+      postDeletionRequested: true,
+      postDeletionStatus: '失敗',
       note: ''
     }
   ];
@@ -1970,6 +3186,8 @@ test('token rows can be reissued and revoked for a roster key', async () => {
   assert.equal(reissued.updated.token, 'new-token');
   assert.equal(reissued.updated.studentUrl, 'https://example.com/exec?t=new-token');
   assert.equal(reissued.updated.revoked, false);
+  assert.equal(reissued.updated.postDeletionRequested, false);
+  assert.equal(reissued.updated.postDeletionStatus, '');
   assert.match(reissued.updated.note, /再発行/);
 
   const revoked = TokenService.revokeTokenRowsForRosterKey(
@@ -1979,6 +3197,89 @@ test('token rows can be reissued and revoked for a roster key', async () => {
   );
   assert.equal(revoked.updated.revoked, true);
   assert.match(revoked.updated.note, /無効化/);
+});
+
+test('teacher test student token is created in token management without roster or distribution rows', async () => {
+  const spreadsheetMock = await createManagedSpreadsheetMock({
+    設定: await buildManagedRows('設定', [
+      { キー: 'WEB_APP_URL', 値: 'https://example.com/exec' }
+    ]),
+    生徒名簿: await buildManagedRows('生徒名簿', [
+      { courseId: 'course-1', courseName: '化学A', rosterKey: 'course-1::student-1', studentId: 'student-1', 氏名: '山田 太郎', 状態: '在籍' }
+    ]),
+    配付ログ: await buildManagedRows('配付ログ', [
+      { timestamp: '2026-05-21T10:00:00.000Z', runId: 'RUN_1', courseId: 'course-1', rosterKey: 'course-1::student-1', studentId: 'student-1', token: 'student-token', status: 'SUCCESS' }
+    ])
+  });
+  const { TokenService, SheetRepository } = await loadApi({ SpreadsheetApp: spreadsheetMock.SpreadsheetApp });
+
+  const result = TokenService.ensureTeacherTestStudentToken('https://example.com/exec');
+
+  assert.equal(result.rosterKey, '__TEST__::test-student');
+  assert.equal(result.name, 'テスト生徒');
+  assert.match(result.token, /^mdl_uuidfromtest\d+$/);
+  assert.equal(result.studentUrl, `https://example.com/exec?t=${result.token}`);
+  const tokenRows = SheetRepository.readTokenRows();
+  const testRows = tokenRows.filter((row) => row.rosterKey === '__TEST__::test-student');
+  assert.equal(testRows.length, 1);
+  assert.equal(testRows[0].courseId, '__TEST__');
+  assert.equal(testRows[0].courseName, 'テスト用');
+  assert.equal(testRows[0].studentId, 'test-student');
+  assert.equal(testRows[0].number, 'TEST');
+  assert.equal(testRows[0].email, '');
+  assert.match(testRows[0].note, /Classroomには配付しない/);
+  assert.equal(SheetRepository.readStudentRows().some((row) => row.rosterKey === '__TEST__::test-student'), false);
+  assert.equal(SheetRepository.readDistributionLogs().filter((row) => row.rosterKey === '__TEST__::test-student' && row.status === 'SUCCESS').length, 0);
+});
+
+test('teacher test student token reuses active rows and reissues revoked or empty token rows', async () => {
+  const spreadsheetMock = await createManagedSpreadsheetMock({
+    トークン管理: await buildManagedRows('トークン管理', [
+      {
+        token: 'existing-token',
+        courseId: '__TEST__',
+        courseName: '古いテスト名',
+        rosterKey: '__TEST__::test-student',
+        studentId: 'test-student',
+        出席番号: 'OLD',
+        氏名: '古い名前',
+        studentUrl: 'https://old.example.com/exec?t=existing-token',
+        issuedAt: '2026-05-20T10:00:00.000Z',
+        lastAccessedAt: '2026-05-20T10:30:00.000Z',
+        revoked: '',
+        note: 'keep'
+      },
+      {
+        token: 'student-token',
+        courseId: 'course-1',
+        courseName: '化学A',
+        rosterKey: 'course-1::student-1',
+        studentId: 'student-1',
+        氏名: '山田 太郎',
+        studentUrl: 'https://example.com/exec?t=student-token',
+        revoked: ''
+      }
+    ])
+  });
+  const { TokenService, SheetRepository } = await loadApi({ SpreadsheetApp: spreadsheetMock.SpreadsheetApp });
+
+  const reused = TokenService.ensureTeacherTestStudentToken('https://example.com/exec');
+
+  assert.equal(reused.token, 'existing-token');
+  assert.equal(reused.studentUrl, 'https://example.com/exec?t=existing-token');
+  assert.equal(reused.issuedAt, '2026-05-20T10:00:00.000Z');
+  assert.equal(reused.lastAccessedAt, '2026-05-20T10:30:00.000Z');
+  assert.equal(reused.name, 'テスト生徒');
+  assert.equal(SheetRepository.readTokenRows().length, 2);
+
+  TokenService.revokeStudentToken('__TEST__::test-student');
+  const reissued = TokenService.ensureTeacherTestStudentToken('https://example.com/exec');
+
+  assert.notEqual(reissued.token, 'existing-token');
+  assert.match(reissued.token, /^mdl_uuidfromtest\d+$/);
+  assert.equal(reissued.studentUrl, `https://example.com/exec?t=${reissued.token}`);
+  assert.equal(reissued.revoked, false);
+  assert.equal(SheetRepository.readTokenRows().filter((row) => row.rosterKey === '__TEST__::test-student').length, 1);
 });
 
 test('token validation rejects empty missing and revoked tokens', async () => {
@@ -2017,7 +3318,7 @@ test('token validation finds only the matching token row with TextFinder', async
     ]
   });
   const { SheetRepository, TokenService } = await loadApi({ SpreadsheetApp: spreadsheetMock.SpreadsheetApp });
-  SheetRepository.assertManagementSchemaReady = () => {};
+  SheetRepository.assertManagementSheetsReady = () => {};
   SheetRepository.readTokenRows = () => {
     throw new Error('readTokenRows should not be used for token validation');
   };
@@ -2050,6 +3351,125 @@ test('token validation finds only the matching token row with TextFinder', async
   );
 });
 
+test('token validation always uses a short token row cache for student runtime', async () => {
+  const cacheMock = createScriptCacheMock();
+  const { SheetRepository, TokenService } = await loadApi({ CacheService: cacheMock.CacheService });
+  const tokenRow = {
+    token: 'active-token',
+    rosterKey: 'course-1::student-1',
+    courseId: 'course-1',
+    studentId: 'student-1',
+    name: '山田 太郎',
+    revoked: false
+  };
+  let findCalls = 0;
+  SheetRepository.getSettingValue = () => '';
+  SheetRepository.findToken = (token) => {
+    findCalls += 1;
+    return token === tokenRow.token ? { ...tokenRow } : null;
+  };
+
+  assert.equal(TokenService.validateToken('active-token').rosterKey, 'course-1::student-1');
+  assert.equal(TokenService.validateToken('active-token').rosterKey, 'course-1::student-1');
+
+  assert.equal(findCalls, 1);
+  const cacheKey = TokenService.createTokenRowCacheKey_('active-token');
+  assert.ok(cacheMock.store.has(cacheKey));
+  assert.equal(cacheKey.includes('active-token'), false);
+
+  SheetRepository.getSettingValue = () => '';
+  TokenService.clearTokenRowCache_('active-token');
+  findCalls = 0;
+
+  TokenService.validateToken('active-token');
+  TokenService.validateToken('active-token');
+
+  assert.equal(findCalls, 1);
+});
+
+test('token row cache ignores corrupted json and never accepts cached revoked tokens', async () => {
+  const cacheMock = createScriptCacheMock();
+  const { SheetRepository, TokenService } = await loadApi({ CacheService: cacheMock.CacheService });
+  const tokenRow = {
+    token: 'active-token',
+    rosterKey: 'course-1::student-1',
+    courseId: 'course-1',
+    studentId: 'student-1',
+    name: '山田 太郎',
+    revoked: false
+  };
+  SheetRepository.getSettingValue = () => '';
+  let findCalls = 0;
+  SheetRepository.findToken = () => {
+    findCalls += 1;
+    return { ...tokenRow };
+  };
+
+  cacheMock.store.set(TokenService.createTokenRowCacheKey_('active-token'), '{not json');
+  assert.equal(TokenService.validateToken('active-token').rosterKey, 'course-1::student-1');
+  assert.equal(findCalls, 1);
+
+  cacheMock.store.set(TokenService.createTokenRowCacheKey_('revoked-token'), JSON.stringify({
+    ...tokenRow,
+    token: 'revoked-token',
+    revoked: true
+  }));
+  SheetRepository.findToken = () => {
+    throw new Error('sheet should not be used when revoked cache is present');
+  };
+
+  assert.throws(() => TokenService.validateToken('revoked-token'), /無効化/);
+});
+
+test('student token row cache keys do not contain raw tokens', async () => {
+  const { TokenService } = await loadApi();
+  const cacheKey = TokenService.createTokenRowCacheKey_('raw-secret-token');
+
+  assert.match(cacheKey, /^tokenRowCache:/);
+  assert.equal(cacheKey.includes('raw-secret-token'), false);
+});
+
+test('token reissue and revoke clear affected token row cache entries', async () => {
+  const cacheMock = createScriptCacheMock();
+  const { SheetRepository, TokenService } = await loadApi({ CacheService: cacheMock.CacheService });
+  let rows = [
+    {
+      token: 'old-token',
+      courseId: 'course-1',
+      courseName: '化学A',
+      rosterKey: 'course-1::student-1',
+      studentId: 'student-1',
+      number: '7',
+      name: '山田 太郎',
+      studentUrl: 'https://example.com/exec?t=old-token',
+      issuedAt: '2026-05-20T12:00:00.000Z',
+      revoked: false
+    }
+  ];
+  SheetRepository.assertManagementSheetsReady = () => {};
+  SheetRepository.getSettingValue = (key) => {
+    if (key === 'WEB_APP_URL') return 'https://example.com/exec';
+    return '';
+  };
+  SheetRepository.readTokenRows = () => rows.map((row) => ({ ...row }));
+  SheetRepository.writeTokenRows = (nextRows) => {
+    rows = nextRows.map((row) => ({ ...row }));
+  };
+  TokenService.generateToken = () => 'new-token';
+  cacheMock.store.set(TokenService.createTokenRowCacheKey_('old-token'), JSON.stringify(rows[0]));
+
+  const reissued = TokenService.reissueStudentToken('course-1::student-1', {});
+
+  assert.equal(reissued.token, 'new-token');
+  assert.equal(cacheMock.store.has(TokenService.createTokenRowCacheKey_('old-token')), false);
+
+  cacheMock.store.set(TokenService.createTokenRowCacheKey_('new-token'), JSON.stringify(reissued));
+  const revoked = TokenService.revokeStudentToken('course-1::student-1');
+
+  assert.equal(revoked.revoked, true);
+  assert.equal(cacheMock.store.has(TokenService.createTokenRowCacheKey_('new-token')), false);
+});
+
 test('recordTokenAccess updates only lastAccessedAt for the matching token row', async () => {
   const spreadsheetMock = createSpreadsheetMock({
     トークン管理: [
@@ -2059,7 +3479,7 @@ test('recordTokenAccess updates only lastAccessedAt for the matching token row',
     ]
   });
   const { SheetRepository } = await loadApi({ SpreadsheetApp: spreadsheetMock.SpreadsheetApp });
-  SheetRepository.assertManagementSchemaReady = () => {};
+  SheetRepository.assertManagementSheetsReady = () => {};
   SheetRepository.readTokenRows = () => {
     throw new Error('readTokenRows should not be used for access recording');
   };
@@ -2171,6 +3591,16 @@ test('classroom distribution target builder skips sent rows and supports failed-
       revoked: false
     },
     {
+      token: 'teacher-test-token',
+      courseId: '__TEST__',
+      courseName: 'テスト用',
+      rosterKey: '__TEST__::test-student',
+      studentId: 'test-student',
+      name: 'テスト生徒',
+      studentUrl: 'https://example.com/exec?t=teacher-test-token',
+      revoked: false
+    },
+    {
       token: 'other-course-token',
       courseId: 'course-2',
       courseName: '化学B',
@@ -2204,6 +3634,12 @@ test('classroom distribution target builder skips sent rows and supports failed-
     batchSize: 1
   });
   assert.equal(JSON.stringify(limitedTargets.map((row) => row.token)), JSON.stringify(['failed-token']));
+
+  const explicitTestTargets = DistributionService.buildDistributionTargets(tokenRows, logRows, {
+    rosterKey: '__TEST__::test-student',
+    batchSize: 10
+  });
+  assert.equal(JSON.stringify(explicitTestTargets), JSON.stringify([]));
 });
 
 test('classroom distribution target builder supports explicit student, token, and force redistribution scopes', async () => {
@@ -2291,7 +3727,7 @@ test('classroom distribution target builder supports explicit student, token, an
 
 test('classroom distribution preview returns normalized scope options and supports roster-only force preview', async () => {
   const { DistributionService, SheetRepository } = await loadApi();
-  SheetRepository.assertManagementSchemaReady = () => {};
+  SheetRepository.assertManagementSheetsReady = () => {};
   SheetRepository.readTokenRows = () => [
     {
       token: 'sent-token-v2',
@@ -2346,12 +3782,494 @@ test('classroom distribution preview returns normalized scope options and suppor
   assert.equal(preview.targets[0].token, 'sent-token-v2');
 });
 
+test('classroom URL distribution rejects post templates without the student URL placeholder', async () => {
+  const spreadsheetMock = await createManagedSpreadsheetMock({
+    トークン管理: await buildManagedRows('トークン管理', [
+      {
+        token: 'token-1',
+        courseId: 'course-1',
+        courseName: '化学A',
+        rosterKey: 'course-1::student-1',
+        studentId: 'student-1',
+        出席番号: '7',
+        氏名: '山田 太郎',
+        メール: 'taro@example.com',
+        studentUrl: 'https://example.com/exec?t=token-1',
+        revoked: ''
+      }
+    ])
+  });
+  const { DistributionService } = await loadApi({
+    SpreadsheetApp: spreadsheetMock.SpreadsheetApp
+  });
+
+  assert.throws(
+    () => DistributionService.distributeStudentUrlsForCheckedCourses({
+      rosterKey: 'course-1::student-1',
+      dryRun: true,
+      postTextTemplate: '山田さんのURLです。'
+    }),
+    /設定シート.*POST_TEXT_TEMPLATE.*\{\{studentUrl\}\}/
+  );
+});
+
+test('classroom URL distribution keeps template replacement for teacher-facing fields', async () => {
+  const spreadsheetMock = await createManagedSpreadsheetMock({
+    トークン管理: await buildManagedRows('トークン管理', [
+      {
+        token: 'token-1',
+        courseId: 'course-1',
+        courseName: '化学A',
+        rosterKey: 'course-1::student-1',
+        studentId: 'student-1',
+        出席番号: '7',
+        氏名: '山田 太郎',
+        メール: 'taro@example.com',
+        studentUrl: 'https://example.com/exec?t=token-1',
+        revoked: ''
+      }
+    ])
+  });
+  const createCalls = [];
+  const { DistributionService } = await loadApi({
+    SpreadsheetApp: spreadsheetMock.SpreadsheetApp,
+    Classroom: {
+      Courses: {
+        Announcements: {
+          create(resource, courseId) {
+            createCalls.push({ resource, courseId });
+            return { id: 'ann-1' };
+          }
+        }
+      }
+    }
+  });
+
+  const result = DistributionService.distributeStudentUrlsForCheckedCourses({
+    rosterKey: 'course-1::student-1',
+    dryRun: false,
+    postTextTemplate: '{{Classroom名}} {{出席番号}} {{氏名}}\n{{studentUrl}}'
+  });
+
+  assert.equal(result.processed, 1);
+  assert.equal(result.success, 1);
+  assert.equal(createCalls.length, 1);
+  assert.equal(createCalls[0].courseId, 'course-1');
+  assert.equal(createCalls[0].resource.text, '化学A 7 山田 太郎\nhttps://example.com/exec?t=token-1');
+});
+
+test('latest classroom URL distribution deletion targets only the latest eligible sent announcements and appends delete logs', async () => {
+  const spreadsheetMock = await createManagedSpreadsheetMock({
+    配付ログ: await buildManagedRows('配付ログ', [
+      {
+        timestamp: '2026-05-21T09:00:00.000Z',
+        runId: 'RUN_OLD',
+        courseId: 'course-1',
+        rosterKey: 'course-1::old',
+        studentId: 'old',
+        token: 'old-token',
+        studentUrl: 'https://example.com/old',
+        classroomAnnouncementId: 'ann-old',
+        status: 'SUCCESS'
+      },
+      {
+        timestamp: '2026-05-21T10:00:00.000Z',
+        runId: 'RUN_LATEST',
+        courseId: 'course-1',
+        rosterKey: 'course-1::student-1',
+        studentId: 'student-1',
+        token: 'token-1',
+        studentUrl: 'https://example.com/1',
+        classroomAnnouncementId: 'ann-1',
+        status: 'SUCCESS'
+      },
+      {
+        timestamp: '2026-05-21T10:01:00.000Z',
+        runId: 'RUN_LATEST',
+        courseId: 'course-1',
+        rosterKey: 'course-1::student-1-duplicate',
+        studentId: 'student-1',
+        token: 'token-1b',
+        studentUrl: 'https://example.com/1b',
+        classroomAnnouncementId: 'ann-1',
+        status: 'SUCCESS'
+      },
+      {
+        timestamp: '2026-05-21T10:02:00.000Z',
+        runId: 'RUN_LATEST',
+        courseId: 'course-1',
+        rosterKey: 'course-1::student-2',
+        studentId: 'student-2',
+        token: 'token-2',
+        studentUrl: 'https://example.com/2',
+        classroomAnnouncementId: 'ann-2',
+        status: 'DRY_RUN'
+      },
+      {
+        timestamp: '2026-05-21T10:03:00.000Z',
+        runId: 'RUN_LATEST',
+        courseId: 'course-1',
+        rosterKey: 'course-1::student-3',
+        studentId: 'student-3',
+        token: 'token-3',
+        studentUrl: 'https://example.com/3',
+        classroomAnnouncementId: '',
+        status: 'SUCCESS'
+      },
+      {
+        timestamp: '2026-05-21T10:04:00.000Z',
+        runId: 'RUN_LATEST',
+        courseId: 'course-1',
+        rosterKey: 'course-1::student-4',
+        studentId: 'student-4',
+        token: 'token-4',
+        studentUrl: 'https://example.com/4',
+        classroomAnnouncementId: 'ann-4',
+        status: 'ERROR'
+      }
+    ])
+  });
+  const deleteCalls = [];
+  const { DistributionService } = await loadApi({
+    console: { ...console, error: () => {} },
+    SpreadsheetApp: spreadsheetMock.SpreadsheetApp,
+    Classroom: {
+      Courses: {
+        Announcements: {
+          remove(courseId, announcementId) {
+            deleteCalls.push({ courseId, announcementId });
+            return {};
+          }
+        }
+      }
+    }
+  });
+
+  const result = DistributionService.deleteLatestClassroomUrlDistribution();
+
+  assert.equal(result.sourceRunId, 'RUN_LATEST');
+  assert.equal(result.processed, 1);
+  assert.equal(result.success, 1);
+  assert.equal(result.error, 0);
+  assert.equal(result.skipped, 0);
+  assert.deepEqual(deleteCalls, [{ courseId: 'course-1', announcementId: 'ann-1' }]);
+
+  const rows = spreadsheetMock.sheets.get('配付ログ').rows;
+  assert.equal(rows.length, 8);
+  assert.equal(rows[2][8], 'SUCCESS');
+  const deleteRow = rows.at(-1);
+  assert.equal(deleteRow[1], result.runId);
+  assert.equal(deleteRow[2], 'course-1');
+  assert.equal(deleteRow[7], 'ann-1');
+  assert.equal(deleteRow[8], 'DELETED');
+  assert.match(deleteRow[9], /Classroom投稿を削除しました。元runId: RUN_LATEST/);
+  assert.ok(spreadsheetMock.sheets.get('実行ログ').rows.some((row) => row[1] === 'CLASSROOM_URL_DISTRIBUTION_DELETE_LATEST'));
+});
+
+test('classroom URL distribution deletion skips deleted announcements and records API failures without deleting source logs', async () => {
+  const spreadsheetMock = await createManagedSpreadsheetMock({
+    配付ログ: await buildManagedRows('配付ログ', [
+      {
+        timestamp: '2026-05-21T10:00:00.000Z',
+        runId: 'RUN_TARGET',
+        courseId: 'course-1',
+        rosterKey: 'course-1::student-1',
+        studentId: 'student-1',
+        token: 'token-1',
+        studentUrl: 'https://example.com/1',
+        classroomAnnouncementId: 'ann-deleted',
+        status: 'SUCCESS'
+      },
+      {
+        timestamp: '2026-05-21T10:01:00.000Z',
+        runId: 'RUN_TARGET',
+        courseId: 'course-1',
+        rosterKey: 'course-1::student-2',
+        studentId: 'student-2',
+        token: 'token-2',
+        studentUrl: 'https://example.com/2',
+        classroomAnnouncementId: 'ann-error',
+        status: 'SUCCESS'
+      },
+      {
+        timestamp: '2026-05-21T10:02:00.000Z',
+        runId: 'RUN_DELETE_OLD',
+        courseId: 'course-1',
+        rosterKey: 'course-1::student-1',
+        studentId: 'student-1',
+        token: 'token-1',
+        studentUrl: 'https://example.com/1',
+        classroomAnnouncementId: 'ann-deleted',
+        status: 'DELETED',
+        errorMessage: 'Classroom投稿を削除しました。元runId: RUN_TARGET'
+      }
+    ])
+  });
+  const deleteCalls = [];
+  const { DistributionService } = await loadApi({
+    console: { ...console, error: () => {} },
+    SpreadsheetApp: spreadsheetMock.SpreadsheetApp,
+    Classroom: {
+      Courses: {
+        Announcements: {
+          remove(courseId, announcementId) {
+            deleteCalls.push({ courseId, announcementId });
+            throw new Error('permission denied');
+          }
+        }
+      }
+    }
+  });
+
+  const result = DistributionService.deleteClassroomUrlDistributionByRunId('RUN_TARGET');
+
+  assert.equal(result.sourceRunId, 'RUN_TARGET');
+  assert.equal(result.processed, 1);
+  assert.equal(result.success, 0);
+  assert.equal(result.error, 1);
+  assert.equal(result.skipped, 0);
+  assert.deepEqual(deleteCalls, [{ courseId: 'course-1', announcementId: 'ann-error' }]);
+  const rows = spreadsheetMock.sheets.get('配付ログ').rows;
+  assert.equal(rows.length, 5);
+  assert.equal(rows[1][8], 'SUCCESS');
+  assert.equal(rows[2][8], 'SUCCESS');
+  const errorRow = rows.at(-1);
+  assert.equal(errorRow[7], 'ann-error');
+  assert.equal(errorRow[8], 'DELETE_ERROR');
+  assert.match(errorRow[9], /permission denied/);
+});
+
+test('classroom URL distribution deletion returns a clear zero-target result', async () => {
+  const spreadsheetMock = await createManagedSpreadsheetMock({
+    配付ログ: await buildManagedRows('配付ログ', [
+      {
+        timestamp: '2026-05-21T10:00:00.000Z',
+        runId: 'RUN_DRY',
+        courseId: 'course-1',
+        rosterKey: 'course-1::student-1',
+        studentId: 'student-1',
+        token: 'token-1',
+        studentUrl: 'https://example.com/1',
+        classroomAnnouncementId: 'ann-1',
+        status: 'DRY_RUN'
+      }
+    ])
+  });
+  const { DistributionService } = await loadApi({
+    SpreadsheetApp: spreadsheetMock.SpreadsheetApp,
+    Classroom: {
+      Courses: {
+        Announcements: {
+          remove() {
+            throw new Error('remove should not be called');
+          }
+        }
+      }
+    }
+  });
+
+  const result = DistributionService.deleteLatestClassroomUrlDistribution();
+
+  assert.equal(result.processed, 0);
+  assert.equal(result.success, 0);
+  assert.equal(result.error, 0);
+  assert.equal(result.skipped, 0);
+  assert.equal(result.sourceRunId, '');
+  assert.match(result.message, /削除対象のClassroom URL配付投稿はありません。/);
+  assert.equal(spreadsheetMock.sheets.get('配付ログ').rows.length, 2);
+});
+
+test('requested classroom URL post deletion revokes only flagged token rows and clears successful requests', async () => {
+  const spreadsheetMock = await createManagedSpreadsheetMock({
+    トークン管理: await buildManagedRows('トークン管理', [
+      {
+        token: 'token-1',
+        courseId: 'course-1',
+        courseName: '化学A',
+        rosterKey: 'course-1::student-1',
+        studentId: 'student-1',
+        氏名: '山田 太郎',
+        studentUrl: 'https://example.com/1',
+        revoked: '',
+        投稿削除: '1',
+        note: 'keep'
+      },
+      {
+        token: 'token-2',
+        courseId: 'course-1',
+        courseName: '化学A',
+        rosterKey: 'course-1::student-2',
+        studentId: 'student-2',
+        氏名: '佐藤 花子',
+        studentUrl: 'https://example.com/2',
+        revoked: '',
+        投稿削除: '',
+        note: ''
+      },
+      {
+        token: 'token-3',
+        courseId: 'course-1',
+        courseName: '化学A',
+        rosterKey: 'course-1::student-3',
+        studentId: 'student-3',
+        氏名: '鈴木 次郎',
+        studentUrl: 'https://example.com/3',
+        revoked: '',
+        投稿削除: true,
+        note: ''
+      },
+      {
+        token: 'token-4',
+        courseId: 'course-1',
+        courseName: '化学A',
+        rosterKey: 'course-1::student-4',
+        studentId: 'student-4',
+        氏名: '処理 済',
+        studentUrl: 'https://example.com/4',
+        revoked: '済',
+        投稿削除: '済',
+        note: ''
+      }
+    ]),
+    配付ログ: await buildManagedRows('配付ログ', [
+      { timestamp: '2026-05-21T10:00:00.000Z', runId: 'RUN_1', courseId: 'course-1', rosterKey: 'course-1::student-1', studentId: 'student-1', token: 'token-1', studentUrl: 'https://example.com/1', classroomAnnouncementId: 'ann-1', status: 'SUCCESS' },
+      { timestamp: '2026-05-21T10:01:00.000Z', runId: 'RUN_1', courseId: 'course-1', rosterKey: 'course-1::student-1', studentId: 'student-1', token: 'token-1', studentUrl: 'https://example.com/1', classroomAnnouncementId: 'ann-1', status: 'SUCCESS' },
+      { timestamp: '2026-05-21T10:02:00.000Z', runId: 'RUN_1', courseId: 'course-1', rosterKey: 'course-1::student-1', studentId: 'student-1', token: 'token-1', studentUrl: 'https://example.com/1', classroomAnnouncementId: '', status: 'SUCCESS' },
+      { timestamp: '2026-05-21T10:03:00.000Z', runId: 'RUN_1', courseId: 'course-1', rosterKey: 'course-1::student-1', studentId: 'student-1', token: 'token-1', studentUrl: 'https://example.com/1', classroomAnnouncementId: 'ann-dry', status: 'DRY_RUN' },
+      { timestamp: '2026-05-21T10:04:00.000Z', runId: 'RUN_1', courseId: 'course-1', rosterKey: 'course-1::student-2', studentId: 'student-2', token: 'token-2', studentUrl: 'https://example.com/2', classroomAnnouncementId: 'ann-not-requested', status: 'SUCCESS' },
+      { timestamp: '2026-05-21T10:05:00.000Z', runId: 'RUN_1', courseId: 'course-1', rosterKey: 'course-1::student-4', studentId: 'student-4', token: 'token-4', studentUrl: 'https://example.com/4', classroomAnnouncementId: 'ann-completed', status: 'SUCCESS' }
+    ])
+  });
+  const deleteCalls = [];
+  const { DistributionService } = await loadApi({
+    SpreadsheetApp: spreadsheetMock.SpreadsheetApp,
+    Classroom: {
+      Courses: {
+        Announcements: {
+          remove(courseId, announcementId) {
+            deleteCalls.push({ courseId, announcementId });
+            return {};
+          }
+        }
+      }
+    }
+  });
+
+  const result = DistributionService.deleteRequestedClassroomUrlPosts();
+
+  assert.equal(result.targetStudents, 2);
+  assert.equal(result.revokedCount, 2);
+  assert.equal(result.success, 1);
+  assert.equal(result.error, 0);
+  assert.equal(result.skipped, 0);
+  assert.equal(result.noTarget, 1);
+  assert.deepEqual(deleteCalls, [{ courseId: 'course-1', announcementId: 'ann-1' }]);
+
+  const tokenRows = spreadsheetMock.sheets.get('トークン管理').rows;
+  const tokenHeader = tokenRows[0];
+  const revokedColumn = tokenHeader.indexOf('revoked');
+  const postDeletionColumn = tokenHeader.indexOf('投稿削除');
+  const noteColumn = tokenHeader.indexOf('note');
+  assert.equal(tokenRows[1][revokedColumn], '済');
+  assert.equal(tokenRows[1][postDeletionColumn], '済');
+  assert.match(tokenRows[1][noteColumn], /keep[\s\S]*投稿削除済/);
+  assert.equal(tokenRows[2][revokedColumn], '');
+  assert.equal(tokenRows[2][postDeletionColumn], '');
+  assert.equal(tokenRows[3][revokedColumn], '済');
+  assert.equal(tokenRows[3][postDeletionColumn], '対象なし');
+  assert.match(tokenRows[3][noteColumn], /投稿削除対象なし/);
+  assert.equal(tokenRows[4][revokedColumn], '済');
+  assert.equal(tokenRows[4][postDeletionColumn], '済');
+
+  const distributionRows = spreadsheetMock.sheets.get('配付ログ').rows;
+  assert.equal(distributionRows.filter((row) => row[8] === 'SUCCESS').length, 5);
+  const deletedRow = distributionRows.at(-1);
+  assert.equal(deletedRow[7], 'ann-1');
+  assert.equal(deletedRow[8], 'DELETED');
+  assert.ok(spreadsheetMock.sheets.get('実行ログ').rows.some((row) => row[1] === 'REQUESTED_CLASSROOM_URL_POST_DELETE'));
+});
+
+test('requested classroom URL post deletion matches roster and student ids while keeping retry flags on API errors', async () => {
+  const spreadsheetMock = await createManagedSpreadsheetMock({
+    トークン管理: await buildManagedRows('トークン管理', [
+      { token: 'token-rk-new', courseId: 'course-1', rosterKey: 'course-1::student-1', studentId: 'student-1', 投稿削除: '1', revoked: '' },
+      { token: 'token-error', courseId: 'course-1', rosterKey: 'course-1::student-2', studentId: 'student-2', 投稿削除: '1', revoked: '' },
+      { token: 'token-old-deleted', courseId: 'course-1', rosterKey: 'course-1::student-3', studentId: 'student-3', 投稿削除: '1', revoked: '' },
+      { token: 'token-failed-status', courseId: 'course-1', rosterKey: 'course-1::student-4', studentId: 'student-4', 投稿削除: '失敗', revoked: '済' }
+    ]),
+    配付ログ: await buildManagedRows('配付ログ', [
+      { timestamp: '2026-05-21T10:00:00.000Z', runId: 'RUN_A', courseId: 'course-1', rosterKey: 'course-1::student-1', studentId: 'student-1', token: 'old-token', studentUrl: 'https://example.com/old', classroomAnnouncementId: 'ann-already', status: 'SUCCESS' },
+      { timestamp: '2026-05-21T10:01:00.000Z', runId: 'RUN_A', courseId: 'course-1', rosterKey: '', studentId: 'student-2', token: 'other-token', studentUrl: 'https://example.com/error', classroomAnnouncementId: 'ann-error', status: 'SUCCESS' },
+      { timestamp: '2026-05-21T10:02:00.000Z', runId: 'RUN_A', courseId: 'course-1', rosterKey: 'course-1::student-3', studentId: 'student-3', token: 'token-old-deleted', studentUrl: 'https://example.com/3', classroomAnnouncementId: 'ann-deleted', status: 'SUCCESS' },
+      { timestamp: '2026-05-21T10:03:00.000Z', runId: 'RUN_DELETE', courseId: 'course-1', rosterKey: 'course-1::student-3', studentId: 'student-3', token: 'token-old-deleted', studentUrl: 'https://example.com/3', classroomAnnouncementId: 'ann-deleted', status: 'DELETED' },
+      { timestamp: '2026-05-21T10:04:00.000Z', runId: 'RUN_A', courseId: 'course-1', rosterKey: 'course-1::student-4', studentId: 'student-4', token: 'token-failed-status', studentUrl: 'https://example.com/4', classroomAnnouncementId: 'ann-should-not-run', status: 'SUCCESS' }
+    ])
+  });
+  const deleteCalls = [];
+  const { DistributionService } = await loadApi({
+    console: { ...console, error: () => {} },
+    SpreadsheetApp: spreadsheetMock.SpreadsheetApp,
+    Classroom: {
+      Courses: {
+        Announcements: {
+          remove(courseId, announcementId) {
+            deleteCalls.push({ courseId, announcementId });
+            if (announcementId === 'ann-already') {
+              throw new Error('FAILED_PRECONDITION: already deleted');
+            }
+            throw new Error('permission denied');
+          }
+        }
+      }
+    }
+  });
+
+  const result = DistributionService.deleteRequestedClassroomUrlPosts();
+
+  assert.equal(result.targetStudents, 3);
+  assert.equal(result.revokedCount, 3);
+  assert.equal(result.success, 0);
+  assert.equal(result.error, 1);
+  assert.equal(result.skipped, 1);
+  assert.equal(result.noTarget, 1);
+  assert.deepEqual(deleteCalls, [
+    { courseId: 'course-1', announcementId: 'ann-already' },
+    { courseId: 'course-1', announcementId: 'ann-error' }
+  ]);
+
+  const tokenRows = spreadsheetMock.sheets.get('トークン管理').rows;
+  const header = tokenRows[0];
+  const revokedColumn = header.indexOf('revoked');
+  const postDeletionColumn = header.indexOf('投稿削除');
+  const noteColumn = header.indexOf('note');
+  assert.equal(tokenRows[1][revokedColumn], '済');
+  assert.equal(tokenRows[1][postDeletionColumn], '済');
+  assert.match(tokenRows[1][noteColumn], /投稿削除済/);
+  assert.equal(tokenRows[2][revokedColumn], '済');
+  assert.equal(tokenRows[2][postDeletionColumn], '失敗');
+  assert.match(tokenRows[2][noteColumn], /投稿削除失敗/);
+  assert.equal(tokenRows[3][revokedColumn], '済');
+  assert.equal(tokenRows[3][postDeletionColumn], '対象なし');
+  assert.match(tokenRows[3][noteColumn], /投稿削除対象なし/);
+  assert.equal(tokenRows[4][revokedColumn], '済');
+  assert.equal(tokenRows[4][postDeletionColumn], '失敗');
+
+  const distributionRows = spreadsheetMock.sheets.get('配付ログ').rows;
+  assert.equal(distributionRows.at(-2)[8], 'DELETE_SKIPPED');
+  assert.equal(distributionRows.at(-1)[8], 'DELETE_ERROR');
+  assert.equal(distributionRows.filter((row) => row[8] === 'SUCCESS').length, 4);
+});
+
 test('mol problem engine normalizes numeric input and rounds significant digits', async () => {
   const { normalizeNumericInput, roundToSignificantDigits, isAnswerCorrect } = await loadApi();
   const atomMass = 12 / 6.02e23;
 
   assert.equal(normalizeNumericInput('１．２３'), 1.23);
+  assert.equal(normalizeNumericInput('6e23'), 6e23);
+  assert.equal(normalizeNumericInput('6E+23'), 6e23);
   assert.equal(normalizeNumericInput('6.0×10^23'), 6.0e23);
+  assert.equal(normalizeNumericInput('6.0x10^23'), 6.0e23);
+  assert.equal(normalizeNumericInput('6.0*10^23'), 6.0e23);
   assert.equal(normalizeNumericInput('６．０×１０＾２３'), 6.0e23);
   assert.equal(normalizeNumericInput('1.0e23'), 1.0e23);
   assert.equal(roundToSignificantDigits(1234, 3), 1230);
@@ -2359,6 +4277,60 @@ test('mol problem engine normalizes numeric input and rounds significant digits'
   assert.ok(Math.abs(roundToSignificantDigits(atomMass, 3) - 1.99e-23) / 1.99e-23 < 1e-12);
   assert.equal(isAnswerCorrect('2.00', 2.004, 0.01, 3), true);
   assert.equal(isAnswerCorrect('2.20', 2.004, 0.01, 3), false);
+});
+
+test('student-facing scientific notation hints and result text avoid e notation', async () => {
+  const { AnswerService, MolProblemService } = await loadApi();
+  const beginnerHint = MolProblemService.createInputHint_({
+    level: 'beginner',
+    unit: '個',
+    expectedAnswer: 6e23
+  });
+  const advancedHint = MolProblemService.createInputHint_({
+    level: 'advanced',
+    unit: '個',
+    expectedAnswer: 6.02e23
+  });
+  const response = AnswerService.buildSubmitAnswerResponse(
+    {
+      isCorrect: true,
+      expectedAnswer: 6.02e23,
+      submittedAnswer: '6.02E+23',
+      normalizedSubmittedAnswer: 6.02e23,
+      unit: '個',
+      explanation: `粒子数 = mol × アボガドロ定数なので、1 × ${MolProblemService.formatScientific_(6.02e23, 3)} = ${MolProblemService.formatScientific_(6.02e23, 3)} 個 です。`,
+      level: 'advanced',
+      problemType: 'mol_to_particles',
+      significantDigits: 3,
+      requiresRounding: false
+    },
+    { totalAttempts: 1, totalCorrect: 1, totalAccuracy: 1, recent10Attempts: 1, recent10Correct: 1, recent10Accuracy: 1 },
+    null
+  );
+
+  assert.equal(beginnerHint, '数値のみ。例: 6.0×10^23 または 6.0x10^23');
+  assert.equal(advancedHint, '有効数字3桁で答えよう。例: 6.02×10^23 または 6.02x10^23');
+  for (const text of [
+    response.result.expectedAnswerText,
+    response.result.submittedAnswerText,
+    response.result.explanation
+  ]) {
+    assert.match(text, /×10\^23/);
+    assert.doesNotMatch(text, /e\+?23/i);
+  }
+});
+
+test('admin settings accept times-ten notation for Avogadro constants', async () => {
+  const { AdminService } = await loadApi();
+  const settings = AdminService.normalizeSettingsPayload({
+    beginnerAvogadroConstant: '6.10×10^23',
+    intermediateAvogadroConstant: '6.11x10^23',
+    advancedAvogadroConstant: '6.12*10^23'
+  });
+
+  assert.equal(settings.beginnerAvogadroConstant, 6.10e23);
+  assert.equal(settings.intermediateAvogadroConstant, 6.11e23);
+  assert.equal(settings.advancedAvogadroConstant, 6.12e23);
 });
 
 test('answer judgment uses enumerated rounded candidates for beginner and intermediate', async () => {
@@ -2539,18 +4511,20 @@ test('mol problem engine generates level-appropriate signed problems', async () 
 
 test('level setting values are cached during repeated problem generation', async () => {
   const { MolProblemService, SheetRepository } = await loadApi();
-  const readCounts = new Map();
-  SheetRepository.getSettingValue = (key) => {
-    readCounts.set(key, (readCounts.get(key) || 0) + 1);
-    return '';
+  let batchReadCount = 0;
+  SheetRepository.getSettingValue = () => {
+    throw new Error('level settings should be read in one lightweight batch');
+  };
+  SheetRepository.getSettingValues = (keys) => {
+    batchReadCount += 1;
+    return Object.fromEntries(keys.map((key) => [key, '']));
   };
 
   MolProblemService.generateProblem({ level: 'beginner', problemType: 1 });
   MolProblemService.generateProblem({ level: 'beginner', problemType: 2 });
   MolProblemService.generateProblem({ level: 'beginner', problemType: 3 });
 
-  assert.equal(readCounts.get('BEGINNER_AVOGADRO_CONSTANT'), 1);
-  assert.equal(readCounts.get('BEGINNER_TOLERANCE'), 1);
+  assert.equal(batchReadCount, 1);
 });
 
 test('mol problem public payload hides answers and server can restore by token and attemptId', async () => {
@@ -2628,7 +4602,7 @@ test('getPracticeProblem validates token and returns public problems for every l
     ]
   });
   const { AnswerService, SheetRepository } = await loadApi({ SpreadsheetApp: spreadsheetMock.SpreadsheetApp });
-  SheetRepository.assertManagementSchemaReady = () => {};
+  SheetRepository.assertManagementSheetsReady = () => {};
 
   for (const level of ['beginner', 'intermediate', 'advanced']) {
     const problem = AnswerService.getPracticeProblem('active-token', { level });
@@ -2696,7 +4670,7 @@ test('adaptive problem weights prioritize weak unattempted and slow types but su
   assert.ok(byType.mol_to_particles > byType.particles_to_mol, 'slow types should get a small boost');
 });
 
-test('getPracticeProblem uses adaptive problem type cache without scanning answer logs', async () => {
+test('getPracticeProblem avoids adaptive problem type cache reads in the student request path', async () => {
   const spreadsheetMock = createSpreadsheetMock({
     トークン管理: [
       ['token', 'courseId', 'courseName', 'rosterKey', 'studentId', '出席番号', '氏名', 'メール', 'studentUrl', 'issuedAt', 'lastAccessedAt', 'revoked', 'note'],
@@ -2717,18 +4691,24 @@ test('getPracticeProblem uses adaptive problem type cache without scanning answe
     ]
   });
   const { AnswerService, SheetRepository, AdaptiveProblemService } = await loadApi({ SpreadsheetApp: spreadsheetMock.SpreadsheetApp });
-  SheetRepository.assertManagementSchemaReady = () => {};
+  SheetRepository.assertManagementSheetsReady = () => {};
   SheetRepository.readAnswerLogs = () => {
-    throw new Error('readAnswerLogs should not be used during adaptive problem generation');
+    throw new Error('readAnswerLogs should not be used during student problem generation');
   };
   SheetRepository.readAnswerLogsForRosterKey = () => {
-    throw new Error('readAnswerLogsForRosterKey should not be used during adaptive problem generation');
+    throw new Error('readAnswerLogsForRosterKey should not be used during student problem generation');
   };
-  AdaptiveProblemService.pickWeightedProblemType_ = () => 'mol_to_mass';
+  SheetRepository.readProblemTypeStatsForRosterKey = () => {
+    throw new Error('problem type stats should not be read during student problem generation');
+  };
+  AdaptiveProblemService.selectProblemTypeForStudent = () => {
+    throw new Error('adaptive selection should not run during student problem generation');
+  };
 
   const problem = AnswerService.getPracticeProblem('active-token', { level: 'beginner' });
 
-  assert.equal(problem.problemType, 'mol_to_mass');
+  assert.equal(problem.level, 'beginner');
+  assert.ok(problem.attemptId);
 });
 
 test('adaptive selection uses CacheService stats before reading the sheet cache', async () => {
@@ -2779,7 +4759,7 @@ test('adaptive selection disabled keeps getPracticeProblem on the random path', 
     ]
   });
   const { AnswerService, SheetRepository, AdaptiveProblemService } = await loadApi({ SpreadsheetApp: spreadsheetMock.SpreadsheetApp });
-  SheetRepository.assertManagementSchemaReady = () => {};
+  SheetRepository.assertManagementSheetsReady = () => {};
   SheetRepository.readProblemTypeStatsForRosterKey = () => {
     throw new Error('problem type stats should not be read when adaptive selection is disabled');
   };
@@ -3070,7 +5050,304 @@ test('same problem content issued twice uses different attemptIds and records se
   }
 });
 
-test('submitAnswer updates only the submitted student cache row without full log or cache rewrites', async () => {
+test('submitAnswer always defers aggregate and problem type cache work in the student route', async () => {
+  const messages = [];
+  const { SheetRepository, MolProblemService, AnswerService, AdaptiveProblemService } = await loadApi({
+    Logger: {
+      log: (message) => {
+        messages.push(String(message || ''));
+      }
+    }
+  });
+  const tokenRow = {
+    token: 'active-token',
+    courseId: 'course-1',
+    courseName: '化学A',
+    rosterKey: 'course-1::student-1',
+    studentId: 'student-1',
+    number: '7',
+    name: '山田 太郎',
+    revoked: false
+  };
+  const appendedLogs = [];
+  let inLock = false;
+  let aggregateReads = 0;
+  let latestReads = 0;
+  let fullReads = 0;
+  let aggregateUpserts = 0;
+  let problemTypeFinds = 0;
+  let problemTypeUpserts = 0;
+  SheetRepository.getSettingValue = (key) => {
+    if (key === 'ENABLE_ADAPTIVE_PROBLEM_SELECTION') return 'false';
+    return '';
+  };
+  SheetRepository.findToken = (token) => token === tokenRow.token ? tokenRow : null;
+  SheetRepository.withDocumentLock = (callback) => {
+    inLock = true;
+    try {
+      return callback();
+    } finally {
+      inLock = false;
+    }
+  };
+  SheetRepository.findAnswerLogByAttemptId = () => null;
+  SheetRepository.appendAnswerLog = (entry) => {
+    assert.equal(inLock, true, 'answer log append should remain inside the lock');
+    appendedLogs.push(entry);
+  };
+  SheetRepository.findAggregateCacheByRosterKey = () => {
+    aggregateReads += 1;
+    throw new Error('aggregate cache should not be read in student submitAnswer');
+  };
+  SheetRepository.readLatestAnswerLogsForRosterKey = () => {
+    latestReads += 1;
+    throw new Error('latest answer logs should not be read in student submitAnswer');
+  };
+  SheetRepository.readAnswerLogsForRosterKey = () => {
+    fullReads += 1;
+    throw new Error('full roster answer logs should not be read in student submitAnswer');
+  };
+  SheetRepository.upsertAggregateCacheRow = () => {
+    aggregateUpserts += 1;
+  };
+  SheetRepository.findProblemTypeStatsRow = () => {
+    problemTypeFinds += 1;
+    return null;
+  };
+  SheetRepository.upsertProblemTypeStatsRow = () => {
+    problemTypeUpserts += 1;
+  };
+  AdaptiveProblemService.clearStatsCache = () => {
+    throw new Error('student submit should not clear adaptive stats cache');
+  };
+  const issued = MolProblemService.issueProblemForToken(tokenRow.token, { level: 'beginner', problemType: 1 });
+
+  const response = AnswerService.submitAnswer({
+    token: tokenRow.token,
+    problem: issued.publicProblem,
+    submittedAnswer: String(issued.problem.expectedAnswer),
+    elapsedMs: 2500,
+    skipNextProblem: false
+  });
+
+  assert.equal(response.ok, true);
+  assert.equal(response.duplicate, false);
+  assert.equal(response.deferredSummaryUpdate, true);
+  assert.equal(response.result.isCorrect, true);
+  assert.match(response.result.expectedAnswerText, /\S/);
+  assert.match(response.result.explanation, /\S/);
+  assert.equal(response.result.totalAttempts, 1);
+  assert.equal(response.result.totalCorrect, 1);
+  assert.equal(response.result.totalAccuracy, 1);
+  assert.equal(response.result.recent10Attempts, 1);
+  assert.equal(response.result.recent10Correct, 1);
+  assert.equal(response.nextProblem, null);
+  assert.equal(appendedLogs.length, 1);
+  assert.equal(aggregateReads, 0);
+  assert.equal(latestReads, 0);
+  assert.equal(fullReads, 0);
+  assert.equal(aggregateUpserts, 0);
+  assert.equal(problemTypeFinds, 0);
+  assert.equal(problemTypeUpserts, 0);
+  const output = messages.join('\n');
+  assert.match(output, /studentRoute=fast/);
+  assert.match(output, /aggregatePath=deferred_aggregate_update/);
+  assert.match(output, /cacheUpdated=false/);
+  assert.match(output, /problemTypeCacheUpdated=false/);
+  assert.match(output, /nextProblemIncluded=false/);
+  assert.doesNotMatch(output, /active-token/);
+});
+
+test('always-fast approximate submit summary updates current response fields without sheet writes', async () => {
+  const { AnswerService } = await loadApi();
+  const tokenRow = {
+    courseId: 'course-1',
+    courseName: '化学A',
+    rosterKey: 'course-1::student-1',
+    studentId: 'student-1',
+    number: '7',
+    name: '山田 太郎'
+  };
+  const entry = {
+    timestamp: '2026-05-21T12:00:00.000Z',
+    level: 'intermediate',
+    problemType: 'mol_to_particles',
+    isCorrect: true,
+    elapsedMs: 3200
+  };
+
+  const summary = AnswerService.buildStudentRuntimeApproxSummary_(tokenRow, {
+    totalAttempts: 9,
+    totalCorrect: 6,
+    recent10Attempts: 9,
+    recent10Correct: 6,
+    intermediateAttempts: 3,
+    intermediateCorrect: 2
+  }, entry, true);
+
+  assert.equal(summary.totalAttempts, 10);
+  assert.equal(summary.totalCorrect, 7);
+  assert.equal(summary.totalAccuracy, 0.7);
+  assert.equal(summary.recent10Attempts, 10);
+  assert.equal(summary.recent10Correct, 7);
+  assert.equal(summary.recent10Accuracy, 0.7);
+  assert.equal(summary.intermediateAttempts, 4);
+  assert.equal(summary.intermediateCorrect, 3);
+  assert.equal(summary.intermediateAccuracy, 0.75);
+  assert.equal(summary.lastAnsweredAt, entry.timestamp);
+  assert.equal(summary.lastLevel, 'intermediate');
+  assert.equal(summary.lastProblemType, 'mol_to_particles');
+  assert.equal(summary.lastElapsedMs, 3200);
+});
+
+test('duplicate submit does not append or run heavy aggregate recomputation in the always-fast student route', async () => {
+  const { SheetRepository, MolProblemService, AnswerService } = await loadApi();
+  const tokenRow = {
+    token: 'active-token',
+    courseId: 'course-1',
+    courseName: '化学A',
+    rosterKey: 'course-1::student-1',
+    studentId: 'student-1',
+    number: '7',
+    name: '山田 太郎',
+    revoked: false
+  };
+  let inLock = false;
+  let appendCalls = 0;
+  let fullReads = 0;
+  let aggregateUpserts = 0;
+  let problemTypeUpserts = 0;
+  SheetRepository.getSettingValue = (key) => {
+    if (key === 'ENABLE_ADAPTIVE_PROBLEM_SELECTION') return 'false';
+    return '';
+  };
+  SheetRepository.findToken = (token) => token === tokenRow.token ? tokenRow : null;
+  SheetRepository.withDocumentLock = (callback) => {
+    inLock = true;
+    try {
+      return callback();
+    } finally {
+      inLock = false;
+    }
+  };
+  SheetRepository.findAggregateCacheByRosterKey = () => {
+    throw new Error('aggregate cache should not be read for duplicate student submitAnswer');
+  };
+  SheetRepository.appendAnswerLog = () => {
+    appendCalls += 1;
+  };
+  SheetRepository.readAnswerLogsForRosterKey = () => {
+    fullReads += 1;
+    throw new Error('duplicate student submit should not read all answer logs');
+  };
+  SheetRepository.upsertAggregateCacheRow = () => {
+    aggregateUpserts += 1;
+  };
+  SheetRepository.upsertProblemTypeStatsRow = () => {
+    problemTypeUpserts += 1;
+  };
+  const issued = MolProblemService.issueProblemForToken(tokenRow.token, { level: 'beginner', problemType: 1 });
+  const existingLog = {
+    timestamp: '2026-05-21T09:00:00.000Z',
+    attemptId: issued.problem.attemptId,
+    token: tokenRow.token,
+    courseId: tokenRow.courseId,
+    courseName: tokenRow.courseName,
+    rosterKey: tokenRow.rosterKey,
+    studentId: tokenRow.studentId,
+    number: tokenRow.number,
+    name: tokenRow.name,
+    level: issued.problem.level,
+    problemType: issued.problem.problemType,
+    questionText: issued.problem.questionText,
+    expectedAnswer: issued.problem.expectedAnswer,
+    submittedAnswer: String(issued.problem.expectedAnswer),
+    normalizedSubmittedAnswer: issued.problem.expectedAnswer,
+    unit: issued.problem.unit,
+    isCorrect: true,
+    tolerance: issued.problem.tolerance,
+    significantDigits: issued.problem.significantDigits,
+    avogadroConstant: issued.problem.avogadroConstant,
+    requiresRounding: issued.problem.requiresRounding === true,
+    explanation: issued.problem.explanation,
+    elapsedMs: 1500,
+    clientInfo: '{}'
+  };
+  SheetRepository.findAnswerLogByAttemptId = () => existingLog;
+
+  const response = AnswerService.submitAnswer({
+    token: tokenRow.token,
+    problem: issued.publicProblem,
+    submittedAnswer: 'wrong answer',
+    elapsedMs: 9999,
+    skipNextProblem: true
+  });
+
+  assert.equal(response.duplicate, true);
+  assert.equal(response.deferredSummaryUpdate, true);
+  assert.equal(response.result.isCorrect, true);
+  assert.equal(response.nextProblem, null);
+  assert.equal(appendCalls, 0);
+  assert.equal(fullReads, 0);
+  assert.equal(aggregateUpserts, 0);
+  assert.equal(problemTypeUpserts, 0);
+});
+
+test('student submit never includes a next problem and leaves next navigation to prefetch or getPracticeProblem', async () => {
+  const { SheetRepository, MolProblemService, AnswerService } = await loadApi();
+  const tokenRow = {
+    token: 'active-token',
+    courseId: 'course-1',
+    courseName: '化学A',
+    rosterKey: 'course-1::student-1',
+    studentId: 'student-1',
+    number: '7',
+    name: '山田 太郎',
+    revoked: false
+  };
+  const appendedAttempts = new Set();
+  SheetRepository.getSettingValue = (key) => {
+    if (key === 'ENABLE_ADAPTIVE_PROBLEM_SELECTION') return 'false';
+    return '';
+  };
+  SheetRepository.findToken = (token) => token === tokenRow.token ? tokenRow : null;
+  SheetRepository.withDocumentLock = (callback) => callback();
+  SheetRepository.findAnswerLogByAttemptId = (_rosterKey, attemptId) => appendedAttempts.has(attemptId)
+    ? { attemptId, rosterKey: tokenRow.rosterKey, isCorrect: true, expectedAnswer: 1, submittedAnswer: '1', unit: 'mol' }
+    : null;
+  SheetRepository.appendAnswerLog = (entry) => {
+    appendedAttempts.add(entry.attemptId);
+  };
+  SheetRepository.findAggregateCacheByRosterKey = () => {
+    throw new Error('student submit should not read aggregate cache before returning');
+  };
+  SheetRepository.readAnswerLogsForRosterKey = () => {
+    throw new Error('student submit should not rebuild logs for prefetch behavior');
+  };
+  SheetRepository.upsertAggregateCacheRow = () => {};
+  SheetRepository.upsertProblemTypeStatsRow = () => {};
+  const prefetched = MolProblemService.issueProblemForToken(tokenRow.token, { level: 'beginner', problemType: 1 });
+  const nonPrefetched = MolProblemService.issueProblemForToken(tokenRow.token, { level: 'beginner', problemType: 2 });
+
+  const skipResponse = AnswerService.submitAnswer({
+    token: tokenRow.token,
+    problem: prefetched.publicProblem,
+    submittedAnswer: String(prefetched.problem.expectedAnswer),
+    skipNextProblem: true
+  });
+  const nextResponse = AnswerService.submitAnswer({
+    token: tokenRow.token,
+    problem: nonPrefetched.publicProblem,
+    submittedAnswer: String(nonPrefetched.problem.expectedAnswer),
+    nextLevel: 'beginner'
+  });
+
+  assert.equal(skipResponse.nextProblem, null);
+  assert.equal(nextResponse.nextProblem, null);
+  assert.equal(nextResponse.deferredSummaryUpdate, true);
+});
+
+test('submitAnswer appends the answer log without synchronously updating aggregate or problem type cache rows', async () => {
   const answerHeaders = [
     'timestamp',
     'attemptId',
@@ -3218,7 +5495,8 @@ test('submitAnswer updates only the submitted student cache row without full log
     ]
   });
   const { SheetRepository, MolProblemService, AnswerService } = await loadApi({ SpreadsheetApp: spreadsheetMock.SpreadsheetApp });
-  SheetRepository.assertManagementSchemaReady = () => {};
+  SheetRepository.assertManagementSheetsReady = () => {};
+  SheetRepository.getSettingValue = () => '';
   SheetRepository.readAnswerLogs = () => {
     throw new Error('readAnswerLogs should not be used during submitAnswer');
   };
@@ -3251,64 +5529,128 @@ test('submitAnswer updates only the submitted student cache row without full log
   const targetCacheRow = aggregateRows[1];
   const otherCacheRow = aggregateRows[2];
   assert.equal(response.duplicate, false);
-  assert.equal(response.result.recent10Attempts, 10);
-  assert.equal(response.result.recent10Correct, 6);
-  assert.equal(targetCacheRow[aggregateHeaders.indexOf('totalAttempts')], 10);
-  assert.equal(targetCacheRow[aggregateHeaders.indexOf('totalCorrect')], 6);
-  assert.equal(targetCacheRow[aggregateHeaders.indexOf('beginnerAttempts')], 4);
+  assert.equal(response.deferredSummaryUpdate, true);
+  assert.equal(response.result.recent10Attempts, 1);
+  assert.equal(response.result.recent10Correct, 1);
+  assert.equal(response.nextProblem, null);
+  assert.equal(targetCacheRow[aggregateHeaders.indexOf('totalAttempts')], 9);
+  assert.equal(targetCacheRow[aggregateHeaders.indexOf('totalCorrect')], 5);
+  assert.equal(targetCacheRow[aggregateHeaders.indexOf('beginnerAttempts')], 3);
   assert.equal(targetCacheRow[aggregateHeaders.indexOf('intermediateAttempts')], 3);
   assert.equal(targetCacheRow[aggregateHeaders.indexOf('advancedAttempts')], 3);
-  assert.equal(targetCacheRow[aggregateHeaders.indexOf('recent10BeginnerAttempts')], 4);
+  assert.equal(targetCacheRow[aggregateHeaders.indexOf('recent10BeginnerAttempts')], 3);
   assert.equal(
     targetCacheRow[aggregateHeaders.indexOf('lastAnsweredAt')],
-    spreadsheetMock.sheets.get('解答ログ').rows.at(-1)[answerHeaders.indexOf('timestamp')]
+    'old-last'
   );
-  assert.equal(targetCacheRow[aggregateHeaders.indexOf('lastLevel')], 'beginner');
-  assert.equal(targetCacheRow[aggregateHeaders.indexOf('lastElapsedMs')], 2500);
+  assert.equal(targetCacheRow[aggregateHeaders.indexOf('lastLevel')], 'advanced');
+  assert.equal(targetCacheRow[aggregateHeaders.indexOf('lastElapsedMs')], 1800);
   assert.equal(otherCacheRow[aggregateHeaders.indexOf('updatedAt')], 'old-other');
   const problemTypeRows = spreadsheetMock.sheets.get('問題タイプ別キャッシュ').rows;
   const targetProblemTypeRow = problemTypeRows[1];
   const otherProblemTypeRow = problemTypeRows[2];
-  assert.equal(targetProblemTypeRow[problemTypeHeaders.indexOf('attempts')], 4);
-  assert.equal(targetProblemTypeRow[problemTypeHeaders.indexOf('correct')], 3);
-  assert.equal(targetProblemTypeRow[problemTypeHeaders.indexOf('accuracy')], 0.75);
-  assert.equal(targetProblemTypeRow[problemTypeHeaders.indexOf('recentAttempts')], 1);
-  assert.equal(targetProblemTypeRow[problemTypeHeaders.indexOf('recentCorrect')], 1);
-  assert.equal(targetProblemTypeRow[problemTypeHeaders.indexOf('averageElapsedMs')], 1525);
-  assert.equal(targetProblemTypeRow[problemTypeHeaders.indexOf('elapsedCount')], 4);
-  assert.equal(targetProblemTypeRow[problemTypeHeaders.indexOf('recentAverageElapsedMs')], 2500);
-  assert.equal(targetProblemTypeRow[problemTypeHeaders.indexOf('lastIsCorrect')], true);
-  assert.equal(targetProblemTypeRow[problemTypeHeaders.indexOf('lastElapsedMs')], 2500);
+  assert.equal(targetProblemTypeRow[problemTypeHeaders.indexOf('attempts')], 3);
+  assert.equal(targetProblemTypeRow[problemTypeHeaders.indexOf('correct')], 2);
+  assert.equal(targetProblemTypeRow[problemTypeHeaders.indexOf('accuracy')], 0.6667);
+  assert.equal(targetProblemTypeRow[problemTypeHeaders.indexOf('recentAttempts')], 3);
+  assert.equal(targetProblemTypeRow[problemTypeHeaders.indexOf('recentCorrect')], 2);
+  assert.equal(targetProblemTypeRow[problemTypeHeaders.indexOf('averageElapsedMs')], 1200);
+  assert.equal(targetProblemTypeRow[problemTypeHeaders.indexOf('elapsedCount')], 3);
+  assert.equal(targetProblemTypeRow[problemTypeHeaders.indexOf('recentAverageElapsedMs')], 1200);
+  assert.equal(targetProblemTypeRow[problemTypeHeaders.indexOf('lastIsCorrect')], false);
+  assert.equal(targetProblemTypeRow[problemTypeHeaders.indexOf('lastElapsedMs')], 1200);
   assert.equal(otherProblemTypeRow[problemTypeHeaders.indexOf('updatedAt')], 'old-type-other');
-  assert.deepEqual(spreadsheetMock.setValuesCalls.filter((call) => call.sheetName === '集計キャッシュ').map((call) => ({
-    row: call.row,
-    column: call.column,
-    numRows: call.numRows,
-    numColumns: call.numColumns
-  })), [
-    {
-      row: 2,
-      column: 1,
-      numRows: 1,
-      numColumns: aggregateHeaders.length
-    }
-  ]);
-  assert.deepEqual(spreadsheetMock.setValuesCalls.filter((call) => call.sheetName === '問題タイプ別キャッシュ').map((call) => ({
-    row: call.row,
-    column: call.column,
-    numRows: call.numRows,
-    numColumns: call.numColumns
-  })), [
-    {
-      row: 2,
-      column: 1,
-      numRows: 1,
-      numColumns: problemTypeHeaders.length
-    }
-  ]);
+  assert.equal(spreadsheetMock.setValuesCalls.filter((call) => call.sheetName === '集計キャッシュ').length, 0);
+  assert.equal(spreadsheetMock.setValuesCalls.filter((call) => call.sheetName === '問題タイプ別キャッシュ').length, 0);
+  assert.equal(spreadsheetMock.setValuesCalls.filter((call) => call.sheetName === '解答ログ').length, 1);
 });
 
-test('submitAnswer rebuilds aggregate cache from all roster logs when cache row is missing', async () => {
+test('submitAnswer logs detailed timing fields and the always-fast student route without raw token', async () => {
+  const messages = [];
+  const { SheetRepository, MolProblemService, AnswerService } = await loadApi({
+    Logger: {
+      log: (message) => {
+        messages.push(String(message || ''));
+      }
+    }
+  });
+  const tokenRow = {
+    token: 'active-token',
+    courseId: 'course-1',
+    courseName: '化学A',
+    rosterKey: 'course-1::student-1',
+    studentId: 'student-1',
+    number: '7',
+    name: '山田 太郎',
+    revoked: false
+  };
+  const logs = [];
+  SheetRepository.getSettingValue = () => '';
+  SheetRepository.findToken = (token) => token === tokenRow.token ? tokenRow : null;
+  SheetRepository.withDocumentLock = (callback) => callback();
+  SheetRepository.findAnswerLogByAttemptId = () => null;
+  SheetRepository.appendAnswerLog = (entry) => {
+    logs.push(entry);
+  };
+  SheetRepository.findAggregateCacheByRosterKey = () => ({
+    rosterKey: tokenRow.rosterKey,
+    totalAttempts: 0,
+    totalCorrect: 0,
+    recent10Attempts: 0,
+    recent10Correct: 0,
+    recent10Accuracy: 0
+  });
+  SheetRepository.readLatestAnswerLogsForRosterKey = () => logs.slice(-10);
+  SheetRepository.upsertAggregateCacheRow = () => {};
+  SheetRepository.findProblemTypeStatsRow = () => ({
+    rosterKey: tokenRow.rosterKey,
+    level: 'beginner',
+    problemType: 'mol_to_mass',
+    attempts: 0,
+    correct: 0
+  });
+  SheetRepository.readLatestAnswerLogsForRosterKeyLevelProblemType = () => logs.slice(-10);
+  SheetRepository.upsertProblemTypeStatsRow = () => {};
+  const issued = MolProblemService.issueProblemForToken(tokenRow.token, { level: 'beginner', problemType: 1 });
+
+  const response = AnswerService.submitAnswer({
+    token: tokenRow.token,
+    problem: issued.publicProblem,
+    submittedAnswer: String(issued.problem.expectedAnswer),
+    elapsedMs: 2500,
+    skipNextProblem: true
+  });
+
+  assert.equal(response.ok, true);
+  const output = messages.join('\n');
+  assert.match(output, /submitAnswer/);
+  assert.match(output, /mode=student/);
+  assert.match(output, /studentRoute=fast/);
+  assert.match(output, /aggregatePath=deferred_aggregate_update/);
+  assert.match(output, /nextProblemIncluded=false/);
+  for (const field of [
+    'elapsedMs',
+    'tokenElapsedMs',
+    'tokenCacheReadElapsedMs',
+    'tokenSheetFindElapsedMs',
+    'tokenCacheWriteElapsedMs',
+    'storedProblemElapsedMs',
+    'gradingElapsedMs',
+    'lockElapsedMs',
+    'appendLogElapsedMs',
+    'duplicateCheckElapsedMs',
+    'appendOnlyElapsedMs',
+    'documentLockWaitAndRunElapsedMs',
+    'aggregateUpdateElapsedMs',
+    'problemTypeCacheUpdateElapsedMs',
+    'nextProblemElapsedMs'
+  ]) {
+    assert.match(output, new RegExp(`${field}=\\d+`), `${field} should be logged`);
+  }
+  assert.doesNotMatch(output, /active-token/);
+});
+
+test('submitAnswer does not rebuild aggregate cache when a legacy runtime setting row remains', async () => {
   const { SheetRepository, MolProblemService, AnswerService } = await loadApi();
   const tokenRow = {
     token: 'active-token',
@@ -3339,7 +5681,7 @@ test('submitAnswer rebuilds aggregate cache from all roster logs when cache row 
     isCorrect: index % 2 === 0,
     elapsedMs: 1000 + index
   }));
-  let rebuiltSummary = null;
+  SheetRepository.getSettingValue = (key) => key === legacyStudentRouteSettingKeyForTest() ? 'false' : '';
   SheetRepository.findToken = (token) => token === tokenRow.token ? tokenRow : null;
   SheetRepository.withDocumentLock = (callback) => callback();
   SheetRepository.findAnswerLogByAttemptId = (rosterKey, attemptId) =>
@@ -3347,14 +5689,24 @@ test('submitAnswer rebuilds aggregate cache from all roster logs when cache row 
   SheetRepository.appendAnswerLog = (entry) => {
     logs.push(entry);
   };
-  SheetRepository.findAggregateCacheByRosterKey = () => null;
-  SheetRepository.readLatestAnswerLogsForRosterKey = () => logs.slice(-10);
-  SheetRepository.readAnswerLogsForRosterKey = (rosterKey) => logs.filter((row) => row.rosterKey === rosterKey);
-  SheetRepository.upsertAggregateCacheRow = (summary) => {
-    rebuiltSummary = summary;
+  SheetRepository.findAggregateCacheByRosterKey = () => {
+    throw new Error('student submit should not read aggregate cache');
   };
-  SheetRepository.findProblemTypeStatsRow = () => null;
-  SheetRepository.upsertProblemTypeStatsRow = () => {};
+  SheetRepository.readLatestAnswerLogsForRosterKey = () => {
+    throw new Error('student submit should not read latest answer logs');
+  };
+  SheetRepository.readAnswerLogsForRosterKey = () => {
+    throw new Error('student submit should not rebuild from answer logs');
+  };
+  SheetRepository.upsertAggregateCacheRow = () => {
+    throw new Error('student submit should not write aggregate cache');
+  };
+  SheetRepository.findProblemTypeStatsRow = () => {
+    throw new Error('student submit should not read problem type cache');
+  };
+  SheetRepository.upsertProblemTypeStatsRow = () => {
+    throw new Error('student submit should not write problem type cache');
+  };
   const issued = MolProblemService.issueProblemForToken(tokenRow.token, { level: 'beginner', problemType: 1 });
 
   const response = AnswerService.submitAnswer({
@@ -3365,13 +5717,10 @@ test('submitAnswer rebuilds aggregate cache from all roster logs when cache row 
   });
 
   assert.equal(response.duplicate, false);
-  assert.equal(response.result.totalAttempts, 13);
-  assert.equal(response.result.recent10Attempts, 10);
-  assert.equal(rebuiltSummary.totalAttempts, 13);
-  assert.equal(rebuiltSummary.totalCorrect, 7);
-  assert.equal(rebuiltSummary.beginnerAttempts, 5);
-  assert.equal(rebuiltSummary.intermediateAttempts, 4);
-  assert.equal(rebuiltSummary.advancedAttempts, 4);
+  assert.equal(response.deferredSummaryUpdate, true);
+  assert.equal(response.result.totalAttempts, 1);
+  assert.equal(response.result.recent10Attempts, 1);
+  assert.equal(response.nextProblem, null);
 });
 
 test('submitAnswer duplicate response restores the existing log without appending a second answer', async () => {
@@ -3422,12 +5771,25 @@ test('submitAnswer duplicate response restores the existing log without appendin
     ]
   });
   const { SheetRepository, MolProblemService, AnswerService } = await loadApi({ SpreadsheetApp: spreadsheetMock.SpreadsheetApp });
-  SheetRepository.assertManagementSchemaReady = () => {};
+  SheetRepository.assertManagementSheetsReady = () => {};
+  SheetRepository.getSettingValue = (key) => key === legacyStudentRouteSettingKeyForTest() ? 'false' : '';
   SheetRepository.readAnswerLogs = () => {
     throw new Error('readAnswerLogs should not be used during duplicate submitAnswer');
   };
   SheetRepository.readAnswerLogsForRosterKey = () => {
     throw new Error('readAnswerLogsForRosterKey should not be used during duplicate submitAnswer');
+  };
+  SheetRepository.findAggregateCacheByRosterKey = () => {
+    throw new Error('aggregate cache should not be read during duplicate submitAnswer');
+  };
+  SheetRepository.upsertAggregateCacheRow = () => {
+    throw new Error('aggregate cache should not be written during duplicate submitAnswer');
+  };
+  SheetRepository.findProblemTypeStatsRow = () => {
+    throw new Error('problem type cache should not be read during duplicate submitAnswer');
+  };
+  SheetRepository.upsertProblemTypeStatsRow = () => {
+    throw new Error('problem type cache should not be written during duplicate submitAnswer');
   };
   SheetRepository.writeAggregateCache = () => {
     throw new Error('writeAggregateCache should not be used during duplicate submitAnswer');
@@ -3469,7 +5831,8 @@ test('submitAnswer duplicate response restores the existing log without appendin
 
   assert.equal(response.duplicate, true);
   assert.equal(response.result.isCorrect, true);
-  assert.equal(response.result.totalAttempts, 1);
+  assert.equal(response.result.totalAttempts, 0);
+  assert.equal(response.nextProblem, null);
   assert.equal(spreadsheetMock.sheets.get('解答ログ').rows.length, 2);
   assert.equal(
     spreadsheetMock.setValuesCalls.filter((call) => call.sheetName === '解答ログ').length,
@@ -3478,7 +5841,84 @@ test('submitAnswer duplicate response restores the existing log without appendin
   );
 });
 
-test('submitAnswer uses adaptive selection for the prefetched next problem', async () => {
+test('submitAnswer skips next problem generation regardless of the client prefetch flag', async () => {
+  const { SheetRepository, MolProblemService, AnswerService } = await loadApi();
+  const tokenRow = {
+    token: 'active-token',
+    courseId: 'course-1',
+    courseName: '化学A',
+    rosterKey: 'course-1::student-1',
+    studentId: 'student-1',
+    number: '7',
+    name: '山田 太郎',
+    revoked: false
+  };
+  const logs = Array.from({ length: 2 }, (_, index) => ({
+    timestamp: `2026-05-20T12:0${index}:00.000Z`,
+    rosterKey: tokenRow.rosterKey,
+    isCorrect: index === 0,
+    level: 'beginner',
+    problemType: 'mol_to_mass',
+    elapsedMs: 1500
+  }));
+  let appendedEntry = null;
+  let nextProblemIssueCount = 0;
+  const originalIssueProblemForStudent = AnswerService.issueProblemForStudent_;
+
+  SheetRepository.getSettingValue = (key) => key === legacyStudentRouteSettingKeyForTest() ? 'false' : '';
+  SheetRepository.findToken = (token) => token === tokenRow.token ? tokenRow : null;
+  SheetRepository.withDocumentLock = (callback) => callback();
+  SheetRepository.findAnswerLogByAttemptId = () => null;
+  SheetRepository.appendAnswerLog = (entry) => {
+    appendedEntry = entry;
+    logs.push(entry);
+  };
+  SheetRepository.findAggregateCacheByRosterKey = () => {
+    throw new Error('student submit should not read aggregate cache');
+  };
+  SheetRepository.readLatestAnswerLogsForRosterKey = () => {
+    throw new Error('student submit should not read latest answer logs');
+  };
+  SheetRepository.readAnswerLogsForRosterKey = () => {
+    throw new Error('student submit should not read answer logs for summary');
+  };
+  SheetRepository.upsertAggregateCacheRow = () => {
+    throw new Error('student submit should not update aggregate cache');
+  };
+  SheetRepository.findProblemTypeStatsRow = () => {
+    throw new Error('student submit should not read problem type cache');
+  };
+  SheetRepository.upsertProblemTypeStatsRow = () => {
+    throw new Error('student submit should not update problem type cache');
+  };
+  const issued = MolProblemService.issueProblemForToken(tokenRow.token, { level: 'beginner', problemType: 1 });
+
+  AnswerService.issueProblemForStudent_ = function (...args) {
+    nextProblemIssueCount += 1;
+    return originalIssueProblemForStudent.apply(this, args);
+  };
+  try {
+    const response = AnswerService.submitAnswer({
+      token: tokenRow.token,
+      problem: issued.publicProblem,
+      submittedAnswer: String(issued.problem.expectedAnswer),
+      elapsedMs: 2500,
+      skipNextProblem: true
+    });
+
+    assert.equal(response.duplicate, false);
+    assert.equal(response.nextProblem, null);
+    assert.equal(response.result.totalAttempts, 1);
+    assert.equal(response.result.recent10Attempts, 1);
+    assert.equal(appendedEntry.attemptId, issued.problem.attemptId);
+    assert.equal(appendedEntry.isCorrect, true);
+    assert.equal(nextProblemIssueCount, 0);
+  } finally {
+    AnswerService.issueProblemForStudent_ = originalIssueProblemForStudent;
+  }
+});
+
+test('submitAnswer does not run adaptive next-problem selection while returning the grading response', async () => {
   const { SheetRepository, MolProblemService, AnswerService, AdaptiveProblemService } = await loadApi();
   const tokenRow = {
     token: 'active-token',
@@ -3497,23 +5937,18 @@ test('submitAnswer uses adaptive selection for the prefetched next problem', asy
   SheetRepository.appendAnswerLog = (entry) => {
     logs.push(entry);
   };
-  SheetRepository.findAggregateCacheByRosterKey = () => ({
-    rosterKey: tokenRow.rosterKey,
-    totalAttempts: 0,
-    totalCorrect: 0,
-    recent10Attempts: 0,
-    recent10Correct: 0,
-    beginnerAttempts: 0,
-    intermediateAttempts: 0,
-    advancedAttempts: 0
-  });
+  SheetRepository.findAggregateCacheByRosterKey = () => {
+    throw new Error('student submit should not read aggregate cache');
+  };
   SheetRepository.readLatestAnswerLogsForRosterKey = () => logs.slice(-10);
   SheetRepository.upsertAggregateCacheRow = () => {};
   SheetRepository.findProblemTypeStatsRow = () => null;
   SheetRepository.readAnswerLogsForRosterKey = () => logs;
   SheetRepository.upsertProblemTypeStatsRow = () => {};
   SheetRepository.getSettingValue = (key) => key === 'ENABLE_ADAPTIVE_PROBLEM_SELECTION' ? 'true' : '';
-  AdaptiveProblemService.selectProblemTypeForStudent = (_tokenRow, level) => level === 'beginner' ? 'mass_to_mol' : '';
+  AdaptiveProblemService.selectProblemTypeForStudent = () => {
+    throw new Error('adaptive next-problem selection should not run during submitAnswer');
+  };
   const issued = MolProblemService.issueProblemForToken(tokenRow.token, { level: 'beginner', problemType: 1 });
 
   const response = AnswerService.submitAnswer({
@@ -3523,8 +5958,8 @@ test('submitAnswer uses adaptive selection for the prefetched next problem', asy
     nextLevel: 'beginner'
   });
 
-  assert.equal(response.nextProblem.level, 'beginner');
-  assert.equal(response.nextProblem.problemType, 'mass_to_mol');
+  assert.equal(response.nextProblem, null);
+  assert.equal(response.deferredSummaryUpdate, true);
 });
 
 test('mol problem integrity check detects expected-answer tampering', async () => {
@@ -3590,6 +6025,42 @@ test('aggregation cache calculates totals and recent ten accuracy per student', 
   assert.equal(rows[0].lastAnsweredAt, '2026-05-20T12:11:00.000Z');
   assert.equal(rows[0].lastLevel, 'advanced');
   assert.equal(rows[0].lastProblemType, 'type-11');
+});
+
+test('aggregation caches ignore teacher test student logs', async () => {
+  const { AggregationService } = await loadApi();
+  const logs = [
+    {
+      timestamp: '2026-05-20T12:00:00.000Z',
+      courseId: 'course-1',
+      courseName: '化学A',
+      rosterKey: 'course-1::student-1',
+      studentId: 'student-1',
+      number: '7',
+      name: '山田 太郎',
+      level: 'beginner',
+      problemType: 'type-1',
+      isCorrect: true
+    },
+    {
+      timestamp: '2026-05-20T12:01:00.000Z',
+      courseId: '__TEST__',
+      courseName: 'テスト用',
+      rosterKey: '__TEST__::test-student',
+      studentId: 'test-student',
+      number: 'TEST',
+      name: 'テスト生徒',
+      level: 'beginner',
+      problemType: 'type-1',
+      isCorrect: false
+    }
+  ];
+
+  const aggregateRows = AggregationService.buildAggregateRows(logs, '2026-05-20T13:00:00.000Z');
+  const problemTypeRows = AggregationService.buildProblemTypeStatsRows(logs, '2026-05-20T13:00:00.000Z');
+
+  assert.equal(JSON.stringify(aggregateRows.map((row) => row.rosterKey)), JSON.stringify(['course-1::student-1']));
+  assert.equal(JSON.stringify(problemTypeRows.map((row) => row.rosterKey)), JSON.stringify(['course-1::student-1']));
 });
 
 test('problem type stats cache groups by student level and problem type', async () => {
@@ -3675,6 +6146,397 @@ test('rebuildAggregateCache also rebuilds problem type stats cache', async () =>
   assert.equal(problemTypeRows[0].correct, 1);
 });
 
+test('rebuild aggregate cache menu refreshes monitor snapshot after aggregate caches', async () => {
+  const uiMock = createUiMock();
+  const { AdminService, AggregationService, MonitorSnapshotService, rebuildAggregateCacheFromMenu } = await loadApi({
+    SpreadsheetApp: {
+      getUi: () => uiMock.ui
+    }
+  });
+  let aggregateCalled = false;
+  AdminService.runLoggedOperation = (_operationName, callback) => callback();
+  AdminService.withAdminActionLock = (_operationName, callback) => callback();
+  AggregationService.rebuildAggregateCache = () => {
+    aggregateCalled = true;
+    return { updated: 2, problemTypeUpdated: 5, rows: [], problemTypeRows: [] };
+  };
+  MonitorSnapshotService.writeDashboardSnapshot = () => {
+    assert.equal(aggregateCalled, true, 'monitor snapshot should be written after aggregate caches');
+    return { generatedAt: '2026-05-21T12:34:56.000Z' };
+  };
+
+  const result = rebuildAggregateCacheFromMenu();
+
+  assert.equal(result.updated, 2);
+  assert.equal(result.problemTypeUpdated, 5);
+  assert.equal(result.monitorSnapshotUpdatedAt, '2026-05-21T12:34:56.000Z');
+  assert.match(uiMock.alerts.at(-1)[0], /集計キャッシュを更新しました/);
+  assert.match(uiMock.alerts.at(-1)[0], /問題タイプ別 5行/);
+  assert.match(uiMock.alerts.at(-1)[0], /モニターキャッシュ 2026-05-21T12:34:56\.000Z/);
+});
+
+test('rebuild aggregate cache menu uses the shared aggregate monitor core', async () => {
+  const code = await readFile('Code.gs', 'utf8');
+
+  assert.match(extractFunctionBody(code, 'rebuildAggregateCacheFromMenu'), /rebuildAggregateAndMonitorCacheCore_\(\)/);
+});
+
+test('monitor rebuild function checks monitor access, refreshes aggregate problem type and snapshot caches, and logs operation', async () => {
+  const spreadsheetMock = await createManagedSpreadsheetMock({});
+  const { MonitorService, AggregationService, MonitorSnapshotService, rebuildAggregateAndMonitorCacheFromMonitor } = await loadApi({
+    SpreadsheetApp: spreadsheetMock.SpreadsheetApp
+  });
+  let accessChecked = false;
+  let aggregateCalled = false;
+  MonitorService.assertMonitorAccess = () => {
+    accessChecked = true;
+  };
+  AggregationService.rebuildAggregateCache = () => {
+    aggregateCalled = true;
+    return {
+      updated: 2,
+      problemTypeUpdated: 5,
+      rows: [{ rosterKey: 'course-1::student-1' }],
+      problemTypeRows: [{ rosterKey: 'course-1::student-1', level: 'beginner' }]
+    };
+  };
+  MonitorSnapshotService.writeDashboardSnapshot = () => {
+    assert.equal(aggregateCalled, true, 'monitor snapshot should be written after aggregate caches');
+    return { generatedAt: '2026-05-21T12:34:56.000Z' };
+  };
+
+  const result = rebuildAggregateAndMonitorCacheFromMonitor();
+
+  assert.equal(accessChecked, true);
+  assert.equal(result.ok, true);
+  assert.equal(result.updated, 2);
+  assert.equal(result.problemTypeRows, 5);
+  assert.equal(result.monitorSnapshotUpdatedAt, '2026-05-21T12:34:56.000Z');
+  assert.match(result.message, /集計キャッシュとモニターキャッシュを更新しました/);
+  const serializedRunLog = JSON.stringify(spreadsheetMock.sheets.get('実行ログ').rows);
+  assert.match(serializedRunLog, /MONITOR_REBUILD_AGGREGATE_MONITOR_CACHE/);
+  assert.match(serializedRunLog, /MONITOR_CACHE_UPDATED:2026-05-21T12:34:56\.000Z/);
+});
+
+test('monitor snapshot rebuild function checks monitor access, writes only the snapshot cache, and logs operation', async () => {
+  const spreadsheetMock = await createManagedSpreadsheetMock({});
+  const { MonitorService, AggregationService, MonitorSnapshotService, rebuildMonitorSnapshotFromMonitor } = await loadApi({
+    SpreadsheetApp: spreadsheetMock.SpreadsheetApp
+  });
+  let accessChecked = false;
+  let snapshotCalled = false;
+  let aggregateCalled = false;
+  let problemTypeCalled = false;
+  MonitorService.assertMonitorAccess = () => {
+    accessChecked = true;
+  };
+  AggregationService.rebuildAggregateCache = () => {
+    aggregateCalled = true;
+    throw new Error('aggregate rebuild should not run for monitor-only refresh');
+  };
+  AggregationService.rebuildProblemTypeStatsCache = () => {
+    problemTypeCalled = true;
+    throw new Error('problem type rebuild should not run for monitor-only refresh');
+  };
+  MonitorSnapshotService.writeDashboardSnapshot = () => {
+    snapshotCalled = true;
+    return {
+      generatedAt: '2026-05-21T10:35:00.000Z',
+      progressRows: [
+        { rosterKey: 'course-1::student-1' },
+        { rosterKey: 'course-1::student-2' }
+      ]
+    };
+  };
+
+  const result = rebuildMonitorSnapshotFromMonitor();
+
+  assert.equal(accessChecked, true);
+  assert.equal(snapshotCalled, true);
+  assert.equal(aggregateCalled, false);
+  assert.equal(problemTypeCalled, false);
+  assert.equal(result.ok, true);
+  assert.equal(result.monitorSnapshotUpdatedAt, '2026-05-21T10:35:00.000Z');
+  assert.equal(result.rowCount, 2);
+  assert.match(result.message, /モニター表示用キャッシュを更新しました/);
+  const serializedRunLog = JSON.stringify(spreadsheetMock.sheets.get('実行ログ').rows);
+  assert.match(serializedRunLog, /MONITOR_REBUILD_MONITOR_SNAPSHOT/);
+  assert.match(serializedRunLog, /MONITOR_SNAPSHOT_UPDATED:2026-05-21T10:35:00\.000Z; ROWS:2/);
+});
+
+test('monitor snapshot rebuild function returns ok false when the admin lock is busy', async () => {
+  const spreadsheetMock = await createManagedSpreadsheetMock({});
+  const lockServiceMock = {
+    getScriptLock: () => ({
+      tryLock() {
+        return false;
+      },
+      releaseLock() {
+        throw new Error('release should not be called without a lock');
+      }
+    })
+  };
+  const { MonitorSnapshotService, AggregationService, rebuildMonitorSnapshotFromMonitor } = await loadApi({
+    SpreadsheetApp: spreadsheetMock.SpreadsheetApp,
+    LockService: lockServiceMock
+  });
+  MonitorSnapshotService.writeDashboardSnapshot = () => {
+    throw new Error('snapshot rebuild should not run when the lock is busy');
+  };
+  AggregationService.rebuildAggregateCache = () => {
+    throw new Error('aggregate rebuild should not run when the lock is busy');
+  };
+  AggregationService.rebuildProblemTypeStatsCache = () => {
+    throw new Error('problem type rebuild should not run when the lock is busy');
+  };
+
+  const result = rebuildMonitorSnapshotFromMonitor();
+
+  assert.equal(result.ok, false);
+  assert.match(result.message, /別の処理が実行中です/);
+  const serializedRunLog = JSON.stringify(spreadsheetMock.sheets.get('実行ログ').rows);
+  assert.match(serializedRunLog, /MONITOR_REBUILD_MONITOR_SNAPSHOT/);
+  assert.match(serializedRunLog, /ERROR: 別の処理が実行中です/);
+});
+
+test('monitor rebuild function returns a clear ok false response when the admin lock is busy', async () => {
+  const spreadsheetMock = await createManagedSpreadsheetMock({});
+  const lockServiceMock = {
+    getScriptLock: () => ({
+      tryLock() {
+        return false;
+      },
+      releaseLock() {
+        throw new Error('release should not be called without a lock');
+      }
+    })
+  };
+  const { AggregationService, rebuildAggregateAndMonitorCacheFromMonitor } = await loadApi({
+    SpreadsheetApp: spreadsheetMock.SpreadsheetApp,
+    LockService: lockServiceMock
+  });
+  AggregationService.rebuildAggregateCache = () => {
+    throw new Error('aggregate rebuild should not run when the lock is busy');
+  };
+
+  const result = rebuildAggregateAndMonitorCacheFromMonitor();
+
+  assert.equal(result.ok, false);
+  assert.match(result.message, /別の処理が実行中です/);
+  const serializedRunLog = JSON.stringify(spreadsheetMock.sheets.get('実行ログ').rows);
+  assert.match(serializedRunLog, /MONITOR_REBUILD_AGGREGATE_MONITOR_CACHE/);
+  assert.match(serializedRunLog, /ERROR: 別の処理が実行中です/);
+});
+
+test('install aggregate monitor auto refresh trigger recreates one scheduled trigger and enables settings', async () => {
+  const spreadsheetMock = await createManagedSpreadsheetMock({
+    設定: await buildManagedRows('設定', [
+      { キー: 'AUTO_REBUILD_CACHE_ENABLED', 値: 'false', 説明: 'old' },
+      { キー: 'AUTO_REBUILD_CACHE_INTERVAL_MINUTES', 値: '10', 説明: 'old' }
+    ])
+  });
+  const uiMock = createUiMock();
+  const scriptAppMock = createScriptAppTriggerMock([
+    'rebuildAggregateAndMonitorCacheForTrigger',
+    'otherHandler'
+  ]);
+  const { SheetRepository, installAggregateMonitorAutoRefreshTriggerFromMenu } = await loadApi({
+    SpreadsheetApp: {
+      ...spreadsheetMock.SpreadsheetApp,
+      getUi: () => uiMock.ui
+    },
+    ScriptApp: scriptAppMock.ScriptApp
+  });
+
+  const result = installAggregateMonitorAutoRefreshTriggerFromMenu();
+
+  assert.equal(result.intervalMinutes, 10);
+  assert.equal(result.deletedTriggers, 1);
+  assert.equal(result.createdTriggers, 1);
+  assert.equal(scriptAppMock.deletedTriggers.length, 1);
+  assert.equal(scriptAppMock.createdTriggers.length, 1);
+  assert.equal(scriptAppMock.createdTriggers[0].handlerFunction, 'rebuildAggregateAndMonitorCacheForTrigger');
+  assert.deepEqual(scriptAppMock.createdTriggers[0].schedule, { unit: 'minutes', interval: 10 });
+  assert.equal(scriptAppMock.triggers.filter((trigger) => trigger.getHandlerFunction() === 'rebuildAggregateAndMonitorCacheForTrigger').length, 1);
+  assert.equal(scriptAppMock.triggers.filter((trigger) => trigger.getHandlerFunction() === 'otherHandler').length, 1);
+  assert.equal(SheetRepository.getSettingValue('AUTO_REBUILD_CACHE_ENABLED'), 'true');
+  assert.equal(SheetRepository.getSettingValue('AUTO_REBUILD_CACHE_INTERVAL_MINUTES'), '10');
+  assert.match(uiMock.alerts.at(-1)[0], /自動更新をON/);
+  assert.match(uiMock.alerts.at(-1)[0], /10分ごと/);
+  assert.match(uiMock.alerts.at(-1)[0], /採点速度には影響しません/);
+});
+
+test('install aggregate monitor auto refresh trigger falls back to five minutes for invalid settings', async () => {
+  const spreadsheetMock = await createManagedSpreadsheetMock({
+    設定: await buildManagedRows('設定', [
+      { キー: 'AUTO_REBUILD_CACHE_ENABLED', 値: 'false' },
+      { キー: 'AUTO_REBUILD_CACHE_INTERVAL_MINUTES', 値: '2' }
+    ])
+  });
+  const uiMock = createUiMock();
+  const scriptAppMock = createScriptAppTriggerMock();
+  const { SheetRepository, installAggregateMonitorAutoRefreshTriggerFromMenu } = await loadApi({
+    SpreadsheetApp: {
+      ...spreadsheetMock.SpreadsheetApp,
+      getUi: () => uiMock.ui
+    },
+    ScriptApp: scriptAppMock.ScriptApp
+  });
+
+  const result = installAggregateMonitorAutoRefreshTriggerFromMenu();
+
+  assert.equal(result.intervalMinutes, 5);
+  assert.deepEqual(scriptAppMock.createdTriggers[0].schedule, { unit: 'minutes', interval: 5 });
+  assert.equal(SheetRepository.getSettingValue('AUTO_REBUILD_CACHE_INTERVAL_MINUTES'), '5');
+});
+
+test('uninstall aggregate monitor auto refresh trigger deletes all matching triggers and disables settings', async () => {
+  const spreadsheetMock = await createManagedSpreadsheetMock({
+    設定: await buildManagedRows('設定', [
+      { キー: 'AUTO_REBUILD_CACHE_ENABLED', 値: 'true' },
+      { キー: 'AUTO_REBUILD_CACHE_INTERVAL_MINUTES', 値: '5' }
+    ])
+  });
+  const uiMock = createUiMock();
+  const scriptAppMock = createScriptAppTriggerMock([
+    'rebuildAggregateAndMonitorCacheForTrigger',
+    'otherHandler',
+    'rebuildAggregateAndMonitorCacheForTrigger'
+  ]);
+  const { SheetRepository, uninstallAggregateMonitorAutoRefreshTriggerFromMenu } = await loadApi({
+    SpreadsheetApp: {
+      ...spreadsheetMock.SpreadsheetApp,
+      getUi: () => uiMock.ui
+    },
+    ScriptApp: scriptAppMock.ScriptApp
+  });
+
+  const result = uninstallAggregateMonitorAutoRefreshTriggerFromMenu();
+
+  assert.equal(result.deletedTriggers, 2);
+  assert.equal(scriptAppMock.deletedTriggers.length, 2);
+  assert.equal(scriptAppMock.triggers.length, 1);
+  assert.equal(scriptAppMock.triggers[0].getHandlerFunction(), 'otherHandler');
+  assert.equal(SheetRepository.getSettingValue('AUTO_REBUILD_CACHE_ENABLED'), 'false');
+  assert.match(uiMock.alerts.at(-1)[0], /自動更新を停止/);
+  assert.match(uiMock.alerts.at(-1)[0], /2件/);
+});
+
+test('show aggregate monitor auto refresh status displays settings triggers snapshot time and student runtime', async () => {
+  const spreadsheetMock = await createManagedSpreadsheetMock({
+    設定: await buildManagedRows('設定', [
+      { キー: 'AUTO_REBUILD_CACHE_ENABLED', 値: 'true' },
+      { キー: 'AUTO_REBUILD_CACHE_INTERVAL_MINUTES', 値: '5' }
+    ]),
+    モニターキャッシュ: await buildManagedRows('モニターキャッシュ', [
+      { key: 'dashboard', json: '{}', updatedAt: '2026-05-21T12:00:00.000Z', note: '自動生成。直接編集しない' }
+    ])
+  });
+  const uiMock = createUiMock();
+  const scriptAppMock = createScriptAppTriggerMock([
+    'rebuildAggregateAndMonitorCacheForTrigger',
+    'rebuildAggregateAndMonitorCacheForTrigger',
+    'otherHandler'
+  ]);
+  const { showAggregateMonitorAutoRefreshStatusFromMenu } = await loadApi({
+    SpreadsheetApp: {
+      ...spreadsheetMock.SpreadsheetApp,
+      getUi: () => uiMock.ui
+    },
+    ScriptApp: scriptAppMock.ScriptApp
+  });
+
+  const status = showAggregateMonitorAutoRefreshStatusFromMenu();
+
+  assert.equal(status.enabled, true);
+  assert.equal(status.intervalMinutes, 5);
+  assert.equal(status.triggerCount, 2);
+  assert.equal(status.monitorSnapshotUpdatedAt, '2026-05-21T12:00:00.000Z');
+  assert.equal(status.studentRuntime, 'fast');
+  const message = uiMock.alerts.at(-1)[0];
+  assert.match(message, /自動更新の状態/);
+  assert.match(message, /AUTO_REBUILD_CACHE_ENABLED: true/);
+  assert.match(message, /AUTO_REBUILD_CACHE_INTERVAL_MINUTES: 5/);
+  assert.match(message, /実際のトリガー数: 2/);
+  assert.match(message, /最後のモニターキャッシュ更新: 2026-05-21T12:00:00\.000Z/);
+  assert.match(message, /生徒API: 常時高速ルート/);
+  assert.match(message, /採点直後のモニター反映は遅れる/);
+  assert.match(message, /⑨ 集計キャッシュを更新/);
+});
+
+test('aggregate monitor auto refresh trigger skips heavy rebuilds when disabled and logs the skip', async () => {
+  const spreadsheetMock = await createManagedSpreadsheetMock({
+    設定: await buildManagedRows('設定', [
+      { キー: 'AUTO_REBUILD_CACHE_ENABLED', 値: 'false' },
+      { キー: 'AUTO_REBUILD_CACHE_INTERVAL_MINUTES', 値: '5' }
+    ])
+  });
+  const { AggregationService, MonitorSnapshotService, rebuildAggregateAndMonitorCacheForTrigger } = await loadApi({
+    SpreadsheetApp: spreadsheetMock.SpreadsheetApp
+  });
+  AggregationService.rebuildAggregateCache = () => {
+    throw new Error('disabled trigger should not rebuild aggregate cache');
+  };
+  MonitorSnapshotService.writeDashboardSnapshot = () => {
+    throw new Error('disabled trigger should not write monitor snapshot');
+  };
+
+  const result = rebuildAggregateAndMonitorCacheForTrigger();
+
+  assert.equal(result.skipped, true);
+  assert.equal(result.reason, 'disabled');
+  const runLogRows = spreadsheetMock.sheets.get('実行ログ').rows;
+  assert.ok(runLogRows.some((row) => row.includes('AUTO_REBUILD_AGGREGATE_MONITOR_CACHE_SKIPPED')));
+  assert.ok(runLogRows.some((row) => row.includes('AUTO_REBUILD_SKIPPED_DISABLED')));
+});
+
+test('aggregate monitor auto refresh trigger rebuilds caches with a lock when enabled and logs snapshot time', async () => {
+  const spreadsheetMock = await createManagedSpreadsheetMock({
+    設定: await buildManagedRows('設定', [
+      { キー: 'AUTO_REBUILD_CACHE_ENABLED', 値: 'true' },
+      { キー: 'AUTO_REBUILD_CACHE_INTERVAL_MINUTES', 値: '5' }
+    ])
+  });
+  let tryLockWaitMs = null;
+  let releaseCount = 0;
+  const lockServiceMock = {
+    getScriptLock: () => ({
+      tryLock(waitMs) {
+        tryLockWaitMs = waitMs;
+        return true;
+      },
+      releaseLock() {
+        releaseCount += 1;
+      }
+    })
+  };
+  const { AggregationService, MonitorSnapshotService, rebuildAggregateAndMonitorCacheForTrigger } = await loadApi({
+    SpreadsheetApp: spreadsheetMock.SpreadsheetApp,
+    LockService: lockServiceMock
+  });
+  let aggregateCalled = false;
+  AggregationService.rebuildAggregateCache = () => {
+    aggregateCalled = true;
+    return { updated: 3, problemTypeUpdated: 7 };
+  };
+  MonitorSnapshotService.writeDashboardSnapshot = () => {
+    assert.equal(aggregateCalled, true, 'monitor snapshot should be written after aggregate rebuild');
+    return { generatedAt: '2026-05-21T12:34:56.000Z' };
+  };
+
+  const result = rebuildAggregateAndMonitorCacheForTrigger();
+
+  assert.equal(result.updated, 3);
+  assert.equal(result.problemTypeUpdated, 7);
+  assert.equal(result.monitorSnapshotUpdatedAt, '2026-05-21T12:34:56.000Z');
+  assert.equal(tryLockWaitMs, 1000);
+  assert.equal(releaseCount, 1);
+  const serializedRunLog = JSON.stringify(spreadsheetMock.sheets.get('実行ログ').rows);
+  assert.match(serializedRunLog, /AUTO_REBUILD_AGGREGATE_MONITOR_CACHE/);
+  assert.match(serializedRunLog, /MONITOR_CACHE_UPDATED:2026-05-21T12:34:56\.000Z/);
+  assert.doesNotMatch(serializedRunLog, /secret-token/);
+});
+
 test('aggregation cache calculates elapsed time averages medians and improvement rate', async () => {
   const { AggregationService } = await loadApi();
   const elapsedMsValues = [100000, 90000, 80000, 70000, 0, -1, 499, 1800001, 20000, 10000, 8000, 5000];
@@ -3738,8 +6600,110 @@ test('student answer summary calculates elapsed metrics without exposing them to
   assert.equal(Object.hasOwn(response.result, 'recent10AverageElapsedMs'), false);
 });
 
-test('initializeStudentSession reads summary from aggregate cache without scanning answer logs', async () => {
+test('initializeStudentSession skips immediate lastAccessedAt write while returning summary and first problem', async () => {
   const spreadsheetMock = createSpreadsheetMock({
+    設定: [
+      ['キー', '値', '説明', '更新日時'],
+      [legacyStudentRouteSettingKeyForTest(), 'true', '', '']
+    ],
+    トークン管理: [
+      ['token', 'courseId', 'courseName', 'rosterKey', 'studentId', '出席番号', '氏名', 'メール', 'studentUrl', 'issuedAt', 'lastAccessedAt', 'revoked', 'note'],
+      ['active-token', 'course-1', '化学A', 'course-1::student-1', 'student-1', '7', '山田 太郎', 'a@example.com', 'https://example.com?t=active-token', '2026-05-20T12:00:00.000Z', '', false, '']
+    ],
+    集計キャッシュ: [
+      ['updatedAt', 'courseId', 'courseName', 'rosterKey', 'studentId', '出席番号', '氏名', 'totalAttempts', 'totalCorrect', 'totalAccuracy', 'recent10Attempts', 'recent10Correct', 'recent10Accuracy', 'lastAnsweredAt', 'lastLevel'],
+      ['2026-05-21T11:00:00.000Z', 'course-1', '化学A', 'course-1::student-1', 'student-1', '7', '山田 太郎', 3, 2, 0.6667, 3, 2, 0.6667, '2026-05-21T10:59:00.000Z', 'beginner']
+    ],
+    解答ログ: [
+      ['timestamp', 'rosterKey'],
+      ['2026-05-21T09:00:00.000Z', 'course-1::student-1']
+    ]
+  });
+  const { AnswerService, SheetRepository } = await loadApi({ SpreadsheetApp: spreadsheetMock.SpreadsheetApp });
+  SheetRepository.assertManagementSheetsReady = () => {};
+  let recordTokenAccessCalls = 0;
+  SheetRepository.recordTokenAccess = () => {
+    recordTokenAccessCalls += 1;
+    throw new Error('recordTokenAccess should be skipped in the student runtime');
+  };
+  SheetRepository.findAggregateCacheByRosterKey = () => {
+    throw new Error('student initialization should not read aggregate cache');
+  };
+  SheetRepository.readAnswerLogs = () => {
+    throw new Error('readAnswerLogs should not be used during student initialization');
+  };
+  SheetRepository.readAnswerLogsForRosterKey = () => {
+    throw new Error('readAnswerLogsForRosterKey should not be used during student initialization');
+  };
+
+  const session = AnswerService.initializeStudentSession('active-token', { level: 'beginner' });
+
+  assert.equal(session.ok, true);
+  assert.equal(session.student.name, '山田 太郎');
+  assert.equal(session.summary.totalAttempts, 0);
+  assert.equal(session.summary.recent10Accuracy, 0);
+  assert.ok(session.problem.attemptId);
+  assert.equal(recordTokenAccessCalls, 0);
+  assert.equal(spreadsheetMock.setValueCalls.length, 0);
+  assert.equal(spreadsheetMock.setValuesCalls.length, 0);
+});
+
+test('student APIs bypass full management sheet readiness checks while using only runtime sheets', async () => {
+  const spreadsheetMock = createSpreadsheetMock({
+    トークン管理: [
+      ['token', 'courseId', 'courseName', 'rosterKey', 'studentId', '出席番号', '氏名', 'メール', 'studentUrl', 'issuedAt', 'lastAccessedAt', 'revoked', 'note'],
+      ['active-token', 'course-1', '化学A', 'course-1::student-1', 'student-1', '7', '山田 太郎', 'a@example.com', 'https://example.com?t=active-token', '2026-05-20T12:00:00.000Z', '', false, '']
+    ],
+    解答ログ: [
+      ['timestamp', 'attemptId', 'token', 'courseId', 'courseName', 'rosterKey', 'studentId', '出席番号', '氏名', 'level', 'problemType', 'questionText', 'expectedAnswer', 'submittedAnswer', 'normalizedSubmittedAnswer', 'unit', 'isCorrect', 'tolerance', 'significantDigits', 'avogadroConstant', 'requiresRounding', 'explanation', 'elapsedMs', 'clientInfo']
+    ],
+    設定: [
+      ['キー', '値', '説明', '更新日時'],
+      [legacyStudentRouteSettingKeyForTest(), 'false', '', '']
+    ],
+    集計キャッシュ: [
+      ['updatedAt', 'rosterKey', 'totalAttempts']
+    ],
+    問題タイプ別キャッシュ: [
+      ['updatedAt', 'rosterKey', 'level', 'problemType']
+    ]
+  });
+  const { AnswerService, MolProblemService, SheetRepository } = await loadApi({ SpreadsheetApp: spreadsheetMock.SpreadsheetApp });
+  let readinessChecks = 0;
+  SheetRepository.assertManagementSheetsReady = () => {
+    readinessChecks += 1;
+    throw new Error('student API should not run full management sheet readiness checks');
+  };
+  SheetRepository.findAggregateCacheByRosterKey = () => {
+    throw new Error('student API should not read aggregate cache');
+  };
+  SheetRepository.readProblemTypeStatsForRosterKey = () => {
+    throw new Error('student API should not read problem type cache');
+  };
+  const issued = MolProblemService.issueProblemForToken('active-token', { level: 'beginner', problemType: 1 });
+
+  const session = AnswerService.initializeStudentSession('active-token', { level: 'beginner' });
+  const problem = AnswerService.getPracticeProblem('active-token', { level: 'beginner' });
+  const response = AnswerService.submitAnswer({
+    token: 'active-token',
+    problem: issued.publicProblem,
+    submittedAnswer: String(issued.problem.expectedAnswer),
+    skipNextProblem: false
+  });
+
+  assert.equal(session.ok, true);
+  assert.ok(problem.attemptId);
+  assert.equal(response.ok, true);
+  assert.equal(response.nextProblem, null);
+  assert.equal(readinessChecks, 0);
+});
+
+test('initializeStudentSession uses a zero summary and ignores a stale legacy runtime setting row', async () => {
+  const spreadsheetMock = createSpreadsheetMock({
+    設定: [
+      ['キー', '値', '説明', '更新日時'],
+      [legacyStudentRouteSettingKeyForTest(), 'false', '', '']
+    ],
     トークン管理: [
       ['token', 'courseId', 'courseName', 'rosterKey', 'studentId', '出席番号', '氏名', 'メール', 'studentUrl', 'issuedAt', 'lastAccessedAt', 'revoked', 'note'],
       ['active-token', 'course-1', '化学A', 'course-1::student-1', 'student-1', '7', '山田 太郎', 'a@example.com', 'https://example.com?t=active-token', '2026-05-20T12:00:00.000Z', '', false, '']
@@ -3754,7 +6718,10 @@ test('initializeStudentSession reads summary from aggregate cache without scanni
     ]
   });
   const { AnswerService, SheetRepository } = await loadApi({ SpreadsheetApp: spreadsheetMock.SpreadsheetApp });
-  SheetRepository.assertManagementSchemaReady = () => {};
+  SheetRepository.assertManagementSheetsReady = () => {};
+  SheetRepository.findAggregateCacheByRosterKey = () => {
+    throw new Error('student initialization should not read aggregate cache');
+  };
   SheetRepository.readAnswerLogs = () => {
     throw new Error('readAnswerLogs should not be used during student initialization');
   };
@@ -3766,15 +6733,11 @@ test('initializeStudentSession reads summary from aggregate cache without scanni
 
   assert.equal(session.ok, true);
   assert.equal(session.student.name, '山田 太郎');
-  assert.equal(session.summary.totalAttempts, 12);
-  assert.equal(session.summary.recent10Accuracy, 0.8);
-  assert.equal(session.summary.lastLevel, 'advanced');
+  assert.equal(session.summary.totalAttempts, 0);
+  assert.equal(session.summary.recent10Accuracy, 0);
+  assert.equal(session.summary.lastLevel, '');
   assert.ok(session.problem.attemptId);
-  assert.equal(spreadsheetMock.setValueCalls.length, 1);
-  assert.equal(spreadsheetMock.setValueCalls[0].sheetName, 'トークン管理');
-  assert.equal(spreadsheetMock.setValueCalls[0].row, 2);
-  assert.equal(spreadsheetMock.setValueCalls[0].column, 11);
-  assert.match(spreadsheetMock.setValueCalls[0].value, /^\d{4}-\d{2}-\d{2}T/);
+  assert.equal(spreadsheetMock.setValueCalls.length, 0);
   assert.equal(spreadsheetMock.setValuesCalls.length, 0, 'student first access should not rewrite token rows');
   assert.equal(
     spreadsheetMock.rangeCalls.some((call) =>
@@ -3783,6 +6746,56 @@ test('initializeStudentSession reads summary from aggregate cache without scanni
     false,
     'student initialization should not read answer log rows'
   );
+});
+
+test('initializeStudentSession and getPracticeProblem log timing fields and student runtime without raw token', async () => {
+  const messages = [];
+  const spreadsheetMock = createSpreadsheetMock({
+    設定: [
+      ['キー', '値', '説明', '更新日時'],
+      [legacyStudentRouteSettingKeyForTest(), 'true', '', ''],
+      ['ENABLE_ADAPTIVE_PROBLEM_SELECTION', 'true', '', '']
+    ],
+    トークン管理: [
+      ['token', 'courseId', 'courseName', 'rosterKey', 'studentId', '出席番号', '氏名', 'メール', 'studentUrl', 'issuedAt', 'lastAccessedAt', 'revoked', 'note'],
+      ['active-token', 'course-1', '化学A', 'course-1::student-1', 'student-1', '7', '山田 太郎', 'a@example.com', 'https://example.com?t=active-token', '2026-05-20T12:00:00.000Z', '', false, '']
+    ],
+    集計キャッシュ: [
+      ['updatedAt', 'courseId', 'courseName', 'rosterKey', 'studentId', '出席番号', '氏名', 'totalAttempts', 'totalCorrect', 'totalAccuracy', 'recent10Attempts', 'recent10Correct', 'recent10Accuracy'],
+      ['2026-05-21T11:00:00.000Z', 'course-1', '化学A', 'course-1::student-1', 'student-1', '7', '山田 太郎', 2, 1, 0.5, 2, 1, 0.5]
+    ],
+    問題タイプ別キャッシュ: [
+      ['updatedAt', 'courseId', 'courseName', 'rosterKey', 'studentId', '出席番号', '氏名', 'level', 'problemType', 'attempts', 'correct', 'accuracy']
+    ]
+  });
+  const { AnswerService, SheetRepository } = await loadApi({
+    SpreadsheetApp: spreadsheetMock.SpreadsheetApp,
+    Logger: {
+      log: (message) => {
+        messages.push(String(message || ''));
+      }
+    }
+  });
+  SheetRepository.assertManagementSheetsReady = () => {};
+
+  AnswerService.initializeStudentSession('active-token', { level: 'beginner' });
+  AnswerService.getPracticeProblem('active-token', { level: 'intermediate' });
+
+  const output = messages.join('\n');
+  assert.match(output, /initializeStudentSession/);
+  assert.match(output, /getPracticeProblem/);
+  assert.match(output, /mode=student/);
+  assert.match(output, /studentRoute=fast/);
+  assert.match(output, /elapsedMs=\d+/);
+  assert.match(output, /tokenElapsedMs=\d+/);
+  assert.match(output, /tokenCacheReadElapsedMs=\d+/);
+  assert.match(output, /tokenSheetFindElapsedMs=\d+/);
+  assert.match(output, /tokenCacheWriteElapsedMs=\d+/);
+  assert.match(output, /summaryElapsedMs=\d+/);
+  assert.match(output, /accessRecord=skipped_student_runtime/);
+  assert.match(output, /adaptiveElapsedMs=\d+/);
+  assert.match(output, /problemElapsedMs=\d+/);
+  assert.doesNotMatch(output, /active-token/);
 });
 
 test('submit answer response includes display-only explanation html while logs keep plain question text', async () => {
@@ -3927,6 +6940,36 @@ test('teacher preview answer grades and issues the next problem without logs or 
   assert.equal(response.nextProblem.level, 'advanced');
 });
 
+test('teacher preview logs are clearly marked without exposing admin auth token', async () => {
+  const messages = [];
+  const { initializeTeacherPreviewSession, getTeacherPreviewProblem, submitTeacherPreviewAnswer } = await loadApi({
+    PropertiesService: createScriptPropertiesMock({ MOL_DRILL_ADMIN_TOKEN: 'admin-secret' }).PropertiesService,
+    Logger: {
+      log: (message) => {
+        messages.push(String(message || ''));
+      }
+    }
+  });
+
+  const session = initializeTeacherPreviewSession('admin-secret', { level: 'beginner' });
+  const problem = getTeacherPreviewProblem('admin-secret', { level: 'intermediate' });
+  const response = submitTeacherPreviewAnswer('admin-secret', {
+    problem,
+    submittedAnswer: String(problem.expectedAnswer || ''),
+    skipNextProblem: true
+  });
+
+  assert.equal(session.ok, true);
+  assert.equal(response.ok, true);
+  const output = messages.join('\n');
+  assert.match(output, /initializeTeacherPreviewSession/);
+  assert.match(output, /getTeacherPreviewProblem/);
+  assert.match(output, /submitTeacherPreviewAnswer/);
+  assert.match(output, /mode=teacherPreview/);
+  assert.match(output, /elapsedMs=\d+/);
+  assert.doesNotMatch(output, /admin-secret/);
+});
+
 test('getStudentState returns a zero summary when aggregate cache has no matching row', async () => {
   const spreadsheetMock = createSpreadsheetMock({
     トークン管理: [
@@ -3942,9 +6985,12 @@ test('getStudentState returns a zero summary when aggregate cache has no matchin
     ]
   });
   const { AnswerService, SheetRepository } = await loadApi({ SpreadsheetApp: spreadsheetMock.SpreadsheetApp });
-  SheetRepository.assertManagementSchemaReady = () => {};
+  SheetRepository.assertManagementSheetsReady = () => {};
   SheetRepository.readAggregateCache = () => {
     throw new Error('readAggregateCache should not be used for student state');
+  };
+  SheetRepository.findAggregateCacheByRosterKey = () => {
+    throw new Error('findAggregateCacheByRosterKey should not be used for student state');
   };
   SheetRepository.readAnswerLogs = () => {
     throw new Error('readAnswerLogs should not be used for student state');
@@ -3973,7 +7019,7 @@ test('initializeStudentSession keeps the invalid URL message for revoked tokens'
     ]
   });
   const { AnswerService, SheetRepository } = await loadApi({ SpreadsheetApp: spreadsheetMock.SpreadsheetApp });
-  SheetRepository.assertManagementSchemaReady = () => {};
+  SheetRepository.assertManagementSheetsReady = () => {};
 
   assert.throws(
     () => AnswerService.initializeStudentSession('revoked-token', {}),

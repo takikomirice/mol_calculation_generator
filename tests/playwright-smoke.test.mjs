@@ -26,19 +26,18 @@ test('playwright smoke: student screen opens and exposes the answer form only', 
   }
 });
 
-test('playwright smoke: admin screen opens without calling real Classroom APIs', async () => {
+test('playwright smoke: monitor screen opens without write controls', async () => {
   const playwright = await loadPlaywright();
 
   const browser = await playwright.chromium.launch({ headless: true });
   const context = await browser.newContext({ javaScriptEnabled: false });
   const page = await context.newPage();
   try {
-    await page.goto(pathToFileURL(`${process.cwd()}/Admin.html`).href);
-    await assert.doesNotReject(page.locator('#dashboardPanel').waitFor({ timeout: 1500 }));
-    await assert.doesNotReject(page.locator('#summaryBody').waitFor({ timeout: 1500 }));
-    await assert.doesNotReject(page.locator('#setupPanel').waitFor({ state: 'attached', timeout: 1500 }));
-    await assert.doesNotReject(page.locator('#webAppUrlInput').waitFor({ state: 'attached', timeout: 1500 }));
-    await assert.doesNotReject(page.locator('#classroomPanel').waitFor({ state: 'attached', timeout: 1500 }));
+    await page.goto(pathToFileURL(`${process.cwd()}/Monitor.html`).href);
+    await assert.doesNotReject(page.locator('#studentTable').waitFor({ timeout: 1500 }));
+    await assert.doesNotReject(page.locator('#refreshButton').waitFor({ timeout: 1500 }));
+    await assert.doesNotReject(page.locator('#autoRefreshToggle').waitFor({ timeout: 1500 }));
+    assert.equal(await page.locator('form').count(), 0);
   } finally {
     await browser.close();
   }

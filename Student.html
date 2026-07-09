@@ -678,6 +678,12 @@
       selectedLevel: 'beginner',
       problem: null,
       pendingProblem: null,
+      prefetchedProblem: null,
+      prefetchedLevel: '',
+      prefetchLevel: '',
+      prefetchPromise: null,
+      prefetchRequestId: 0,
+      isPrefetching: false,
       startedAt: 0,
       answerLocked: false,
       isInitializing: false,
@@ -812,7 +818,7 @@
     function updateButtonStates() {
       const busy = state.isInitializing || state.isSubmitting;
       elements.submitButton.disabled = busy || !state.problem || state.answerLocked;
-      elements.nextProblemButton.disabled = busy || (!state.pendingProblem && !state.answerLocked);
+      elements.nextProblemButton.disabled = busy || !state.answerLocked;
       elements.answerInput.disabled = busy || !state.problem;
       elements.answerInput.readOnly = state.answerLocked;
       elements.levelButtons.forEach(function (button) {
@@ -847,6 +853,100 @@
         button.classList.toggle('active', selected);
         button.setAttribute('aria-pressed', selected ? 'true' : 'false');
       });
+    }
+
+    function getProblemAttemptId(problem) {
+      return String(problem && problem.attemptId || '').trim();
+    }
+
+    function getProblemLevel(problem) {
+      return String(problem && problem.level || '').trim();
+    }
+
+    function getProblemRequest(level) {
+      const nextLevel = LEVEL_LABELS[level] ? level : state.selectedLevel;
+      const method = state.teacherPreview ? 'getTeacherPreviewProblem' : 'getPracticeProblem';
+      const args = state.teacherPreview
+        ? [state.adminToken, { level: nextLevel }]
+        : [state.token, { level: nextLevel }];
+      return { method: method, args: args, level: nextLevel };
+    }
+
+    function isUsablePrefetchedProblem(problem, level) {
+      const nextLevel = LEVEL_LABELS[level] ? level : state.selectedLevel;
+      const attemptId = getProblemAttemptId(problem);
+      if (!problem || !attemptId || getProblemLevel(problem) !== nextLevel) {
+        return false;
+      }
+      return attemptId !== getProblemAttemptId(state.problem);
+    }
+
+    function hasUsablePrefetchedProblem(level) {
+      return state.prefetchedLevel === (LEVEL_LABELS[level] ? level : state.selectedLevel)
+        && isUsablePrefetchedProblem(state.prefetchedProblem, level);
+    }
+
+    function clearPrefetchedProblem() {
+      state.prefetchedProblem = null;
+      state.prefetchedLevel = '';
+      state.prefetchLevel = '';
+      state.prefetchPromise = null;
+      state.prefetchRequestId += 1;
+      state.isPrefetching = false;
+    }
+
+    function takePrefetchedProblem(level) {
+      if (!hasUsablePrefetchedProblem(level)) {
+        return null;
+      }
+      const problem = state.prefetchedProblem;
+      clearPrefetchedProblem();
+      return problem;
+    }
+
+    function startPrefetchForCurrentLevel() {
+      if (!state.problem || state.answerLocked || state.pendingProblem || state.isPrefetching || hasUsablePrefetchedProblem(state.selectedLevel)) {
+        return null;
+      }
+      const request = getProblemRequest(state.selectedLevel);
+      const method = request.method;
+      const args = request.args;
+      const requestId = state.prefetchRequestId + 1;
+      state.prefetchRequestId = requestId;
+      state.prefetchedProblem = null;
+      state.prefetchedLevel = '';
+      state.isPrefetching = true;
+      state.prefetchLevel = request.level;
+      state.prefetchPromise = runServer(method, args)
+        .then(function (problem) {
+          if (state.prefetchRequestId !== requestId || state.prefetchLevel !== state.selectedLevel || state.answerLocked) {
+            return null;
+          }
+          if (!isUsablePrefetchedProblem(problem, request.level)) {
+            return null;
+          }
+          state.prefetchedProblem = problem;
+          state.prefetchedLevel = request.level;
+          if (window.console && console.info) {
+            console.info('prefetchProblem ready', { level: request.level, attemptId: getProblemAttemptId(problem) });
+          }
+          updateButtonStates();
+          return problem;
+        })
+        .catch(function (error) {
+          if (state.prefetchRequestId === requestId && window.console && console.warn) {
+            console.warn('prefetchProblem failed', error);
+          }
+          return null;
+        })
+        .finally(function () {
+          if (state.prefetchRequestId === requestId) {
+            state.isPrefetching = false;
+            state.prefetchPromise = null;
+            updateButtonStates();
+          }
+        });
+      return state.prefetchPromise;
     }
 
     function hideError() {
@@ -910,7 +1010,7 @@
         return '解答を入力してください。';
       }
       if (!Number.isFinite(normalizeClientNumber(raw))) {
-        return '数値のみで入力してください。例: 2.00、6.0e23、6.0×10^23';
+        return '数値のみで入力してください。例: 2.00、6.0×10^23、6.0x10^23';
       }
       return '';
     }
@@ -933,6 +1033,7 @@
     }
 
     function applyProblem(problem, shouldClearAnswer) {
+      clearPrefetchedProblem();
       state.problem = problem || null;
       state.pendingProblem = null;
       state.answerLocked = false;
@@ -963,6 +1064,7 @@
       setTimeout(function () {
         elements.answerInput.focus();
       }, 0);
+      startPrefetchForCurrentLevel();
     }
 
     async function initialize() {
@@ -1004,10 +1106,10 @@
       setLoading(true, '作成中...');
       try {
         hideError();
-        const method = state.teacherPreview ? 'getTeacherPreviewProblem' : 'getPracticeProblem';
-        const args = state.teacherPreview
-          ? [state.adminToken, { level: state.selectedLevel }]
-          : [state.token, { level: state.selectedLevel }];
+        clearPrefetchedProblem();
+        const request = getProblemRequest(state.selectedLevel);
+        const method = request.method;
+        const args = request.args;
         const problem = await runServer(method, args);
         applyProblem(problem, true);
       } catch (error) {
@@ -1048,23 +1150,28 @@
       setLoading(true, '採点中...');
       try {
         hideError();
+        const submittedProblem = state.problem;
+        const submittedAttemptId = getProblemAttemptId(submittedProblem);
         const request = {
           token: state.token,
-          problem: state.problem,
+          problem: submittedProblem,
           submittedAnswer: elements.answerInput.value,
           elapsedMs: Date.now() - state.startedAt,
           nextLevel: state.selectedLevel,
+          skipNextProblem: hasUsablePrefetchedProblem(state.selectedLevel),
           clientInfo: { userAgent: navigator.userAgent }
         };
         const method = state.teacherPreview ? 'submitTeacherPreviewAnswer' : 'submitAnswer';
         const args = state.teacherPreview ? [state.adminToken, request] : [request];
         const response = await runServer(method, args);
+        if (submittedAttemptId !== getProblemAttemptId(state.problem)) {
+          throw new Error('表示中の問題が更新されました。もう一度送信してください。');
+        }
         const result = response.result || {};
         renderResult(result);
         renderSummary(result);
         state.answerLocked = true;
-        state.pendingProblem = response.nextProblem || null;
-        elements.nextProblemButton.disabled = !state.pendingProblem;
+        state.pendingProblem = takePrefetchedProblem(state.selectedLevel) || response.nextProblem || null;
         setTimeout(function () {
           elements.answerInput.focus();
         }, 0);
@@ -1077,13 +1184,40 @@
     }
 
     function canShowPrefetchedProblem() {
-      return state.answerLocked && !!state.pendingProblem && !state.isSubmitting && !state.isInitializing;
+      return state.answerLocked && !state.isSubmitting && !state.isInitializing;
     }
 
-    function showNextProblem() {
+    async function showNextProblem() {
+      if (!state.answerLocked) {
+        return;
+      }
+      if (state.isSubmitting || state.isInitializing) {
+        return;
+      }
       if (state.pendingProblem) {
         applyProblem(state.pendingProblem, true);
         return;
+      }
+      const prefetchedProblem = takePrefetchedProblem(state.selectedLevel);
+      if (prefetchedProblem) {
+        applyProblem(prefetchedProblem, true);
+        return;
+      }
+      if (state.isPrefetching && state.prefetchLevel === state.selectedLevel && state.prefetchPromise) {
+        state.lastAction = 'fetchProblem';
+        state.isInitializing = true;
+        setLoading(true, '作成中...');
+        try {
+          await state.prefetchPromise;
+          const completedPrefetch = takePrefetchedProblem(state.selectedLevel);
+          if (completedPrefetch) {
+            applyProblem(completedPrefetch, true);
+            return;
+          }
+        } finally {
+          state.isInitializing = false;
+          setLoading(false, '');
+        }
       }
       fetchProblem();
     }
@@ -1112,6 +1246,7 @@
         if (nextLevel === state.selectedLevel) {
           return;
         }
+        clearPrefetchedProblem();
         selectLevel(nextLevel);
         fetchProblem();
       });

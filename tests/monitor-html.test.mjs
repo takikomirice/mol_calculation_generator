@@ -1,0 +1,359 @@
+import assert from 'node:assert/strict';
+import { readFile } from 'node:fs/promises';
+import test from 'node:test';
+
+async function loadMonitorHtml() {
+  return readFile('Monitor.html', 'utf8');
+}
+
+test('monitor screen exposes read-only classroom monitor layout', async () => {
+  const html = await loadMonitorHtml();
+
+  assert.match(html, /もるくえ！ モニター/);
+  assert.match(html, /id="refreshButton"/);
+  assert.match(html, /id="autoRefreshToggle"/);
+  assert.match(html, /id="rebuildMonitorSnapshotButton"/);
+  assert.match(html, /id="rebuildCachesButton"/);
+  assert.match(html, /id="openSpreadsheetButton"/);
+  assert.match(html, /id="downloadCsvButton"/);
+  assert.match(html, /id="lastUpdatedAt"/);
+  assert.match(html, /id="kpiBar"/);
+  assert.match(html, /id="studentTable"/);
+  assert.match(html, /id="studentBody"/);
+  assert.match(html, /id="historyModal"/);
+  assert.match(html, /id="searchInput"/);
+  assert.match(html, /id="courseFilter"/);
+  assert.match(html, /id="statusFilter"/);
+  assert.match(html, /id="viewModeSelect"/);
+  assert.match(html, /id="followOnlyToggle"/);
+  assert.match(html, /id="notStartedOnlyToggle"/);
+  assert.doesNotMatch(html, /id="sortSelect"/);
+
+  for (const label of [
+    '配付済み',
+    'アクセス済み',
+    '解答済み',
+    '未実施',
+    '要フォロー',
+    '総解答',
+    '直近正答率',
+    '自動更新',
+    'モニターだけ更新',
+    '集計から完全更新',
+    '管理スプレッドシートを開く',
+    '表示中一覧CSV',
+    '表示',
+    'Classroom',
+    '番号',
+    '氏名',
+    '状態',
+    '配付',
+    'アクセス',
+    '解答',
+    'レベル別',
+    '最終解答',
+    '要フォロー理由',
+    '履歴'
+  ]) {
+    assert.match(html, new RegExp(label), `${label} should be visible`);
+  }
+
+  assert.match(html, /<thead id="studentHead">/);
+});
+
+test('monitor screen defines compact view modes', async () => {
+  const html = await loadMonitorHtml();
+
+  assert.match(html, /id="viewModeSelect"/);
+  assert.match(html, /<option value="standard" selected>標準<\/option>/);
+  assert.match(html, /<option value="follow">フォロー<\/option>/);
+  assert.match(html, /<option value="detail">詳細<\/option>/);
+  assert.match(html, /<option value="distribution">配付確認<\/option>/);
+  assert.match(html, /const DEFAULT_VIEW_MODE = 'standard'/);
+  assert.match(html, /const VIEW_MODE_COLUMNS = {/);
+  assert.match(html, /standard:\s*\[\s*'number',\s*'name',\s*'status',\s*'attempts',\s*'recentAccuracy',\s*'lastAnsweredAt',\s*'history'\s*\]/);
+  assert.match(html, /follow:\s*\[\s*'number',\s*'name',\s*'status',\s*'followReason',\s*'attempts',\s*'recentAccuracy',\s*'lastAnsweredAt',\s*'history'\s*\]/);
+  assert.match(html, /detail:\s*\[\s*'number',\s*'name',\s*'status',\s*'distribution',\s*'access',\s*'attempts',\s*'recentAccuracy',\s*'levelSummary',\s*'lastAnsweredAt',\s*'history'\s*\]/);
+  assert.match(html, /distribution:\s*\[\s*'courseName',\s*'number',\s*'name',\s*'distribution',\s*'access',\s*'history'\s*\]/);
+  assert.match(html, /elements\.viewModeSelect\.addEventListener\('change',/);
+});
+
+test('monitor screen keeps number and name sticky during horizontal scroll', async () => {
+  const html = await loadMonitorHtml();
+
+  assert.match(html, /\.sticky-number/);
+  assert.match(html, /\.sticky-name/);
+  assert.match(html, /position:\s*sticky/);
+  assert.match(html, /\.sticky-number\s*{[\s\S]*left:\s*0/);
+  assert.match(html, /\.sticky-name\s*{[\s\S]*left:\s*var\(--number-column-width\)/);
+  assert.match(html, /key:\s*'number'[\s\S]*thClass:\s*'sticky-number'[\s\S]*tdClass:\s*'nowrap num sticky-number'/);
+  assert.match(html, /key:\s*'name'[\s\S]*thClass:\s*'sticky-name'[\s\S]*tdClass:\s*'sticky-name'/);
+  assert.doesNotMatch(html, /sticky-course/);
+  const courseNameColumn = html.match(/key:\s*'courseName'[\s\S]*?render:\s*\(row\) => escapeHtml\(row\.courseName \|\| '-'\)/)?.[0] || '';
+  assert.doesNotMatch(courseNameColumn, /sticky/);
+});
+
+test('monitor screen supports sortable table headers', async () => {
+  const html = await loadMonitorHtml();
+
+  assert.match(html, /sortKey:\s*null/);
+  assert.match(html, /state\.sortKey/);
+  assert.match(html, /state\.sortDirection/);
+  assert.match(html, /function handleSortHeaderClick\(sortKey\)/);
+  assert.match(html, /data-sort-key/);
+  assert.match(html, /sort-header/);
+
+  for (const [label, key] of [
+    ['番号', 'number'],
+    ['氏名', 'name'],
+    ['状態', 'status'],
+    ['配付', 'distribution'],
+    ['アクセス', 'access'],
+    ['解答', 'attempts'],
+    ['直近正答率', 'recentAccuracy'],
+    ['最終解答', 'lastAnsweredAt']
+  ]) {
+    assert.match(html, new RegExp(`label:\\s*'${label}'[\\s\\S]*sortKey:\\s*'${key}'`), `${label} should be sortable by ${key}`);
+  }
+
+  assert.match(html, /state\.sortDirection = 'asc'/);
+  assert.match(html, /state\.sortDirection = 'desc'/);
+  assert.match(html, /state\.sortKey = ''/);
+  assert.match(html, /state\.sortDirection = ''/);
+  assert.match(html, /▲/);
+  assert.match(html, /▼/);
+  assert.match(html, /function compareNumberLike\(a, b\)/);
+  assert.match(html, /function compareDateTimeWithEmptyLast\(a, b, direction\)/);
+  assert.match(html, /localeCompare\(String\(b \|\| ''\), 'ja'\)/);
+});
+
+test('monitor screen calls only monitor read APIs through google.script.run', async () => {
+  const html = await loadMonitorHtml();
+
+  assert.match(html, /google\.script\.run/);
+  const serverCalls = Array.from(html.matchAll(/runServer\('([^']+)'/g), (match) => match[1]);
+  assert.deepEqual(new Set(serverCalls), new Set([
+    'getMonitorDashboardData',
+    'getMonitorStudentAnswerHistory',
+    'getMonitorStudentProblemTypeStats',
+    'rebuildMonitorSnapshotFromMonitor',
+    'rebuildAggregateAndMonitorCacheFromMonitor'
+  ]));
+  assert.equal(serverCalls.some((name) => /csv/i.test(name)), false, 'CSV export should not call a server function');
+
+  for (const forbidden of [
+    'refreshClassroomList',
+    'refreshStudentsForCheckedCourses',
+    'issueTokens',
+    'reissueStudentToken',
+    'revokeStudentToken',
+    'distributeStudentUrls',
+    'deleteRequestedClassroomUrlPosts',
+    'deleteLatestClassroomUrlDistribution',
+    'reinitializeSheets',
+    'saveAdminSettings',
+    'saveCourseSyncSelection',
+    'writeDashboardSnapshot',
+    'rebuildAggregateCacheFromMenu',
+    'installAggregateMonitorAutoRefreshTriggerFromMenu',
+    'uninstallAggregateMonitorAutoRefreshTriggerFromMenu',
+    'showAggregateMonitorAutoRefreshStatusFromMenu',
+    'rebuildAggregateAndMonitorCacheForTrigger',
+    'MonitorSnapshotService',
+    'configureWebAppUrlFromMenu',
+    'configureClassroomPostTextFromMenu',
+    'configureDistributionSettingsFromMenu',
+    'configureProblemSettingsFromMenu',
+    'showTeacherPreviewUrlForSelectedTokenRowFromMenu',
+    'reissueSelectedStudentTokenFromMenu',
+    'revokeSelectedStudentTokenFromMenu',
+    'openAdminDialog',
+    'getAdminDashboardOverview',
+    'getAdminLogData',
+    'getAdminDashboardData'
+  ]) {
+    assert.doesNotMatch(html, new RegExp(forbidden), `${forbidden} should not be available on monitor screen`);
+  }
+
+  for (const forbidden of [
+    'analyzeAnswers',
+    'renderAnalytics',
+    'analysisDashboard'
+  ]) {
+    assert.doesNotMatch(html, new RegExp(forbidden, 'i'), `${forbidden} should not be available on monitor screen`);
+  }
+});
+
+test('monitor screen formats levels and problem types for teachers', async () => {
+  const html = await loadMonitorHtml();
+
+  assert.match(html, /function formatLevel\(level\)/);
+  assert.match(html, /beginner:\s*'初級'/);
+  assert.match(html, /intermediate:\s*'中級'/);
+  assert.match(html, /advanced:\s*'上級'/);
+  assert.match(html, /function formatProblemType\(problemType\)/);
+  assert.match(html, /mol_to_mass:\s*'mol→質量'/);
+  assert.match(html, /mass_to_mol:\s*'質量→mol'/);
+  assert.match(html, /'1':\s*'mol→質量'/);
+  assert.match(html, /'14':\s*'質量→モル質量推定'/);
+  assert.match(html, /text\.toLowerCase\(\) === 'undefined'/);
+  assert.match(html, /return labels\[text\] \|\| text \|\| '-'/);
+});
+
+test('monitor screen supports read-only auto refresh without overlapping loads', async () => {
+  const html = await loadMonitorHtml();
+
+  assert.match(html, /id="autoRefreshToggle"/);
+  assert.match(html, /const AUTO_REFRESH_INTERVAL_MS = 60000/);
+  assert.match(html, /setInterval\(refreshFromAutoRefresh, AUTO_REFRESH_INTERVAL_MS\)/);
+  assert.match(html, /if \(state\.loading\) return/);
+  assert.match(html, /window\.addEventListener\('beforeunload', stopAutoRefresh\)/);
+});
+
+test('monitor screen displays snapshot status and logs server and render timings', async () => {
+  const html = await loadMonitorHtml();
+
+  assert.match(html, /snapshotMode/);
+  assert.match(html, /snapshotGeneratedAt/);
+  assert.match(html, /snapshot-missing/);
+  assert.match(html, /モニターキャッシュが未作成です/);
+  assert.match(html, /まず強調表示されている「モニターだけ更新」を押してください。/);
+  assert.match(html, /それでも表示できない場合や、人数・集計が古い場合は「集計から完全更新」を実行してください。/);
+  assert.match(html, /必要に応じて管理スプレッドシートを開いて確認してください。/);
+  assert.match(html, /performance\.now\(\)/);
+  assert.match(html, /console\.log\(\s*'getMonitorDashboardData'/);
+  assert.match(html, /console\.log\(\s*'renderDashboard'/);
+  assert.match(html, /表示データ更新:/);
+});
+
+test('monitor screen highlights the next recommended maintenance action', async () => {
+  const html = await loadMonitorHtml();
+
+  assert.match(html, /fullRebuildRecommended:\s*false/);
+  assert.match(html, /monitorSnapshotRebuildRecommended:\s*false/);
+  assert.match(html, /state\.monitorSnapshotRebuildRecommended = state\.data\.snapshotMissing === true/);
+  assert.match(html, /state\.fullRebuildRecommended = false/);
+  assert.match(html, /elements\.rebuildMonitorSnapshotButton\.classList\.toggle\('attention', state\.monitorSnapshotRebuildRecommended === true\)/);
+  assert.match(html, /elements\.rebuildCachesButton\.classList\.toggle\('attention', state\.fullRebuildRecommended === true\)/);
+  assert.match(html, /state\.fullRebuildRecommended = true/);
+  assert.match(html, /state\.monitorSnapshotRebuildRecommended = false/);
+  assert.match(html, /モニターだけ更新では復旧できませんでした。/);
+  assert.match(html, /強調表示されている「集計から完全更新」を実行してください。/);
+  assert.match(html, /モニターキャッシュを作成できませんでした。「集計から完全更新」を実行してください。/);
+  assert.match(html, /まず「モニターだけ更新」を押してください。それでも人数や集計が古い場合は「集計から完全更新」を実行してください。/);
+});
+
+test('monitor screen provides teacher maintenance controls without exposing other write operations', async () => {
+  const html = await loadMonitorHtml();
+
+  assert.match(html, /id="rebuildMonitorSnapshotButton"/);
+  assert.match(html, /id="rebuildCachesButton"/);
+  assert.match(html, /id="openSpreadsheetButton"/);
+  assert.match(html, /id="downloadCsvButton"/);
+  assert.match(html, /function rebuildMonitorSnapshotFromMonitor\(/);
+  assert.match(html, /function rebuildCachesFromMonitor\(/);
+  assert.match(html, /window\.confirm\(/);
+  assert.match(html, /既存の集計キャッシュを使って、Webモニター表示用キャッシュだけ更新します。通常はこちらを使ってください。実行しますか？/);
+  assert.match(html, /解答ログから集計キャッシュ、問題タイプ別キャッシュ、モニターキャッシュをすべて作り直します。時間がかかることがあります。実行しますか？/);
+  assert.match(html, /runServer\('rebuildMonitorSnapshotFromMonitor'\)/);
+  assert.match(html, /runServer\('rebuildAggregateAndMonitorCacheFromMonitor'\)/);
+  assert.match(html, /state\.maintenanceRunning/);
+  assert.match(html, /更新中\.\.\./);
+  assert.match(html, /loadDashboard\(\)/);
+  assert.match(html, /maintenanceLinks/);
+  assert.match(html, /spreadsheetUrl/);
+  assert.match(html, /window\.open\(url, '_blank', 'noopener'\)/);
+  assert.doesNotMatch(html, /runServer\('rebuildAggregateCacheFromMenu'/);
+  assert.doesNotMatch(html, /runServer\('installAggregateMonitorAutoRefreshTriggerFromMenu'/);
+  assert.doesNotMatch(html, /runServer\('uninstallAggregateMonitorAutoRefreshTriggerFromMenu'/);
+});
+
+test('monitor screen builds visible rows CSV on the client only', async () => {
+  const html = await loadMonitorHtml();
+
+  assert.match(html, /function downloadVisibleRowsCsv\(/);
+  assert.match(html, /const rows = getFilteredRows\(\)/);
+  assert.match(html, /Classroom/);
+  assert.match(html, /出席番号/);
+  assert.match(html, /氏名/);
+  assert.match(html, /状態/);
+  assert.match(html, /配付/);
+  assert.match(html, /アクセス/);
+  assert.match(html, /解答数/);
+  assert.match(html, /直近10問正答率/);
+  assert.match(html, /初級/);
+  assert.match(html, /中級/);
+  assert.match(html, /上級/);
+  assert.match(html, /最終解答/);
+  assert.match(html, /要フォロー理由/);
+  assert.match(html, /'\\ufeff' \+ csvText/);
+  assert.match(html, /new Blob\(/);
+  assert.match(html, /URL\.createObjectURL/);
+  assert.match(html, /const filename = `molque-monitor-\$\{formatCsvTimestamp/);
+  assert.match(html, /window\.open\('', '_blank'\)/);
+  assert.match(html, /escapeCsvValue/);
+  assert.match(html, /replace\(\/"\/g, '""'\)/);
+  assert.doesNotMatch(html, /runServer\('[^']*Csv[^']*'/i);
+});
+
+test('monitor screen has status badge classes for monitor states', async () => {
+  const html = await loadMonitorHtml();
+
+  assert.match(html, /function getStatusBadgeClass\(statusLabel\)/);
+  for (const cssClass of [
+    'status-undistributed',
+    'status-distribution-failed',
+    'status-not-accessed',
+    'status-not-started',
+    'status-follow',
+    'status-speed-drop',
+    'status-active',
+    'status-good',
+    'status-advanced'
+  ]) {
+    assert.match(html, new RegExp(cssClass), `${cssClass} should be defined`);
+  }
+});
+
+test('monitor screen has no left menu or settings form', async () => {
+  const html = await loadMonitorHtml();
+
+  assert.doesNotMatch(html, /side-nav|sidebar|left-menu|nav-button/i);
+  assert.doesNotMatch(html, /<form[\s>]/i);
+  assert.doesNotMatch(html, /設定を保存|URLをClassroomに配付|トークン再発行|無効化|投稿削除|全初期化/);
+});
+
+test('monitor screen keeps level summary in one row and only in detail mode', async () => {
+  const html = await loadMonitorHtml();
+
+  assert.match(html, /function levelSummary\(row\)/);
+  assert.match(html, /\.join\(' \/ '\)/);
+  assert.doesNotMatch(html, /levelSummary\(row\)[\s\S]*<br/i);
+  assert.match(html, /detail:\s*\[[^\]]*'levelSummary'[^\]]*\]/);
+  assert.doesNotMatch(html, /standard:\s*\[[^\]]*'levelSummary'[^\]]*\]/);
+  assert.doesNotMatch(html, /follow:\s*\[[^\]]*'levelSummary'[^\]]*\]/);
+  assert.doesNotMatch(html, /distribution:\s*\[[^\]]*'levelSummary'[^\]]*\]/);
+});
+
+test('monitor documentation explains classroom-oriented monitor controls', async () => {
+  const [readme, operationGuide] = await Promise.all([
+    readFile('README.md', 'utf8'),
+    readFile('運用手順.md', 'utf8')
+  ]);
+  const docs = `${readme}\n${operationGuide}`;
+
+  assert.match(docs, /表示モード/);
+  assert.match(docs, /番号・氏名/);
+  assert.match(docs, /見出しクリック|見出しをクリック/);
+  assert.match(docs, /WebモニターURL.*先生用/);
+  assert.match(docs, /WebモニターURL.*生徒には共有しない/);
+  assert.match(docs, /アクセス範囲.*Webアプリ.*デプロイ設定/);
+  assert.match(docs, /モニターだけ更新/);
+  assert.match(docs, /集計から完全更新/);
+  assert.match(docs, /snapshot-missing[\s\S]*モニターだけ更新/);
+  assert.match(docs, /管理スプレッドシートを開/);
+  assert.match(docs, /表示中一覧CSV/);
+  assert.match(docs, /解答ログ全履歴CSV|分析CSV/);
+  assert.doesNotMatch(docs, new RegExp(['MONITOR', 'ALLOWED', 'EMAILS'].join('_')));
+  assert.doesNotMatch(docs, /Webモニターで分析/);
+});

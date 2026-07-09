@@ -123,7 +123,7 @@ test('token validation accepts active tokens and rejects missing or revoked toke
   assert.throws(() => TokenService.validateTokenAgainstRows('revoked-token', rows), /無効化/);
 });
 
-test('answer log schema contains required fields including attemptId', async () => {
+test('answer log columns contain required fields including attemptId', async () => {
   const { SheetRepository } = await loadApi();
   const answerLog = SheetRepository.getSheetDefinitions().find((definition) => definition.name === '解答ログ');
 
@@ -150,7 +150,7 @@ test('answer log schema contains required fields including attemptId', async () 
   }
 });
 
-test('answer submission appends an attemptId and returns recent ten accuracy', async () => {
+test('answer submission appends an attemptId and returns the always-fast approximate summary', async () => {
   const { SheetRepository, MolProblemService, AnswerService } = await loadApi();
   const tokenRow = {
     token: 'active-token',
@@ -163,27 +163,33 @@ test('answer submission appends an attemptId and returns recent ten accuracy', a
     revoked: false
   };
   const issued = MolProblemService.issueProblemForToken('active-token', { level: 'beginner', problemType: 1 });
-  const existingLogs = Array.from({ length: 9 }, (_, index) => ({
-    timestamp: `2026-05-20T12:0${index}:00.000Z`,
-    rosterKey: tokenRow.rosterKey,
-    isCorrect: index % 2 === 0,
-    level: 'beginner'
-  }));
   let appendedEntry = null;
 
   SheetRepository.findToken = (token) => token === tokenRow.token ? tokenRow : null;
+  SheetRepository.getSettingValue = () => '';
   SheetRepository.withDocumentLock = (callback) => callback();
   SheetRepository.findAnswerLogByAttemptId = () => null;
   SheetRepository.appendAnswerLog = (entry) => {
     appendedEntry = entry;
-    existingLogs.push(entry);
   };
-  SheetRepository.readAnswerLogsForRosterKey = () => existingLogs;
-  SheetRepository.findAggregateCacheByRosterKey = () => null;
-  SheetRepository.readLatestAnswerLogsForRosterKey = () => existingLogs.slice(-10);
-  SheetRepository.upsertAggregateCacheRow = () => {};
-  SheetRepository.findProblemTypeStatsRow = () => null;
-  SheetRepository.upsertProblemTypeStatsRow = () => {};
+  SheetRepository.readAnswerLogsForRosterKey = () => {
+    throw new Error('readAnswerLogsForRosterKey should not run in the student route');
+  };
+  SheetRepository.findAggregateCacheByRosterKey = () => {
+    throw new Error('findAggregateCacheByRosterKey should not run in the student route');
+  };
+  SheetRepository.readLatestAnswerLogsForRosterKey = () => {
+    throw new Error('readLatestAnswerLogsForRosterKey should not run in the student route');
+  };
+  SheetRepository.upsertAggregateCacheRow = () => {
+    throw new Error('upsertAggregateCacheRow should not run in the student route');
+  };
+  SheetRepository.findProblemTypeStatsRow = () => {
+    throw new Error('findProblemTypeStatsRow should not run in the student route');
+  };
+  SheetRepository.upsertProblemTypeStatsRow = () => {
+    throw new Error('upsertProblemTypeStatsRow should not run in the student route');
+  };
 
   const response = AnswerService.submitAnswer({
     token: 'active-token',
@@ -197,7 +203,9 @@ test('answer submission appends an attemptId and returns recent ten accuracy', a
   assert.ok(appendedEntry.attemptId.startsWith('ATT_'));
   assert.equal(appendedEntry.isCorrect, true);
   assert.equal(appendedEntry.normalizedSubmittedAnswer, issued.problem.expectedAnswer);
-  assert.equal(response.result.recent10Attempts, 10);
-  assert.equal(response.result.recent10Correct, 6);
-  assert.equal(response.result.recent10Accuracy, 0.6);
+  assert.equal(response.result.recent10Attempts, 1);
+  assert.equal(response.result.recent10Correct, 1);
+  assert.equal(response.result.recent10Accuracy, 1);
+  assert.equal(response.nextProblem, null);
+  assert.equal(response.deferredSummaryUpdate, true);
 });
