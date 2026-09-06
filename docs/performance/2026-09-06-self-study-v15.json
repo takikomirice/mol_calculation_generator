@@ -1,0 +1,44 @@
+{
+  "schemaVersion": 1,
+  "date": "2026-09-06",
+  "environment": "isolated GAS test project, one Chrome session",
+  "deployments": {
+    "beforeBatchedReads": 14,
+    "afterBatchedReads": 15
+  },
+  "milliseconds": {
+    "initializeWithSummaryCacheRebuild": {
+      "v14": [
+        8662
+      ],
+      "v15": [
+        3216
+      ]
+    },
+    "learningCheck": {
+      "v14": [
+        1144
+      ],
+      "v15": [
+        2423,
+        1216
+      ]
+    },
+    "submitAnswer": {
+      "v14": [
+        5680
+      ],
+      "v15": [
+        5094,
+        3132
+      ]
+    }
+  },
+  "method": "Existing [GAS timing] console entries measure google.script.run request through success callback. No frame/render delay or multi-user load is included.",
+  "limits": [
+    "Small samples; not a p95 or an SLA.",
+    "Initial runs had 14 and 15 historical answers respectively; not a controlled benchmark.",
+    "Some grading requests still exceeded the provisional 5000 ms budget.",
+    "Only an isolated test student and existing isolated teacher fixture were used."
+  ]
+}

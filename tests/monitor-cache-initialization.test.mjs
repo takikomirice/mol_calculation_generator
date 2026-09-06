@@ -50,6 +50,7 @@ globalThis.__api = {
     errors.push({ context, message: error && error.message ? error.message : String(error) });
   };
   api.SheetRepository.appendRunLog = () => {};
+  api.AdminService.getAdminToken = () => 'secret';
   return { api, alerts, errors };
 }
 
@@ -157,7 +158,7 @@ test('monitor snapshot rebuild failure recommends full rebuild except for lock c
   api.AdminService.runLoggedOperation = () => {
     throw new Error('モニターキャッシュを作成できませんでした');
   };
-  const failed = api.rebuildMonitorSnapshotFromMonitor();
+  const failed = api.rebuildMonitorSnapshotFromMonitor('secret');
   assert.equal(failed.ok, false);
   assert.equal(failed.requiresFullRebuild, true);
   assert.equal(failed.recommendedAction, 'full-rebuild');
@@ -166,7 +167,7 @@ test('monitor snapshot rebuild failure recommends full rebuild except for lock c
   api.AdminService.runLoggedOperation = () => {
     throw new Error('別の処理が実行中です。少し待ってから再実行してください。');
   };
-  const locked = api.rebuildMonitorSnapshotFromMonitor();
+  const locked = api.rebuildMonitorSnapshotFromMonitor('secret');
   assert.equal(locked.ok, false);
   assert.equal(locked.requiresFullRebuild, false);
   assert.equal(locked.recommendedAction, 'retry');

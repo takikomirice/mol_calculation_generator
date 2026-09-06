@@ -214,6 +214,13 @@
       box-shadow: 0 1px 0 rgba(16, 24, 40, .03);
     }
 
+    .mode-buttons { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+    .mode-button { min-height: 48px; padding: 10px 6px; border: 1px solid var(--primary); color: var(--primary); background: #fff; font-weight: 800; }
+    .mode-button[aria-pressed="true"] { background: var(--primary); color: #fff; }
+    .auto-current { display: grid; gap: 6px; padding: 12px; border-radius: 8px; background: #eef4ff; }
+    .auto-current strong { font-size: 22px; color: var(--primary); }
+    .auto-current p { margin: 0; }
+
     .level-buttons {
       display: grid;
       grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -391,6 +398,8 @@
       color: var(--danger);
     }
 
+    #categorySelect { width: 100%; min-height: 44px; padding: 8px; font: inherit; border: 1px solid #cbd5e1; border-radius: 8px; background: #fff; color: #18212f; }
+    [hidden] { display: none !important; }
     .answer-summary {
       display: grid;
       grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -538,6 +547,25 @@
         grid-template-columns: 1fr;
       }
     }
+
+    .learning-progress { background: #edf8f3; border: 1px solid #c3e2d3; padding: 14px 18px; border-radius: 18px; margin-bottom: 16px; }
+    .learning-progress-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+    .learning-progress strong { color: #176344; font-size: 24px; }
+    .learning-progress button { border: 1px solid #a5cbb8; border-radius: 12px; background: white; color: #185b41; padding: 10px 12px; font: inherit; font-weight: 700; cursor: pointer; }
+    .learning-progress progress { display: block; width: 100%; height: 14px; margin: 8px 0; accent-color: #27875e; }
+    .learning-progress p { margin: 5px 0 0; font-size: 12px; line-height: 1.6; }
+    .learning-dialog { box-sizing: border-box; width: min(600px, calc(100% - 24px)); max-height: calc(100dvh - 32px); border: 0; border-radius: 20px; padding: 22px; color: #25394a; overflow-y: auto; overflow-wrap: anywhere; box-shadow: 0 20px 70px #18332e40; }
+    .learning-dialog::backdrop { background: #162d4266; }
+    .learning-dialog h2 { margin: 0; font-size: 21px; }
+    .learning-dialog h3 { font-size: 16px; margin-top: 24px; }
+    .learning-dialog .learning-close { border: 1px solid #cbd5e1; background: white; padding: 10px 14px; border-radius: 10px; cursor: pointer; font: inherit; }
+    .learning-advice { padding: 14px; background: #f0f7f4; border-radius: 14px; margin: 16px 0; }
+    .learning-advice p { line-height: 1.7; margin: 8px 0; }
+    .learning-evidence { padding-left: 22px; font-size: 13px; line-height: 1.9; }
+    .learning-dialog details { border-bottom: 1px solid #dbe4e8; padding: 12px 0; }
+    .learning-dialog summary { cursor: pointer; line-height: 1.7; }
+    .learning-dialog details p { white-space: pre-wrap; line-height: 1.7; font-size: 14px; }
+    .learning-dialog button:focus-visible, .learning-dialog summary:focus-visible { outline: 3px solid #21795a; outline-offset: 3px; }
   </style>
 </head>
 <body>
@@ -573,20 +601,48 @@
         <strong class="status-value" id="recentAccuracy">0%</strong>
       </div>
       <div class="status-card">
-        <span class="status-label">現在</span>
-        <strong class="status-value" id="currentLevelLabel">初級</strong>
+        <span class="status-label">現在のレベル</span>
+        <strong class="status-value" id="currentLevelLabel">Lv.1</strong>
       </div>
     </section>
 
-    <section class="card" aria-label="レベル選択">
+    <section class="learning-progress" id="learningProgress" aria-label="正解の積み重ね">
+      <div class="learning-progress-head"><div>これまで <strong id="earnedCorrect">0</strong> 問正解</div><button id="learningCheckButton" type="button" disabled>苦手チェック</button></div>
+      <progress id="correctGauge" max="10" value="0" aria-label="10正解ごとのゲージ"></progress>
+      <p id="gaugeMessage" role="status" aria-live="polite">正解するたびに1つずつ。間違えても減りません。</p>
+    </section>
+
+    <section class="card" aria-label="練習モード">
+      <span class="section-label">練習モード</span>
+      <div class="mode-buttons" role="group" aria-label="練習モードの切り替え">
+        <button id="manualModeButton" class="mode-button" type="button" aria-pressed="true">マニュアル</button>
+        <button id="autoModeButton" class="mode-button" type="button" aria-pressed="false">オートレベリング</button>
+      </div>
+      <p id="practiceModeHelp" class="helper">マニュアルでは、Lv.1〜Lv.6と練習する変換を選べます。</p>
+      <div id="autoPracticeDetails" class="auto-current" role="status" aria-live="polite" hidden>
+        <span class="status-label">オートレベリング中・現在のレベル</span>
+        <strong id="autoPracticeLevel">確認中…</strong>
+        <span id="autoPracticeFocus"></span>
+        <p id="autoPracticeMessage" class="helper"></p>
+      </div>
+    </section>
+    <section class="card" id="manualLevelPanel" aria-label="レベル選択">
       <span class="section-label">レベル選択</span>
       <div class="level-buttons" id="levelButtons" role="group" aria-label="問題レベル">
-        <button class="level-button active" type="button" data-level="beginner" aria-pressed="true"><span class="level-name">初級</span><span class="level-copy">まずは変換に慣れよう</span></button>
-        <button class="level-button" type="button" data-level="intermediate" aria-pressed="false"><span class="level-name">中級</span><span class="level-copy">少し手順が増える問題に挑戦</span></button>
-        <button class="level-button" type="button" data-level="advanced" aria-pressed="false"><span class="level-name">上級</span><span class="level-copy">有効数字3桁で仕上げよう</span></button>
+        <button class="level-button active" type="button" data-level="lv1" aria-pressed="true"><span class="level-name">Lv.1</span><span class="level-copy">molと1種類の変換</span></button>
+        <button class="level-button" type="button" data-level="lv2" aria-pressed="false"><span class="level-name">Lv.2</span><span class="level-copy">molとの変換・ランダム</span></button>
+        <button class="level-button" type="button" data-level="lv3" aria-pressed="false"><span class="level-name">Lv.3</span><span class="level-copy">molを経由する1種類の変換</span></button>
+        <button class="level-button" type="button" data-level="lv4" aria-pressed="false"><span class="level-name">Lv.4</span><span class="level-copy">molを経由・ランダム</span></button>
+        <button class="level-button" type="button" data-level="lv5" aria-pressed="false"><span class="level-name">Lv.5</span><span class="level-copy">Lv.2＋有効数字3桁</span></button>
+        <button class="level-button" type="button" data-level="lv6" aria-pressed="false"><span class="level-name">Lv.6</span><span class="level-copy">Lv.4＋有効数字3桁</span></button>
       </div>
     </section>
 
+    <section class="card" id="categoryPanel" aria-label="変換の選択">
+      <label for="categorySelect">練習する変換</label>
+      <select id="categorySelect" aria-label="練習する変換"></select>
+      <p class="helper">選んだ2つの量の間で、往復の変換を練習します。</p>
+    </section>
     <section class="card" aria-label="問題">
       <div class="card-head">
         <span class="section-label">問題</span>
@@ -613,13 +669,12 @@
         <span class="unit-box" id="unitBox">-</span>
       </div>
       <button class="primary-button" id="submitButton" type="button" disabled>解答する</button>
-      <button class="secondary-button" id="nextProblemButton" type="button" disabled>次の問題</button>
     </section>
 
     <section class="card result-panel hidden" id="resultPanel" aria-live="polite" aria-label="結果表示">
       <div class="result-heading">
         <span class="result-mark" id="resultMark">○</span>
-        <h2 class="result-title" id="resultTitle">正解: できた！</h2>
+        <h2 class="result-title" id="resultTitle" tabindex="-1">正解: できた！</h2>
       </div>
       <div class="answer-summary">
         <div class="answer-summary-item">
@@ -633,6 +688,8 @@
       </div>
       <p class="explanation" id="explanationText">解説を表示します。</p>
       <p class="rounding-note" id="roundingNoteText">正答と解説を見て確認しましょう。</p>
+      <p class="helper" id="resultProgress"></p>
+      <button class="secondary-button" id="nextProblemButton" type="button" disabled>次の問題</button>
     </section>
 
     <section class="card error-panel hidden" id="errorPanel" aria-live="assertive" data-error-types="token不正 通信失敗 入力不正">
@@ -643,14 +700,33 @@
     </section>
   </main>
 
+
+  <dialog id="learningDialog" class="learning-dialog" aria-labelledby="learningTitle">
+    <div class="learning-progress-head"><h2 id="learningTitle">苦手チェック</h2><button id="learningClose" class="learning-close" type="button" autofocus>閉じる</button></div>
+    <p class="helper">自分の解答から、次の一歩を見つけよう。</p>
+    <p id="learningStatus" role="status" aria-live="polite"></p>
+    <button id="learningRetry" class="secondary-button" type="button" hidden>もう一度読み込む</button>
+    <div id="learningContent" hidden>
+      <div class="learning-advice"><strong id="learningMessage"></strong><p id="learningEvidence"></p><p id="learningTip"></p></div>
+      <button id="learningPractice" class="primary-button" type="button" hidden>この練習を試す</button>
+      <p class="helper">選ぶとマニュアルに切り替えて問題を入れ替えます。オートへもいつでも戻れます。</p>
+      <details><summary id="learningCoverage">変換ごとの記録を見る</summary><p class="helper">選択中のレベル・各方向の直近5問です。記録が少ないところは、まだ確認中です。</p><ul id="learningRows" class="learning-evidence"></ul></details>
+      <h3>最近間違えた問題</h3><p class="helper">全レベルから新しい順に最大5問。問題を開くと、自分の解答と解説を確認できます。</p>
+      <div id="learningMistakes"></div>
+    </div>
+  </dialog>
+
   <script>
-    const initialToken = <?!= JSON.stringify(typeof initialToken === 'undefined' ? '' : initialToken) ?>;
+    const initialToken = <?!= JSON.stringify(typeof initialToken === 'undefined' ? '' : initialToken).replace(/</g, '\\u003c') ?>;
     const initialAdminToken = <?!= JSON.stringify(typeof initialAdminToken === 'undefined' ? '' : initialAdminToken) ?>;
     const initialTeacherPreview = <?!= JSON.stringify(typeof initialTeacherPreview === 'undefined' ? false : initialTeacherPreview) ?>;
     const LEVEL_LABELS = {
-      beginner: '初級',
-      intermediate: '中級',
-      advanced: '上級'
+      lv1: 'Lv.1',
+      lv2: 'Lv.2',
+      lv3: 'Lv.3',
+      lv4: 'Lv.4',
+      lv5: 'Lv.5',
+      lv6: 'Lv.6'
     };
     const DEFAULT_ROUNDING_NOTE = '単位は入力せず、数値だけ入力してください。';
     const RESULT_COPY = {
@@ -659,8 +735,8 @@
         'ばっちり合っています！',
         'いい感じ！',
         'その調子！',
-        'いいですね！式の立て方も合っています！',
-        'いい感じです！単位までよく見られています！'
+        'いいですね！答えが合っています！',
+        'いい感じです！この問題は正解です！'
       ],
       incorrect: [
         'もう一歩！',
@@ -675,7 +751,10 @@
       token: (params.get('t') || params.get('token') || initialToken || '').trim(),
       adminToken: (initialAdminToken || '').trim(),
       teacherPreview: initialTeacherPreview === true || params.get('preview') === 'teacher' || params.get('teacherPreview') === '1',
-      selectedLevel: 'beginner',
+      practiceMode: 'manual',
+      manualSelection: {level:'lv1', category:'mol_mass'},
+      selectedLevel: 'lv1',
+      selectedCategory: 'mol_mass',
       problem: null,
       pendingProblem: null,
       prefetchedProblem: null,
@@ -688,10 +767,31 @@
       answerLocked: false,
       isInitializing: false,
       isSubmitting: false,
-      lastAction: null
+      lastAction: null,
+      lastTotalCorrect: null,
+      learningRequestId: 0,
+      learningTarget: null
     };
 
     const elements = {
+      learningProgress: document.getElementById('learningProgress'),
+      learningCheckButton: document.getElementById('learningCheckButton'),
+      earnedCorrect: document.getElementById('earnedCorrect'),
+      correctGauge: document.getElementById('correctGauge'),
+      gaugeMessage: document.getElementById('gaugeMessage'),
+      learningDialog: document.getElementById('learningDialog'),
+      learningClose: document.getElementById('learningClose'),
+      learningStatus: document.getElementById('learningStatus'),
+      learningRetry: document.getElementById('learningRetry'),
+      learningContent: document.getElementById('learningContent'),
+      learningMessage: document.getElementById('learningMessage'),
+      learningEvidence: document.getElementById('learningEvidence'),
+      learningTip: document.getElementById('learningTip'),
+      learningPractice: document.getElementById('learningPractice'),
+      learningCoverage: document.getElementById('learningCoverage'),
+      learningRows: document.getElementById('learningRows'),
+      learningMistakes: document.getElementById('learningMistakes'),
+
       appRoot: document.getElementById('appRoot'),
       loadingText: document.getElementById('loadingText'),
       teacherPreviewBanner: document.getElementById('teacherPreviewBanner'),
@@ -701,6 +801,16 @@
       totalAttempts: document.getElementById('totalAttempts'),
       recentAccuracy: document.getElementById('recentAccuracy'),
       currentLevelLabel: document.getElementById('currentLevelLabel'),
+      manualModeButton: document.getElementById('manualModeButton'),
+      autoModeButton: document.getElementById('autoModeButton'),
+      practiceModeHelp: document.getElementById('practiceModeHelp'),
+      autoPracticeDetails: document.getElementById('autoPracticeDetails'),
+      autoPracticeLevel: document.getElementById('autoPracticeLevel'),
+      autoPracticeFocus: document.getElementById('autoPracticeFocus'),
+      autoPracticeMessage: document.getElementById('autoPracticeMessage'),
+      manualLevelPanel: document.getElementById('manualLevelPanel'),
+      categoryPanel: document.getElementById('categoryPanel'),
+      categorySelect: document.getElementById('categorySelect'),
       levelButtons: Array.prototype.slice.call(document.querySelectorAll('[data-level]')),
       questionText: document.getElementById('questionText'),
       inputHintText: document.getElementById('inputHintText'),
@@ -715,6 +825,7 @@
       resultPanel: document.getElementById('resultPanel'),
       resultMark: document.getElementById('resultMark'),
       resultTitle: document.getElementById('resultTitle'),
+      resultProgress: document.getElementById('resultProgress'),
       expectedAnswerText: document.getElementById('expectedAnswerText'),
       submittedAnswerText: document.getElementById('submittedAnswerText'),
       explanationText: document.getElementById('explanationText'),
@@ -726,9 +837,14 @@
     };
 
     function runServer(method, args) {
+      const startedAt = Date.now();
       return new Promise(function (resolve, reject) {
         const runner = google.script.run
-          .withSuccessHandler(resolve)
+          .withSuccessHandler(function (result) {
+            console.info('[GAS timing] ' + method + ': ' + (Date.now() - startedAt) + ' ms');
+            if (result && result.performance) console.info('[GAS stages] ' + method + ': ' + JSON.stringify(result.performance));
+            resolve(result);
+          })
           .withFailureHandler(reject);
         runner[method].apply(runner, args || []);
       });
@@ -769,7 +885,7 @@
     }
 
     function hasSignificantDigitContext(data) {
-      return data.level === 'advanced' && (data.requiresRounding === true || Number(data.significantDigits || 0) >= 3);
+      return ['lv5', 'lv6', 'advanced'].includes(data.level) && (data.requiresRounding === true || Number(data.significantDigits || 0) >= 3);
     }
 
     function buildResultTitle(data, correct) {
@@ -786,13 +902,12 @@
         }
         return '正解: ' + pickCopy(RESULT_COPY.correct);
       }
-      if (hasSignificantDigitContext(data)) {
-        return '不正解: 惜しい！有効数字を確認してみよう！';
-      }
+      if (data.acceptedAnswerType === 'precision') return '数値は合っています。有効数字を3桁にしよう';
       return '不正解: ' + pickCopy(RESULT_COPY.incorrect);
     }
 
     function buildRoundingNote(data, correct) {
+      if (data.acceptedAnswerType === 'precision') return '末尾の0も桁数に含めます。例: 1.20、6.00×10^23。';
       if (correct && data.acceptedAnswerType === 'rounded' && data.exactAnswerText) {
         return '正解。ただし正確な値は ' + data.exactAnswerText + ' です。';
       }
@@ -813,10 +928,15 @@
 
     function renderTeacherPreviewMode() {
       elements.teacherPreviewBanner.classList.toggle('hidden', !state.teacherPreview);
+      elements.learningProgress.hidden = state.teacherPreview;
     }
 
     function updateButtonStates() {
       const busy = state.isInitializing || state.isSubmitting;
+      elements.learningCheckButton.disabled = busy || state.teacherPreview || state.lastTotalCorrect === null;
+      elements.manualModeButton.disabled = busy;
+      elements.autoModeButton.disabled = busy || state.teacherPreview;
+      elements.categorySelect.disabled = busy;
       elements.submitButton.disabled = busy || !state.problem || state.answerLocked;
       elements.nextProblemButton.disabled = busy || !state.answerLocked;
       elements.answerInput.disabled = busy || !state.problem;
@@ -843,16 +963,43 @@
       const data = summary || {};
       elements.totalAttempts.textContent = String(Number(data.totalAttempts || 0));
       elements.recentAccuracy.textContent = formatRate(data.recent10Accuracy || 0);
+      const correct=Math.max(0,Number(data.totalCorrect || 0));
+      const gained=state.lastTotalCorrect !== null && correct > state.lastTotalCorrect;
+      const progress=correct === 0 ? 0 : (correct-1)%10+1;
+      elements.earnedCorrect.textContent=String(correct);
+      elements.correctGauge.setAttribute('value',String(progress));
+      elements.correctGauge.setAttribute('aria-valuetext','累計'+correct+'問正解。10問ごとの区切りまで'+progress+' / 10');
+      elements.gaugeMessage.textContent=correct>0 && correct%10===0
+        ? (gained?'10正解の区切り達成！ ':'')+'これまで'+Math.floor(correct/10)+'個の区切り。次も自分のペースでどうぞ。'
+        : (gained?'正解を1つ積み重ねました。 ':'')+'次の区切りまであと'+(10-progress)+'正解。間違えても、途中で終わっても、累計は減りません。';
+      elements.resultProgress.textContent='これまでの正解：'+correct+'問。自分のペースで続けよう。';
+      state.lastTotalCorrect=correct;
     }
 
     function selectLevel(level) {
-      state.selectedLevel = LEVEL_LABELS[level] ? level : 'beginner';
+      state.selectedLevel = LEVEL_LABELS[level] ? level : 'lv1';
       elements.currentLevelLabel.textContent = LEVEL_LABELS[state.selectedLevel];
+      renderCategoryOptions();
       elements.levelButtons.forEach(function (button) {
         const selected = button.dataset.level === state.selectedLevel;
         button.classList.toggle('active', selected);
         button.setAttribute('aria-pressed', selected ? 'true' : 'false');
       });
+    }
+
+    function renderCategoryOptions() {
+      const groups = state.selectedLevel === 'lv3'
+        ? { mass_particles: '質量 ⇔ 個数', mass_volume: '質量 ⇔ 体積', volume_particles: '体積 ⇔ 個数' }
+        : { mol_mass: 'mol ⇔ 質量', mol_particles: 'mol ⇔ 個数', mol_volume: 'mol ⇔ 体積' };
+      const focused = ['lv1', 'lv3'].includes(state.selectedLevel);
+      if (!groups[state.selectedCategory]) state.selectedCategory = Object.keys(groups)[0];
+      elements.categoryPanel.hidden = !focused || state.practiceMode === 'auto';
+      elements.categorySelect.replaceChildren();
+      Object.keys(groups).forEach(function(key) {
+        const option = document.createElement('option'); option.value = key; option.textContent = groups[key];
+        elements.categorySelect.appendChild(option);
+      });
+      elements.categorySelect.value = state.selectedCategory;
     }
 
     function getProblemAttemptId(problem) {
@@ -867,8 +1014,8 @@
       const nextLevel = LEVEL_LABELS[level] ? level : state.selectedLevel;
       const method = state.teacherPreview ? 'getTeacherPreviewProblem' : 'getPracticeProblem';
       const args = state.teacherPreview
-        ? [state.adminToken, { level: nextLevel }]
-        : [state.token, { level: nextLevel }];
+        ? [state.adminToken, { level: nextLevel, category: state.selectedCategory }]
+        : [state.token, { level: nextLevel, category: state.selectedCategory, practiceMode: state.practiceMode }];
       return { method: method, args: args, level: nextLevel };
     }
 
@@ -878,6 +1025,7 @@
       if (!problem || !attemptId || getProblemLevel(problem) !== nextLevel) {
         return false;
       }
+      if (['lv1', 'lv3'].includes(nextLevel) && problem.category !== state.selectedCategory) return false;
       return attemptId !== getProblemAttemptId(state.problem);
     }
 
@@ -905,7 +1053,7 @@
     }
 
     function startPrefetchForCurrentLevel() {
-      if (!state.problem || state.answerLocked || state.pendingProblem || state.isPrefetching || hasUsablePrefetchedProblem(state.selectedLevel)) {
+      if (state.practiceMode === 'auto' || !state.problem || state.answerLocked || state.pendingProblem || state.isPrefetching || hasUsablePrefetchedProblem(state.selectedLevel)) {
         return null;
       }
       const request = getProblemRequest(state.selectedLevel);
@@ -919,7 +1067,7 @@
       state.prefetchLevel = request.level;
       state.prefetchPromise = runServer(method, args)
         .then(function (problem) {
-          if (state.prefetchRequestId !== requestId || state.prefetchLevel !== state.selectedLevel || state.answerLocked) {
+          if (state.prefetchRequestId !== requestId || state.prefetchLevel !== state.selectedLevel) {
             return null;
           }
           if (!isUsablePrefetchedProblem(problem, request.level)) {
@@ -1009,7 +1157,9 @@
       if (raw === '') {
         return '解答を入力してください。';
       }
-      if (!Number.isFinite(normalizeClientNumber(raw))) {
+      const normalized = raw.normalize('NFKC').replace(/×/g, 'x').replace(/\s+/g, '');
+      const validSyntax = /^[+]?(?:\d+(?:\.\d*)?|\.\d+)(?:(?:e|[x*]10\^)[+-]?\d+)?$/i.test(normalized);
+      if (!validSyntax || !Number.isFinite(normalizeClientNumber(normalized))) {
         return '数値のみで入力してください。例: 2.00、6.0×10^23、6.0x10^23';
       }
       return '';
@@ -1017,8 +1167,9 @@
 
     function showError(kind, error, retryAction) {
       const message = error && error.message ? error.message : String(error || '');
-      const isTokenError = kind === 'token' || /token|無効なURL|URLを確認|見つかりません/i.test(message);
-      const title = isTokenError ? 'token不正' : kind === 'input' ? '入力不正' : '通信失敗';
+      const needsNewProblem = /新しい問題を取得してください/.test(message);
+      const isTokenError = kind === 'token' || /token|無効なURL|URLを確認/i.test(message);
+      const title = isTokenError ? 'URLを確認してください' : kind === 'input' ? '入力不正' : '通信失敗';
       const detail = isTokenError
         ? 'URLを確認できませんでした。先生から配付された本人用URLを開き直してください。'
         : kind === 'input'
@@ -1027,8 +1178,8 @@
 
       elements.errorTitle.textContent = title;
       elements.errorMessage.textContent = detail;
-      elements.retryButton.textContent = kind === 'input' ? '入力へ戻る' : '再試行';
-      elements.retryButton.dataset.retryAction = retryAction || (kind === 'input' ? 'focusInput' : state.lastAction || 'initialize');
+      elements.retryButton.textContent = needsNewProblem ? '新しい問題' : kind === 'input' ? '入力へ戻る' : '再試行';
+      elements.retryButton.dataset.retryAction = needsNewProblem ? 'fetchProblem' : retryAction || (kind === 'input' ? 'focusInput' : state.lastAction || 'initialize');
       elements.errorPanel.classList.remove('hidden');
     }
 
@@ -1051,7 +1202,9 @@
         return;
       }
 
+      if (state.problem.category) state.selectedCategory = state.problem.category;
       selectLevel(state.problem.level || state.selectedLevel);
+      renderPracticeMode(state.problem.learningPlan);
       renderServerHtmlOrText(elements.questionText, state.problem.questionHtml, state.problem.questionText, '問題文を取得できませんでした。');
       elements.inputHintText.textContent = state.problem.inputHint || '数値のみを入力してください。';
       renderGivenValues(state.problem);
@@ -1086,8 +1239,8 @@
         hideError();
         const method = state.teacherPreview ? 'initializeTeacherPreviewSession' : 'initializeStudentSession';
         const args = state.teacherPreview
-          ? [state.adminToken, { level: state.selectedLevel, studentToken: state.token }]
-          : [state.token, { level: state.selectedLevel }];
+          ? [state.adminToken, { level: state.selectedLevel, category: state.selectedCategory, studentToken: state.token }]
+          : [state.token, { level: state.selectedLevel, category: state.selectedCategory, practiceMode: state.practiceMode }];
         const result = await runServer(method, args);
         renderStudent(result.student);
         renderSummary(result.summary);
@@ -1134,7 +1287,7 @@
     }
 
     async function submitAnswer() {
-      if (!state.problem || state.isSubmitting) {
+      if (!state.problem || state.isSubmitting || state.isInitializing || state.answerLocked) {
         return;
       }
 
@@ -1158,7 +1311,8 @@
           submittedAnswer: elements.answerInput.value,
           elapsedMs: Date.now() - state.startedAt,
           nextLevel: state.selectedLevel,
-          skipNextProblem: hasUsablePrefetchedProblem(state.selectedLevel),
+          category: state.selectedCategory,
+          skipNextProblem: state.practiceMode !== 'auto' && hasUsablePrefetchedProblem(state.selectedLevel),
           clientInfo: { userAgent: navigator.userAgent }
         };
         const method = state.teacherPreview ? 'submitTeacherPreviewAnswer' : 'submitAnswer';
@@ -1171,9 +1325,11 @@
         renderResult(result);
         renderSummary(result);
         state.answerLocked = true;
-        state.pendingProblem = takePrefetchedProblem(state.selectedLevel) || response.nextProblem || null;
+        state.pendingProblem = state.practiceMode === 'auto' ? response.nextProblem || null : takePrefetchedProblem(state.selectedLevel) || response.nextProblem || null;
         setTimeout(function () {
-          elements.answerInput.focus();
+          elements.answerInput.blur();
+          elements.resultTitle.focus({preventScroll:true});
+          elements.resultPanel.scrollIntoView({block:'start',behavior:'auto'});
         }, 0);
       } catch (error) {
         showError('network', error, 'submitAnswer');
@@ -1222,6 +1378,72 @@
       fetchProblem();
     }
 
+
+    function closeLearningCheck() {
+      state.learningRequestId+=1;
+      state.learningTarget=null;
+      elements.learningCheckButton.focus();
+    }
+    async function openLearningCheck() {
+      if(state.teacherPreview || state.isInitializing || state.isSubmitting) return;
+      if(!elements.learningDialog.open) elements.learningDialog.showModal();
+      const id=++state.learningRequestId;
+      state.learningTarget=null;
+      elements.learningContent.hidden=true;
+      elements.learningPractice.hidden=true;
+      elements.learningRetry.hidden=true;
+      elements.learningStatus.textContent='記録を確認しています…';
+      try {
+        const check=await runServer('getStudentLearningCheck',[state.token,{level:state.selectedLevel}]);
+        if(id!==state.learningRequestId || !elements.learningDialog.open) return;
+        elements.learningStatus.textContent=LEVEL_LABELS[check.level]+'の記録から提案しています。';
+        elements.learningMessage.textContent=check.advice.message;
+        elements.learningEvidence.textContent=check.advice.evidence;
+        elements.learningTip.textContent=check.advice.tip;
+        state.learningTarget=check.advice.target;
+        elements.learningPractice.textContent=LEVEL_LABELS[check.advice.target.level]+'でこの練習を試す';
+        elements.learningCoverage.textContent='変換ごとの記録を見る（直近5問中4問以上正解：'+check.coverage.confirmed+' / 6方向）';
+        elements.learningRows.replaceChildren();
+        check.rows.forEach(function(row) {
+          const item=document.createElement('li');
+          item.textContent=row.label+'：'+(row.recentAttempts ? row.recentCorrect+' / '+row.recentAttempts+'問正解' : 'これから')+(row.confirmed?' ・いい感じ！':'');
+          elements.learningRows.appendChild(item);
+        });
+        elements.learningMistakes.replaceChildren();
+        if(!check.mistakes.length) elements.learningMistakes.textContent='間違えた問題の記録はまだありません。';
+        check.mistakes.forEach(function(row) {
+          const detail=document.createElement('details');const title=document.createElement('summary');
+          title.textContent=(LEVEL_LABELS[row.level] || row.level)+' · '+row.questionText;
+          detail.appendChild(title);
+          const lines=['自分の解答：'+row.submittedAnswer+' '+row.unit,'正答：'+row.expectedAnswerText];
+          if(row.acceptedAnswerType==='precision') lines.push('数値は合っています。有効数字3桁を確認しよう。');
+          lines.push('解説：'+(row.explanation || '記録なし'));
+          if(row.timestamp) lines.push('解答日時：'+new Date(row.timestamp).toLocaleString('ja-JP'));
+          lines.forEach(function(text) {const p=document.createElement('p');p.textContent=text;detail.appendChild(p);});
+          elements.learningMistakes.appendChild(detail);
+        });
+        elements.learningPractice.hidden=false;
+        elements.learningContent.hidden=false;
+      } catch(error) {
+        if(id!==state.learningRequestId || !elements.learningDialog.open) return;
+        elements.learningStatus.textContent='記録を読み込めませんでした。もう一度試すか、閉じて学習を続けられます。';
+        elements.learningRetry.hidden=false;
+      }
+    }
+    function practiceLearningSuggestion() {
+      const target=state.learningTarget;
+      if(!target || state.isInitializing || state.isSubmitting) return;
+      state.practiceMode='manual';
+      state.selectedCategory=target.category;
+      selectLevel(target.level);
+      savePracticePreferences();
+      elements.learningDialog.close();
+      clearPrefetchedProblem();
+      applyProblem(null);
+      renderPracticeMode();
+      fetchProblem();
+    }
+
     function retryLastAction() {
       const action = elements.retryButton.dataset.retryAction;
       if (action === 'focusInput') {
@@ -1240,6 +1462,55 @@
       initialize();
     }
 
+    function savePracticePreferences() {
+      if(state.teacherPreview) return;
+      if(state.practiceMode==='manual') state.manualSelection={level:state.selectedLevel,category:state.selectedCategory};
+      try {
+        localStorage.setItem('molPracticeMode',state.practiceMode);
+        localStorage.setItem('molManualSelection',JSON.stringify(state.manualSelection));
+      } catch(_) {}
+    }
+    function renderPracticeMode(plan) {
+      const automatic=state.practiceMode==='auto';
+      elements.manualModeButton.setAttribute('aria-pressed',String(!automatic));
+      elements.autoModeButton.setAttribute('aria-pressed',String(automatic));
+      elements.manualLevelPanel.hidden=automatic;
+      elements.autoPracticeDetails.hidden=!automatic;
+      elements.practiceModeHelp.textContent=state.teacherPreview ? 'マニュアルで確認できます。オートレベリングは、履歴を記録する生徒画面で利用できます。'
+        : automatic ? '解答に合わせてレベルと変換を調整します。マニュアルへはいつでも戻せます。切り替えると問題が変わります。'
+        : 'Lv.1〜Lv.6を自分で選べます。Lv.1・Lv.3では変換も選べます。モードを切り替えると問題が変わります。';
+      const active=automatic && state.problem && plan && plan.mode==='auto';
+      elements.autoPracticeLevel.textContent=active ? LEVEL_LABELS[state.problem.level] || '確認中…' : '確認中…';
+      elements.autoPracticeFocus.textContent=active ? plan.focusLabel || '' : '';
+      elements.autoPracticeMessage.textContent=active ? plan.message || '' : '解答履歴に合わせて、次の練習を選んでいます。';
+      renderCategoryOptions();
+    }
+    function changePracticeMode(mode) {
+      if(state.isInitializing || state.isSubmitting || state.practiceMode===mode || (state.teacherPreview && mode==='auto')) return;
+      savePracticePreferences();
+      state.practiceMode=mode;
+      if(mode==='manual') {
+        state.selectedCategory=state.manualSelection.category;
+        selectLevel(state.manualSelection.level);
+      }
+      savePracticePreferences();
+      clearPrefetchedProblem();
+      applyProblem(null,true);
+      renderPracticeMode();
+      fetchProblem();
+    }
+    elements.manualModeButton.addEventListener('click',()=>changePracticeMode('manual'));
+    elements.autoModeButton.addEventListener('click',()=>changePracticeMode('auto'));
+    try {
+      const manual=JSON.parse(localStorage.getItem('molManualSelection') || 'null');
+      if(manual && LEVEL_LABELS[manual.level]) {
+        state.manualSelection={level:manual.level,category:typeof manual.category==='string' ? manual.category : 'mol_mass'};
+        state.selectedLevel=manual.level;state.selectedCategory=state.manualSelection.category;
+      }
+      if(!state.teacherPreview && localStorage.getItem('molPracticeMode')==='auto') state.practiceMode='auto';
+    } catch(_) {}
+    renderPracticeMode();
+
     elements.levelButtons.forEach(function (button) {
       button.addEventListener('click', function () {
         const nextLevel = button.dataset.level;
@@ -1248,11 +1519,26 @@
         }
         clearPrefetchedProblem();
         selectLevel(nextLevel);
+        savePracticePreferences();
         fetchProblem();
       });
     });
+    elements.categorySelect.addEventListener('change', function () {
+      state.selectedCategory = elements.categorySelect.value;
+      savePracticePreferences();
+      clearPrefetchedProblem();
+      fetchProblem();
+    });
+    elements.learningCheckButton.addEventListener('click',openLearningCheck);
+    elements.learningRetry.addEventListener('click',openLearningCheck);
+    elements.learningClose.addEventListener('click',function(){ elements.learningDialog.close(); });
+    elements.learningDialog.addEventListener('close',closeLearningCheck);
+    elements.learningPractice.addEventListener('click',practiceLearningSuggestion);
     elements.submitButton.addEventListener('click', submitAnswer);
     elements.nextProblemButton.addEventListener('click', showNextProblem);
+    elements.resultTitle.addEventListener('keydown',function(event){
+      if(event.key==='Enter' && !event.repeat && canShowPrefetchedProblem()){event.preventDefault();showNextProblem();}
+    });
     elements.retryButton.addEventListener('click', retryLastAction);
     elements.answerInput.addEventListener('keydown', function (event) {
       if (event.key === 'Enter') {

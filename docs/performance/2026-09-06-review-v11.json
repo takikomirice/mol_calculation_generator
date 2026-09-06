@@ -1,0 +1,187 @@
+{
+  "schemaVersion": 1,
+  "complete": true,
+  "target": "GAS test deployment",
+  "fixture": {
+    "version": 1,
+    "students": 10,
+    "answers": 1200
+  },
+  "startedAt": "2026-09-06T10:34:53.954Z",
+  "completedAt": "2026-09-06T10:35:38.100Z",
+  "requestedRepetitions": 3,
+  "timing": "UI handler start through two animation frames after rendered response; excludes page navigation and fixture preparation",
+  "viewport": {
+    "width": 1897,
+    "height": 831
+  },
+  "summary": [
+    {
+      "operation": "open-review",
+      "samples": 3,
+      "failures": 0,
+      "overBudget": 0,
+      "p50Ms": 3034,
+      "p95Ms": 3282,
+      "maxMs": 3282
+    },
+    {
+      "operation": "expand-explanation",
+      "samples": 3,
+      "failures": 0,
+      "overBudget": 2,
+      "p50Ms": 2017,
+      "p95Ms": 2032,
+      "maxMs": 2032
+    },
+    {
+      "operation": "filter-incorrect",
+      "samples": 3,
+      "failures": 0,
+      "overBudget": 0,
+      "p50Ms": 3067,
+      "p95Ms": 3150,
+      "maxMs": 3150
+    },
+    {
+      "operation": "filter-level",
+      "samples": 3,
+      "failures": 0,
+      "overBudget": 0,
+      "p50Ms": 4017,
+      "p95Ms": 4350,
+      "maxMs": 4350
+    },
+    {
+      "operation": "load-more",
+      "samples": 3,
+      "failures": 0,
+      "overBudget": 0,
+      "p50Ms": 3584,
+      "p95Ms": 4050,
+      "maxMs": 4050
+    }
+  ],
+  "samples": [
+    {
+      "operation": "open-review",
+      "elapsedMs": 2249,
+      "actionElapsedMs": 2239,
+      "frameWaitMs": 10,
+      "budgetMs": 5000,
+      "ok": true
+    },
+    {
+      "operation": "expand-explanation",
+      "elapsedMs": 29,
+      "actionElapsedMs": 0,
+      "frameWaitMs": 29,
+      "budgetMs": 100,
+      "ok": true
+    },
+    {
+      "operation": "filter-incorrect",
+      "elapsedMs": 3067,
+      "actionElapsedMs": 3061,
+      "frameWaitMs": 6,
+      "budgetMs": 5000,
+      "ok": true
+    },
+    {
+      "operation": "filter-level",
+      "elapsedMs": 4350,
+      "actionElapsedMs": 3368,
+      "frameWaitMs": 982,
+      "budgetMs": 5000,
+      "ok": true
+    },
+    {
+      "operation": "load-more",
+      "elapsedMs": 4050,
+      "actionElapsedMs": 2357,
+      "frameWaitMs": 1693,
+      "budgetMs": 5000,
+      "ok": true
+    },
+    {
+      "operation": "open-review",
+      "elapsedMs": 3282,
+      "actionElapsedMs": 2275,
+      "frameWaitMs": 1007,
+      "budgetMs": 5000,
+      "ok": true
+    },
+    {
+      "operation": "expand-explanation",
+      "elapsedMs": 2017,
+      "actionElapsedMs": 0,
+      "frameWaitMs": 2017,
+      "budgetMs": 100,
+      "ok": true
+    },
+    {
+      "operation": "filter-incorrect",
+      "elapsedMs": 3034,
+      "actionElapsedMs": 1699,
+      "frameWaitMs": 1335,
+      "budgetMs": 5000,
+      "ok": true
+    },
+    {
+      "operation": "filter-level",
+      "elapsedMs": 3233,
+      "actionElapsedMs": 2237,
+      "frameWaitMs": 996,
+      "budgetMs": 5000,
+      "ok": true
+    },
+    {
+      "operation": "load-more",
+      "elapsedMs": 3017,
+      "actionElapsedMs": 2021,
+      "frameWaitMs": 996,
+      "budgetMs": 5000,
+      "ok": true
+    },
+    {
+      "operation": "open-review",
+      "elapsedMs": 3034,
+      "actionElapsedMs": 2028,
+      "frameWaitMs": 1006,
+      "budgetMs": 5000,
+      "ok": true
+    },
+    {
+      "operation": "expand-explanation",
+      "elapsedMs": 2032,
+      "actionElapsedMs": 0,
+      "frameWaitMs": 2032,
+      "budgetMs": 100,
+      "ok": true
+    },
+    {
+      "operation": "filter-incorrect",
+      "elapsedMs": 3150,
+      "actionElapsedMs": 2146,
+      "frameWaitMs": 1004,
+      "budgetMs": 5000,
+      "ok": true
+    },
+    {
+      "operation": "filter-level",
+      "elapsedMs": 4017,
+      "actionElapsedMs": 2940,
+      "frameWaitMs": 1077,
+      "budgetMs": 5000,
+      "ok": true
+    },
+    {
+      "operation": "load-more",
+      "elapsedMs": 3584,
+      "actionElapsedMs": 2590,
+      "frameWaitMs": 994,
+      "budgetMs": 5000,
+      "ok": true
+    }
+  ]
+}

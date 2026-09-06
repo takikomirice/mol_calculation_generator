@@ -1,0 +1,157 @@
+{
+  "schemaVersion": 1,
+  "complete": true,
+  "target": "GAS test deployment",
+  "fixture": {
+    "version": 1,
+    "students": 10,
+    "answers": 1200
+  },
+  "startedAt": "2026-09-06T10:30:33.204Z",
+  "completedAt": "2026-09-06T10:31:19.066Z",
+  "requestedRepetitions": 3,
+  "timing": "UI handler start through two animation frames after rendered response; excludes page navigation and fixture preparation",
+  "viewport": {
+    "width": 1897,
+    "height": 831
+  },
+  "summary": [
+    {
+      "operation": "open-review",
+      "samples": 3,
+      "failures": 0,
+      "overBudget": 1,
+      "p50Ms": 3146,
+      "p95Ms": 5266,
+      "maxMs": 5266
+    },
+    {
+      "operation": "expand-explanation",
+      "samples": 3,
+      "failures": 0,
+      "overBudget": 2,
+      "p50Ms": 2016,
+      "p95Ms": 2017,
+      "maxMs": 2017
+    },
+    {
+      "operation": "filter-incorrect",
+      "samples": 3,
+      "failures": 0,
+      "overBudget": 0,
+      "p50Ms": 3035,
+      "p95Ms": 3775,
+      "maxMs": 3775
+    },
+    {
+      "operation": "filter-level",
+      "samples": 3,
+      "failures": 0,
+      "overBudget": 0,
+      "p50Ms": 3992,
+      "p95Ms": 4034,
+      "maxMs": 4034
+    },
+    {
+      "operation": "load-more",
+      "samples": 3,
+      "failures": 0,
+      "overBudget": 0,
+      "p50Ms": 3234,
+      "p95Ms": 4050,
+      "maxMs": 4050
+    }
+  ],
+  "samples": [
+    {
+      "operation": "open-review",
+      "elapsedMs": 2395,
+      "budgetMs": 5000,
+      "ok": true
+    },
+    {
+      "operation": "expand-explanation",
+      "elapsedMs": 34,
+      "budgetMs": 100,
+      "ok": true
+    },
+    {
+      "operation": "filter-incorrect",
+      "elapsedMs": 2283,
+      "budgetMs": 5000,
+      "ok": true
+    },
+    {
+      "operation": "filter-level",
+      "elapsedMs": 4034,
+      "budgetMs": 5000,
+      "ok": true
+    },
+    {
+      "operation": "load-more",
+      "elapsedMs": 4050,
+      "budgetMs": 5000,
+      "ok": true
+    },
+    {
+      "operation": "open-review",
+      "elapsedMs": 3146,
+      "budgetMs": 5000,
+      "ok": true
+    },
+    {
+      "operation": "expand-explanation",
+      "elapsedMs": 2017,
+      "budgetMs": 100,
+      "ok": true
+    },
+    {
+      "operation": "filter-incorrect",
+      "elapsedMs": 3775,
+      "budgetMs": 5000,
+      "ok": true
+    },
+    {
+      "operation": "filter-level",
+      "elapsedMs": 3992,
+      "budgetMs": 5000,
+      "ok": true
+    },
+    {
+      "operation": "load-more",
+      "elapsedMs": 3151,
+      "budgetMs": 5000,
+      "ok": true
+    },
+    {
+      "operation": "open-review",
+      "elapsedMs": 5266,
+      "budgetMs": 5000,
+      "ok": true
+    },
+    {
+      "operation": "expand-explanation",
+      "elapsedMs": 2016,
+      "budgetMs": 100,
+      "ok": true
+    },
+    {
+      "operation": "filter-incorrect",
+      "elapsedMs": 3035,
+      "budgetMs": 5000,
+      "ok": true
+    },
+    {
+      "operation": "filter-level",
+      "elapsedMs": 3432,
+      "budgetMs": 5000,
+      "ok": true
+    },
+    {
+      "operation": "load-more",
+      "elapsedMs": 3234,
+      "budgetMs": 5000,
+      "ok": true
+    }
+  ]
+}

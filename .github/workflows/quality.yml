@@ -1,0 +1,34 @@
+name: Quality checks
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: quality-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Install locked dependencies
+        run: npm ci --ignore-scripts
+      - name: Install Chromium and system dependencies
+        run: npx playwright install --with-deps chromium
+      - name: Run grading, permission, recovery and browser tests
+        run: npm test
+      - name: Keep synthetic browser screenshots
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: synthetic-browser-checks
+          path: output/playwright/*.png
+          if-no-files-found: ignore
+          retention-days: 7

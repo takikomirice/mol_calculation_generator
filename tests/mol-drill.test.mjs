@@ -73,7 +73,7 @@ globalThis.__api = {
   writeTeacherUrlsToSettingsFromMenu: typeof writeTeacherUrlsToSettingsFromMenu === 'undefined' ? undefined : writeTeacherUrlsToSettingsFromMenu,
   rebuildAggregateCacheFromMenu: typeof rebuildAggregateCacheFromMenu === 'undefined' ? undefined : rebuildAggregateCacheFromMenu,
   rebuildAggregateAndMonitorCacheCore_: typeof rebuildAggregateAndMonitorCacheCore_ === 'undefined' ? undefined : rebuildAggregateAndMonitorCacheCore_,
-  rebuildAggregateAndMonitorCacheForTrigger: typeof rebuildAggregateAndMonitorCacheForTrigger === 'undefined' ? undefined : rebuildAggregateAndMonitorCacheForTrigger,
+  rebuildAggregateAndMonitorCacheForTrigger_: typeof rebuildAggregateAndMonitorCacheForTrigger_ === 'undefined' ? undefined : rebuildAggregateAndMonitorCacheForTrigger_,
   installAggregateMonitorAutoRefreshTriggerFromMenu: typeof installAggregateMonitorAutoRefreshTriggerFromMenu === 'undefined' ? undefined : installAggregateMonitorAutoRefreshTriggerFromMenu,
   uninstallAggregateMonitorAutoRefreshTriggerFromMenu: typeof uninstallAggregateMonitorAutoRefreshTriggerFromMenu === 'undefined' ? undefined : uninstallAggregateMonitorAutoRefreshTriggerFromMenu,
   showAggregateMonitorAutoRefreshStatusFromMenu: typeof showAggregateMonitorAutoRefreshStatusFromMenu === 'undefined' ? undefined : showAggregateMonitorAutoRefreshStatusFromMenu,
@@ -283,6 +283,12 @@ function createSpreadsheetMock(initialSheets) {
       return this;
     }
 
+    findAll() {
+      this.nextIndex=0;const matches=[];let cell;
+      while((cell=this.findNext())) matches.push(cell);
+      return matches;
+    }
+
     findNext() {
       const needle = this.caseSensitive ? this.value : this.value.toLowerCase();
       const cellCount = this.range.numRows * this.range.numColumns;
@@ -321,8 +327,14 @@ function createSpreadsheetMock(initialSheets) {
       return this.rows.reduce((max, row) => Math.max(max, row.length), 0);
     }
 
+    appendRow(row) { this.rows.push(Array.from(row)); return this; }
+
     getMaxRows() {
       return Math.max(this.rows.length, 100);
+    }
+
+    getDataRange() {
+      return this.getRange(1, 1, this.getLastRow(), this.getLastColumn());
     }
 
     clear() {
@@ -942,7 +954,7 @@ test('full management sheet reinitialization clears existing sheets without back
   assert.match(settingsByKey.ADMIN_TOKEN, /^adm_uuidfromtest/);
 });
 
-test('public reinitializeSheets runs without confirmation text', async () => {
+test('reinitializeSheets requires spreadsheet UI context', async () => {
   const spreadsheetMock = await createManagedSpreadsheetMock({
     Classroom一覧: await buildManagedRows('Classroom一覧', [
       { courseId: 'course-1', name: '化学A', courseState: 'ACTIVE', 同期対象: '1' }
@@ -950,10 +962,7 @@ test('public reinitializeSheets runs without confirmation text', async () => {
   });
   const { reinitializeSheets } = await loadApi({ SpreadsheetApp: spreadsheetMock.SpreadsheetApp });
 
-  const result = reinitializeSheets();
-
-  assert.equal(result.ok, true);
-  assert.equal(spreadsheetMock.sheets.get('Classroom一覧').rows.length, 1);
+  assert.throws(() => reinitializeSheets(), /getUi/);
 });
 
 test('course sync target column uses 1 or blank while reading legacy TRUE values', async () => {
@@ -1447,10 +1456,10 @@ test('teacher URL menu writes monitor and test student URLs to settings without 
   const result = writeTeacherUrlsToSettingsFromMenu();
 
   const alertText = uiMock.alerts.flat().join('\n');
-  assert.equal(SheetRepository.getSettingValue('MONITOR_URL'), 'https://example.com/exec?page=monitor');
+  assert.equal(SheetRepository.getSettingValue('MONITOR_URL'), 'https://example.com/exec?page=monitor&auth=secret');
   assert.match(SheetRepository.getSettingValue('TEST_STUDENT_URL'), /^https:\/\/example\.com\/exec\?t=mdl_uuidfromtest\d+$/);
   assert.doesNotMatch(SheetRepository.getSettingValue('TEST_STUDENT_URL'), /preview=teacher|teacherPreview/);
-  assert.equal(result.monitorUrl, 'https://example.com/exec?page=monitor');
+  assert.equal(result.monitorUrl, 'https://example.com/exec?page=monitor&auth=secret');
   assert.equal(result.testStudentUrl, SheetRepository.getSettingValue('TEST_STUDENT_URL'));
   assert.equal(result.testStudent.rosterKey, '__TEST__::test-student');
   assert.match(alertText, /設定シート/);
@@ -1491,7 +1500,7 @@ test('teacher URL menu appends page=monitor with ampersand when WEB_APP_URL alre
 
   writeTeacherUrlsToSettingsFromMenu();
 
-  assert.equal(SheetRepository.getSettingValue('MONITOR_URL'), 'https://example.com/exec?x=1&page=monitor');
+  assert.equal(SheetRepository.getSettingValue('MONITOR_URL'), 'https://example.com/exec?x=1&page=monitor&auth=adm_uuidfromtest1');
   assert.match(SheetRepository.getSettingValue('TEST_STUDENT_URL'), /^https:\/\/example\.com\/exec\?x=1&t=mdl_uuidfromtest\d+$/);
 });
 
@@ -1880,7 +1889,7 @@ test('monitor dashboard data requires monitor access and returns read-only light
       { timestamp: '2026-05-21T09:00:00.000Z', attemptId: 'ATT_1', rosterKey: 'course-1::student-1' }
     ])
   });
-  const { SheetRepository, DistributionService, MonitorSnapshotService, getMonitorDashboardData } = await loadApi({
+  const { AdminService,  SheetRepository, DistributionService, MonitorSnapshotService, getMonitorDashboardData } = await loadApi({
     SpreadsheetApp: spreadsheetMock.SpreadsheetApp,
     Session: {
       getActiveUser: () => {
@@ -1902,7 +1911,8 @@ test('monitor dashboard data requires monitor access and returns read-only light
     throw new Error('distribution preview should not be built during monitor dashboard data load');
   };
 
-  const data = getMonitorDashboardData();
+  AdminService.getAdminToken = () => 'secret';
+  const data = getMonitorDashboardData('secret');
 
   assert.equal(data.appName, 'もるくえ！');
   assert.match(data.generatedAt, /^\d{4}-\d{2}-\d{2}T/);
@@ -1953,7 +1963,7 @@ test('monitor snapshot service writes dashboard JSON without teacher test studen
 
   const snapshot = MonitorSnapshotService.writeDashboardSnapshot();
 
-  assert.equal(snapshot.snapshotVersion, 1);
+  assert.equal(snapshot.snapshotVersion, 2);
   assert.equal(snapshot.source, 'monitor-snapshot');
   assert.equal(snapshot.studentRuntime, 'fast');
   assert.equal(snapshot.snapshotMode, 'snapshot');
@@ -2006,7 +2016,7 @@ test('getMonitorDashboardData returns usable snapshot without live dashboard rea
       { key: 'dashboard', json: JSON.stringify(storedSnapshot), updatedAt: storedSnapshot.generatedAt, note: '自動生成。直接編集しない' }
     ])
   });
-  const { SheetRepository, MonitorSnapshotService, getMonitorDashboardData } = await loadApi({
+  const { AdminService,  SheetRepository, MonitorSnapshotService, getMonitorDashboardData } = await loadApi({
     SpreadsheetApp: spreadsheetMock.SpreadsheetApp
   });
   SheetRepository.readCourseRows = () => {
@@ -2016,7 +2026,8 @@ test('getMonitorDashboardData returns usable snapshot without live dashboard rea
     throw new Error('monitor dashboard read path must not write snapshots');
   };
 
-  const data = getMonitorDashboardData();
+  AdminService.getAdminToken = () => 'secret';
+  const data = getMonitorDashboardData('secret');
 
   assert.equal(data.source, 'monitor-snapshot');
   assert.equal(data.snapshotMode, 'snapshot');
@@ -2042,7 +2053,7 @@ test('getMonitorDashboardData attaches maintenance spreadsheet link without stor
   });
   const spreadsheet = spreadsheetMock.SpreadsheetApp.getActiveSpreadsheet();
   spreadsheet.getUrl = () => 'https://docs.google.com/spreadsheets/d/admin-sheet/edit';
-  const { MonitorSnapshotService, getMonitorDashboardData } = await loadApi({
+  const { AdminService,  MonitorSnapshotService, getMonitorDashboardData } = await loadApi({
     SpreadsheetApp: spreadsheetMock.SpreadsheetApp
   });
 
@@ -2057,7 +2068,8 @@ test('getMonitorDashboardData attaches maintenance spreadsheet link without stor
   assert.doesNotMatch(snapshotJson, /admin-sheet/);
   assert.doesNotMatch(snapshotJson, /secret-token|studentUrl/);
 
-  const data = getMonitorDashboardData();
+  AdminService.getAdminToken = () => 'secret';
+  const data = getMonitorDashboardData('secret');
 
   assert.deepEqual(Object.keys(data.maintenanceLinks).sort(), ['spreadsheetUrl']);
   assert.equal(data.maintenanceLinks.spreadsheetUrl, 'https://docs.google.com/spreadsheets/d/admin-sheet/edit');
@@ -2071,7 +2083,7 @@ test('getMonitorDashboardData returns a lightweight snapshot-missing response wi
       { key: 'dashboard', json: '', updatedAt: '', note: '' }
     ])
   });
-  const { SheetRepository, MonitorSnapshotService, getMonitorDashboardData } = await loadApi({
+  const { AdminService,  SheetRepository, MonitorSnapshotService, getMonitorDashboardData } = await loadApi({
     SpreadsheetApp: spreadsheetMock.SpreadsheetApp
   });
   SheetRepository.readCourseRows = () => {
@@ -2081,7 +2093,8 @@ test('getMonitorDashboardData returns a lightweight snapshot-missing response wi
     throw new Error('missing monitor snapshot should not write snapshots');
   };
 
-  const data = getMonitorDashboardData();
+  AdminService.getAdminToken = () => 'secret';
+  const data = getMonitorDashboardData('secret');
 
   assert.equal(data.source, 'snapshot-missing');
   assert.equal(data.snapshotMode, 'snapshot-missing');
@@ -2107,11 +2120,12 @@ test('getMonitorDashboardData returns maintenance links even when the monitor sn
   });
   const spreadsheet = spreadsheetMock.SpreadsheetApp.getActiveSpreadsheet();
   spreadsheet.getUrl = () => 'https://docs.google.com/spreadsheets/d/admin-sheet/edit';
-  const { getMonitorDashboardData } = await loadApi({
+  const { AdminService,  getMonitorDashboardData } = await loadApi({
     SpreadsheetApp: spreadsheetMock.SpreadsheetApp
   });
 
-  const data = getMonitorDashboardData();
+  AdminService.getAdminToken = () => 'secret';
+  const data = getMonitorDashboardData('secret');
 
   assert.equal(data.source, 'snapshot-missing');
   assert.equal(data.maintenanceLinks.spreadsheetUrl, 'https://docs.google.com/spreadsheets/d/admin-sheet/edit');
@@ -2124,14 +2138,15 @@ test('getMonitorDashboardData returns snapshot-missing for corrupted JSON withou
       { key: 'dashboard', json: '{broken json', updatedAt: '2026-05-21T10:00:00.000Z', note: '' }
     ])
   });
-  const { SheetRepository, getMonitorDashboardData } = await loadApi({
+  const { AdminService,  SheetRepository, getMonitorDashboardData } = await loadApi({
     SpreadsheetApp: spreadsheetMock.SpreadsheetApp
   });
   SheetRepository.readCourseRows = () => {
     throw new Error('corrupted monitor snapshot should not trigger live course reads');
   };
 
-  const data = getMonitorDashboardData();
+  AdminService.getAdminToken = () => 'secret';
+  const data = getMonitorDashboardData('secret');
 
   assert.equal(data.source, 'snapshot-missing');
   assert.equal(data.snapshotMode, 'snapshot-missing');
@@ -2238,7 +2253,7 @@ test('getMonitorDashboardData logs snapshot timing fields without live fallback'
       { key: 'dashboard', json: '', updatedAt: '', note: '' }
     ])
   });
-  const { getMonitorDashboardData } = await loadApi({
+  const { AdminService,  getMonitorDashboardData } = await loadApi({
     SpreadsheetApp: spreadsheetMock.SpreadsheetApp,
     Logger: {
       log(message) {
@@ -2247,7 +2262,8 @@ test('getMonitorDashboardData logs snapshot timing fields without live fallback'
     }
   });
 
-  getMonitorDashboardData();
+  AdminService.getAdminToken = () => 'secret';
+  getMonitorDashboardData('secret');
 
   const output = messages.join('\n');
   assert.match(output, /getMonitorDashboardData elapsedMs=\d+/);
@@ -2262,13 +2278,13 @@ test('getMonitorDashboardData logs snapshot timing fields without live fallback'
   assert.doesNotMatch(output, /token-|active-token|studentUrl/);
 });
 
-test('monitor student history and problem type stats reuse optimized read-only readers without admin token', async () => {
+test('monitor student history and problem type stats reuse optimized read-only readers with a teacher capability', async () => {
   const spreadsheetMock = await createManagedSpreadsheetMock({
     設定: await buildManagedRows('設定', [
       { キー: 'ADMIN_TOKEN', 値: 'secret' }
     ])
   });
-  const {
+  const { AdminService,
     MonitorService,
     SheetRepository,
     getMonitorStudentAnswerHistory,
@@ -2305,15 +2321,16 @@ test('monitor student history and problem type stats reuse optimized read-only r
     ];
   };
 
-  const history = getMonitorStudentAnswerHistory('course-1::student-1', 2);
+  AdminService.getAdminToken = () => 'secret';
+  const history = getMonitorStudentAnswerHistory('secret', 'course-1::student-1', 2);
   assert.equal(history.length, 1);
   assert.equal(history[0].attemptId, 'ATT_1');
-  assert.equal(JSON.stringify(getMonitorStudentAnswerHistory('', 2)), JSON.stringify([]));
+  assert.equal(JSON.stringify(getMonitorStudentAnswerHistory('secret', '', 2)), JSON.stringify([]));
 
-  const stats = getMonitorStudentProblemTypeStats('course-1::student-1');
+  const stats = getMonitorStudentProblemTypeStats('secret', 'course-1::student-1');
   assert.equal(stats.length, 1);
   assert.equal(stats[0].problemType, 'type1');
-  assert.equal(JSON.stringify(getMonitorStudentProblemTypeStats('')), JSON.stringify([]));
+  assert.equal(JSON.stringify(getMonitorStudentProblemTypeStats('secret', '')), JSON.stringify([]));
   assert.equal(monitorAccessChecks, 4);
 });
 
@@ -2854,7 +2871,7 @@ test('teacher preview URL builder requires admin access and protects preview wit
   assert.equal(cachedPayload.authToken, 'admin-secret');
   assert.throws(
     () => buildTeacherStudentPreviewUrl('wrong-secret', 'student-token'),
-    /管理ダッシュボードの内部認証が一致しません/
+    /先生用の内部認証が一致しません/
   );
 });
 
@@ -2944,7 +2961,7 @@ test('doGet routes monitor after teacher preview and before student token route'
   const cacheMock = createScriptCacheMock();
   const nonce = 'tp_monitor_priority';
   cacheMock.store.set(`teacherPreviewNonce:${nonce}`, JSON.stringify({ authToken: 'admin-secret' }));
-  const { doGet } = await loadApi({
+  const { AdminService,  doGet } = await loadApi({
     SpreadsheetApp: spreadsheetMock.SpreadsheetApp,
     PropertiesService: createScriptPropertiesMock({ MOL_DRILL_ADMIN_TOKEN: 'admin-secret' }).PropertiesService,
     HtmlService: htmlServiceMock.HtmlService,
@@ -2954,16 +2971,17 @@ test('doGet routes monitor after teacher preview and before student token route'
     }
   });
 
-  const teacherPreview = doGet({ parameter: { preview: 'teacher', page: 'monitor', previewNonce: nonce, t: 'student-token' } });
+  AdminService.getAdminToken = () => 'admin-secret';
+  const teacherPreview = doGet({ parameter: { preview: 'teacher', page: 'monitor', auth: 'admin-secret', previewNonce: nonce, t: 'student-token' } });
   assert.equal(teacherPreview.title, 'もるくえ！');
   assert.equal(htmlServiceMock.templates.at(-1).name, 'Student');
   assert.equal(htmlServiceMock.templates.at(-1).initialTeacherPreview, true);
 
-  const monitorByPage = doGet({ parameter: { page: 'monitor', t: 'student-token' } });
+  const monitorByPage = doGet({ parameter: { page: 'monitor', auth: 'admin-secret', t: 'student-token' } });
   assert.equal(monitorByPage.title, 'もるくえ！ モニター');
   assert.equal(htmlServiceMock.templates.at(-1).name, 'Monitor');
 
-  const monitorByFlag = doGet({ parameter: { monitor: '1', t: 'student-token' } });
+  const monitorByFlag = doGet({ parameter: { monitor: '1', auth: 'admin-secret', t: 'student-token' } });
   assert.equal(monitorByFlag.title, 'もるくえ！ モニター');
   assert.equal(htmlServiceMock.templates.at(-1).name, 'Monitor');
 
@@ -2981,13 +2999,13 @@ test('doGet routes monitor after teacher preview and before student token route'
   assert.equal(htmlServiceMock.templates.some((template) => template.name === 'Admin'), false);
 });
 
-test('MonitorService assertMonitorAccess only checks management sheets without current user email', async () => {
+test('MonitorService checks teacher capability without scanning all management sheets or current user email', async () => {
   const spreadsheetMock = await createManagedSpreadsheetMock({
     設定: await buildManagedRows('設定', [
       { キー: legacyMonitorEmailSettingKeyForTest(), 値: '' }
     ])
   });
-  const { MonitorService, SheetRepository } = await loadApi({
+  const { AdminService,  MonitorService, SheetRepository } = await loadApi({
     SpreadsheetApp: spreadsheetMock.SpreadsheetApp,
     Session: {
       getActiveUser: () => {
@@ -3002,10 +3020,11 @@ test('MonitorService assertMonitorAccess only checks management sheets without c
     return originalAssertManagementSheetsReady();
   };
 
-  assert.equal(MonitorService.isMonitorRoute({ parameter: { page: 'monitor' } }), true);
+  assert.equal(MonitorService.isMonitorRoute({ parameter: { page: 'monitor', auth: 'secret' } }), true);
   assert.equal(MonitorService.isMonitorRoute({ parameter: { monitor: '1' } }), true);
-  assert.doesNotThrow(() => MonitorService.assertMonitorAccess());
-  assert.equal(managementReadyChecks, 1);
+  AdminService.getAdminToken = () => 'secret';
+  assert.doesNotThrow(() => MonitorService.assertMonitorAccess('secret'));
+  assert.equal(managementReadyChecks, 0);
 });
 
 test('MonitorService ignores legacy monitor allowed emails when they remain in settings', async () => {
@@ -3015,7 +3034,7 @@ test('MonitorService ignores legacy monitor allowed emails when they remain in s
     ])
   });
   const htmlServiceMock = createHtmlServiceMock();
-  const { MonitorService, doGet } = await loadApi({
+  const { AdminService,  MonitorService, doGet } = await loadApi({
     SpreadsheetApp: spreadsheetMock.SpreadsheetApp,
     HtmlService: htmlServiceMock.HtmlService,
     Session: {
@@ -3023,15 +3042,17 @@ test('MonitorService ignores legacy monitor allowed emails when they remain in s
     }
   });
 
-  assert.doesNotThrow(() => MonitorService.assertMonitorAccess());
+  AdminService.getAdminToken = () => 'secret';
+  assert.doesNotThrow(() => MonitorService.assertMonitorAccess('secret'));
 
-  const monitor = doGet({ parameter: { page: 'monitor' } });
+  AdminService.getAdminToken = () => 'secret';
+  const monitor = doGet({ parameter: { page: 'monitor', auth: 'secret' } });
   assert.equal(monitor.title, 'もるくえ！ モニター');
   assert.equal(htmlServiceMock.templates.at(-1).name, 'Monitor');
   assert.equal(htmlServiceMock.outputs.length, 0);
 });
 
-test('monitor access denied HTML is reserved for management sheet setup problems', async () => {
+test('monitor access denied HTML handles missing teacher authentication', async () => {
   const spreadsheetMock = createSpreadsheetMock({});
   const htmlServiceMock = createHtmlServiceMock();
   const { doGet } = await loadApi({
@@ -3046,7 +3067,7 @@ test('monitor access denied HTML is reserved for management sheet setup problems
 
   const denied = doGet({ parameter: { page: 'monitor' } });
   assert.equal(denied.title, 'モニター画面を開けません');
-  assert.match(denied.html, /管理シート|作成・補修/);
+  assert.match(denied.html, /内部認証/);
   assert.doesNotMatch(denied.html, new RegExp(`メールアドレス|許可メール|${legacyMonitorEmailSettingKeyForTest()}`));
   assert.equal(htmlServiceMock.templates.length, 0);
 });
@@ -5122,6 +5143,7 @@ test('submitAnswer always defers aggregate and problem type cache work in the st
   };
   const issued = MolProblemService.issueProblemForToken(tokenRow.token, { level: 'beginner', problemType: 1 });
 
+  AnswerService.readRuntimeSummaryCache_ = (row) => ({rosterKey: row.rosterKey, summary: AnswerService.buildStudentSummaryFromAggregate_(row, {}), recent: []});
   const response = AnswerService.submitAnswer({
     token: tokenRow.token,
     problem: issued.publicProblem,
@@ -5275,6 +5297,8 @@ test('duplicate submit does not append or run heavy aggregate recomputation in t
   };
   SheetRepository.findAnswerLogByAttemptId = () => existingLog;
 
+  AnswerService.readRuntimeSummaryCache_ = row => ({rosterKey:row.rosterKey,summary:{totalAttempts:0,totalCorrect:0,recent10Accuracy:0},recent:[]});
+
   const response = AnswerService.submitAnswer({
     token: tokenRow.token,
     problem: issued.publicProblem,
@@ -5329,6 +5353,7 @@ test('student submit never includes a next problem and leaves next navigation to
   const prefetched = MolProblemService.issueProblemForToken(tokenRow.token, { level: 'beginner', problemType: 1 });
   const nonPrefetched = MolProblemService.issueProblemForToken(tokenRow.token, { level: 'beginner', problemType: 2 });
 
+  AnswerService.readRuntimeSummaryCache_ = (row) => ({rosterKey: row.rosterKey, summary: AnswerService.buildStudentSummaryFromAggregate_(row, {}), recent: []});
   const skipResponse = AnswerService.submitAnswer({
     token: tokenRow.token,
     problem: prefetched.publicProblem,
@@ -5517,6 +5542,7 @@ test('submitAnswer appends the answer log without synchronously updating aggrega
   };
   const issued = MolProblemService.issueProblemForToken(tokenRow.token, { level: 'beginner', problemType: 1 });
 
+  AnswerService.readRuntimeSummaryCache_ = (row) => ({rosterKey: row.rosterKey, summary: AnswerService.buildStudentSummaryFromAggregate_(row, {}), recent: []});
   const response = AnswerService.submitAnswer({
     token: tokenRow.token,
     problem: issued.publicProblem,
@@ -5562,7 +5588,8 @@ test('submitAnswer appends the answer log without synchronously updating aggrega
   assert.equal(otherProblemTypeRow[problemTypeHeaders.indexOf('updatedAt')], 'old-type-other');
   assert.equal(spreadsheetMock.setValuesCalls.filter((call) => call.sheetName === '集計キャッシュ').length, 0);
   assert.equal(spreadsheetMock.setValuesCalls.filter((call) => call.sheetName === '問題タイプ別キャッシュ').length, 0);
-  assert.equal(spreadsheetMock.setValuesCalls.filter((call) => call.sheetName === '解答ログ').length, 1);
+  const persistedLogs = spreadsheetMock.sheets.get('解答ログ').rows;
+  assert.equal(persistedLogs.slice(1).filter(row => row[persistedLogs[0].indexOf('attemptId')] === issued.publicProblem.attemptId).length, 1);
 });
 
 test('submitAnswer logs detailed timing fields and the always-fast student route without raw token', async () => {
@@ -5613,6 +5640,7 @@ test('submitAnswer logs detailed timing fields and the always-fast student route
   SheetRepository.upsertProblemTypeStatsRow = () => {};
   const issued = MolProblemService.issueProblemForToken(tokenRow.token, { level: 'beginner', problemType: 1 });
 
+  AnswerService.readRuntimeSummaryCache_ = (row) => ({rosterKey: row.rosterKey, summary: AnswerService.buildStudentSummaryFromAggregate_(row, {}), recent: []});
   const response = AnswerService.submitAnswer({
     token: tokenRow.token,
     problem: issued.publicProblem,
@@ -5709,6 +5737,7 @@ test('submitAnswer does not rebuild aggregate cache when a legacy runtime settin
   };
   const issued = MolProblemService.issueProblemForToken(tokenRow.token, { level: 'beginner', problemType: 1 });
 
+  AnswerService.readRuntimeSummaryCache_ = (row) => ({rosterKey: row.rosterKey, summary: AnswerService.buildStudentSummaryFromAggregate_(row, {}), recent: []});
   const response = AnswerService.submitAnswer({
     token: tokenRow.token,
     problem: issued.publicProblem,
@@ -5822,6 +5851,7 @@ test('submitAnswer duplicate response restores the existing log without appendin
     '{}'
   ]);
 
+  AnswerService.readRuntimeSummaryCache_ = (row) => ({rosterKey: row.rosterKey, summary: AnswerService.buildStudentSummaryFromAggregate_(row, {}), recent: []});
   const response = AnswerService.submitAnswer({
     token: tokenRow.token,
     problem: issued.publicProblem,
@@ -5898,6 +5928,8 @@ test('submitAnswer skips next problem generation regardless of the client prefet
     return originalIssueProblemForStudent.apply(this, args);
   };
   try {
+
+  AnswerService.readRuntimeSummaryCache_ = row => ({rosterKey:row.rosterKey,summary:{totalAttempts:0,totalCorrect:0,recent10Accuracy:0},recent:[]});
     const response = AnswerService.submitAnswer({
       token: tokenRow.token,
       problem: issued.publicProblem,
@@ -5951,6 +5983,7 @@ test('submitAnswer does not run adaptive next-problem selection while returning 
   };
   const issued = MolProblemService.issueProblemForToken(tokenRow.token, { level: 'beginner', problemType: 1 });
 
+  AnswerService.readRuntimeSummaryCache_ = (row) => ({rosterKey: row.rosterKey, summary: AnswerService.buildStudentSummaryFromAggregate_(row, {}), recent: []});
   const response = AnswerService.submitAnswer({
     token: tokenRow.token,
     problem: issued.publicProblem,
@@ -6148,8 +6181,10 @@ test('rebuildAggregateCache also rebuilds problem type stats cache', async () =>
 
 test('rebuild aggregate cache menu refreshes monitor snapshot after aggregate caches', async () => {
   const uiMock = createUiMock();
+  const spreadsheetMock = await createManagedSpreadsheetMock({});
   const { AdminService, AggregationService, MonitorSnapshotService, rebuildAggregateCacheFromMenu } = await loadApi({
     SpreadsheetApp: {
+      ...spreadsheetMock.SpreadsheetApp,
       getUi: () => uiMock.ui
     }
   });
@@ -6276,7 +6311,7 @@ test('monitor snapshot rebuild function returns ok false when the admin lock is 
       }
     })
   };
-  const { MonitorSnapshotService, AggregationService, rebuildMonitorSnapshotFromMonitor } = await loadApi({
+  const { AdminService,  MonitorSnapshotService, AggregationService, rebuildMonitorSnapshotFromMonitor } = await loadApi({
     SpreadsheetApp: spreadsheetMock.SpreadsheetApp,
     LockService: lockServiceMock
   });
@@ -6290,7 +6325,8 @@ test('monitor snapshot rebuild function returns ok false when the admin lock is 
     throw new Error('problem type rebuild should not run when the lock is busy');
   };
 
-  const result = rebuildMonitorSnapshotFromMonitor();
+  AdminService.getAdminToken = () => 'secret';
+  const result = rebuildMonitorSnapshotFromMonitor('secret');
 
   assert.equal(result.ok, false);
   assert.match(result.message, /別の処理が実行中です/);
@@ -6311,7 +6347,7 @@ test('monitor rebuild function returns a clear ok false response when the admin 
       }
     })
   };
-  const { AggregationService, rebuildAggregateAndMonitorCacheFromMonitor } = await loadApi({
+  const { AdminService,  AggregationService, rebuildAggregateAndMonitorCacheFromMonitor } = await loadApi({
     SpreadsheetApp: spreadsheetMock.SpreadsheetApp,
     LockService: lockServiceMock
   });
@@ -6319,7 +6355,8 @@ test('monitor rebuild function returns a clear ok false response when the admin 
     throw new Error('aggregate rebuild should not run when the lock is busy');
   };
 
-  const result = rebuildAggregateAndMonitorCacheFromMonitor();
+  AdminService.getAdminToken = () => 'secret';
+  const result = rebuildAggregateAndMonitorCacheFromMonitor('secret');
 
   assert.equal(result.ok, false);
   assert.match(result.message, /別の処理が実行中です/);
@@ -6337,7 +6374,7 @@ test('install aggregate monitor auto refresh trigger recreates one scheduled tri
   });
   const uiMock = createUiMock();
   const scriptAppMock = createScriptAppTriggerMock([
-    'rebuildAggregateAndMonitorCacheForTrigger',
+    'rebuildAggregateAndMonitorCacheForTrigger_',
     'otherHandler'
   ]);
   const { SheetRepository, installAggregateMonitorAutoRefreshTriggerFromMenu } = await loadApi({
@@ -6355,9 +6392,9 @@ test('install aggregate monitor auto refresh trigger recreates one scheduled tri
   assert.equal(result.createdTriggers, 1);
   assert.equal(scriptAppMock.deletedTriggers.length, 1);
   assert.equal(scriptAppMock.createdTriggers.length, 1);
-  assert.equal(scriptAppMock.createdTriggers[0].handlerFunction, 'rebuildAggregateAndMonitorCacheForTrigger');
+  assert.equal(scriptAppMock.createdTriggers[0].handlerFunction, 'rebuildAggregateAndMonitorCacheForTrigger_');
   assert.deepEqual(scriptAppMock.createdTriggers[0].schedule, { unit: 'minutes', interval: 10 });
-  assert.equal(scriptAppMock.triggers.filter((trigger) => trigger.getHandlerFunction() === 'rebuildAggregateAndMonitorCacheForTrigger').length, 1);
+  assert.equal(scriptAppMock.triggers.filter((trigger) => trigger.getHandlerFunction() === 'rebuildAggregateAndMonitorCacheForTrigger_').length, 1);
   assert.equal(scriptAppMock.triggers.filter((trigger) => trigger.getHandlerFunction() === 'otherHandler').length, 1);
   assert.equal(SheetRepository.getSettingValue('AUTO_REBUILD_CACHE_ENABLED'), 'true');
   assert.equal(SheetRepository.getSettingValue('AUTO_REBUILD_CACHE_INTERVAL_MINUTES'), '10');
@@ -6399,9 +6436,9 @@ test('uninstall aggregate monitor auto refresh trigger deletes all matching trig
   });
   const uiMock = createUiMock();
   const scriptAppMock = createScriptAppTriggerMock([
-    'rebuildAggregateAndMonitorCacheForTrigger',
+    'rebuildAggregateAndMonitorCacheForTrigger_',
     'otherHandler',
-    'rebuildAggregateAndMonitorCacheForTrigger'
+    'rebuildAggregateAndMonitorCacheForTrigger_'
   ]);
   const { SheetRepository, uninstallAggregateMonitorAutoRefreshTriggerFromMenu } = await loadApi({
     SpreadsheetApp: {
@@ -6434,8 +6471,8 @@ test('show aggregate monitor auto refresh status displays settings triggers snap
   });
   const uiMock = createUiMock();
   const scriptAppMock = createScriptAppTriggerMock([
-    'rebuildAggregateAndMonitorCacheForTrigger',
-    'rebuildAggregateAndMonitorCacheForTrigger',
+    'rebuildAggregateAndMonitorCacheForTrigger_',
+    'rebuildAggregateAndMonitorCacheForTrigger_',
     'otherHandler'
   ]);
   const { showAggregateMonitorAutoRefreshStatusFromMenu } = await loadApi({
@@ -6471,7 +6508,7 @@ test('aggregate monitor auto refresh trigger skips heavy rebuilds when disabled 
       { キー: 'AUTO_REBUILD_CACHE_INTERVAL_MINUTES', 値: '5' }
     ])
   });
-  const { AggregationService, MonitorSnapshotService, rebuildAggregateAndMonitorCacheForTrigger } = await loadApi({
+  const { AggregationService, MonitorSnapshotService, rebuildAggregateAndMonitorCacheForTrigger_ } = await loadApi({
     SpreadsheetApp: spreadsheetMock.SpreadsheetApp
   });
   AggregationService.rebuildAggregateCache = () => {
@@ -6481,7 +6518,7 @@ test('aggregate monitor auto refresh trigger skips heavy rebuilds when disabled 
     throw new Error('disabled trigger should not write monitor snapshot');
   };
 
-  const result = rebuildAggregateAndMonitorCacheForTrigger();
+  const result = rebuildAggregateAndMonitorCacheForTrigger_();
 
   assert.equal(result.skipped, true);
   assert.equal(result.reason, 'disabled');
@@ -6510,7 +6547,7 @@ test('aggregate monitor auto refresh trigger rebuilds caches with a lock when en
       }
     })
   };
-  const { AggregationService, MonitorSnapshotService, rebuildAggregateAndMonitorCacheForTrigger } = await loadApi({
+  const { AggregationService, MonitorSnapshotService, rebuildAggregateAndMonitorCacheForTrigger_ } = await loadApi({
     SpreadsheetApp: spreadsheetMock.SpreadsheetApp,
     LockService: lockServiceMock
   });
@@ -6524,7 +6561,7 @@ test('aggregate monitor auto refresh trigger rebuilds caches with a lock when en
     return { generatedAt: '2026-05-21T12:34:56.000Z' };
   };
 
-  const result = rebuildAggregateAndMonitorCacheForTrigger();
+  const result = rebuildAggregateAndMonitorCacheForTrigger_();
 
   assert.equal(result.updated, 3);
   assert.equal(result.problemTypeUpdated, 7);
@@ -6636,6 +6673,7 @@ test('initializeStudentSession skips immediate lastAccessedAt write while return
     throw new Error('readAnswerLogsForRosterKey should not be used during student initialization');
   };
 
+  AnswerService.readRuntimeSummaryCache_ = (row) => ({rosterKey: row.rosterKey, summary: AnswerService.buildStudentSummaryFromAggregate_(row, {}), recent: []});
   const session = AnswerService.initializeStudentSession('active-token', { level: 'beginner' });
 
   assert.equal(session.ok, true);
@@ -6729,6 +6767,7 @@ test('initializeStudentSession uses a zero summary and ignores a stale legacy ru
     throw new Error('readAnswerLogsForRosterKey should not be used during student initialization');
   };
 
+  AnswerService.readRuntimeSummaryCache_ = (row) => ({rosterKey: row.rosterKey, summary: AnswerService.buildStudentSummaryFromAggregate_(row, {}), recent: []});
   const session = AnswerService.initializeStudentSession('active-token', { level: 'beginner' });
 
   assert.equal(session.ok, true);
@@ -6778,6 +6817,7 @@ test('initializeStudentSession and getPracticeProblem log timing fields and stud
   });
   SheetRepository.assertManagementSheetsReady = () => {};
 
+  AnswerService.readRuntimeSummaryCache_ = (row) => ({rosterKey: row.rosterKey, summary: AnswerService.buildStudentSummaryFromAggregate_(row, {}), recent: []});
   AnswerService.initializeStudentSession('active-token', { level: 'beginner' });
   AnswerService.getPracticeProblem('active-token', { level: 'intermediate' });
 
@@ -6857,7 +6897,7 @@ test('teacher preview session uses admin auth, mock student data, and no student
   assert.equal(session.problem.level, 'beginner');
   assert.throws(
     () => initializeTeacherPreviewSession('wrong-secret', { level: 'beginner' }),
-    /管理ダッシュボードの内部認証が一致しません/
+    /先生用の内部認証が一致しません/
   );
 });
 
@@ -6999,6 +7039,7 @@ test('getStudentState returns a zero summary when aggregate cache has no matchin
     throw new Error('readAnswerLogsForRosterKey should not be used for student state');
   };
 
+  AnswerService.readRuntimeSummaryCache_ = (row) => ({rosterKey: row.rosterKey, summary: AnswerService.buildStudentSummaryFromAggregate_(row, {}), recent: []});
   const state = AnswerService.getStudentState('active-token');
 
   assert.equal(state.student.rosterKey, 'course-1::student-1');

@@ -1,0 +1,44 @@
+{
+  "date": "2026-09-06",
+  "gasVersion": 20,
+  "scope": "administrator workflow; synthetic review fixture of 10 students and 1200 answers",
+  "measurement": "browser GAS timing from invocation to success callback; not render time",
+  "milliseconds": {
+    "initialNormalDashboard": [
+      7480
+    ],
+    "globalOperationGuide": [
+      1305
+    ],
+    "studentOperationGuide": [
+      3274
+    ],
+    "reviewTransitions": [
+      {
+        "from": 1,
+        "to": 2,
+        "elapsed": 2023
+      },
+      {
+        "from": 2,
+        "to": 3,
+        "elapsed": 3036
+      },
+      {
+        "from": 3,
+        "to": 2,
+        "elapsed": 2303
+      }
+    ]
+  },
+  "reviewFilters": {
+    "correctness": "incorrect",
+    "level": "lv1"
+  },
+  "limitations": [
+    "Small samples; no p95 or constant speed guarantee",
+    "Single administrator; no concurrent classroom load in this run",
+    "Real student row navigation validated with local synthetic tests only",
+    "No Classroom messages or student URL changes performed"
+  ]
+}

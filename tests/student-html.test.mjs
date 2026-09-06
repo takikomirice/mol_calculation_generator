@@ -38,7 +38,7 @@ test('student screen exposes required learner, status, level, problem, result, a
     assert.match(html, new RegExp(`id="${id}"`), `${id} should exist`);
   }
 
-  for (const level of ['beginner', 'intermediate', 'advanced']) {
+  for (const level of ['lv1', 'lv2', 'lv3', 'lv4', 'lv5', 'lv6']) {
     assert.match(html, new RegExp(`data-level="${level}"`), `${level} level button should exist`);
   }
 });
@@ -50,12 +50,12 @@ test('student screen uses encouraging result titles with advanced-only significa
     'できた！',
     'いい感じ！',
     'その調子！',
-    'いいですね！式の立て方も合っています！',
+    'いいですね！答えが合っています！',
     '3問連続',
     '5問連続',
-    'まずは変換に慣れよう',
-    '少し手順が増える問題に挑戦',
-    '有効数字3桁で仕上げよう',
+    'molと1種類の変換',
+    'molを経由する1種類の変換',
+    '有効数字3桁',
     '有効数字までOK',
     'もう一歩！',
     '惜しい！',
@@ -69,7 +69,7 @@ test('student screen uses encouraging result titles with advanced-only significa
   assert.match(html, /currentCorrectStreak/);
   assert.match(html, /requiresRounding/);
   assert.match(html, /significantDigits/);
-  assert.match(html, /data\.level === 'advanced'/);
+  assert.match(html, /'lv5', 'lv6', 'advanced'/);
   assert.doesNotMatch(html, /有効数字に合わせて丸めて判定します/);
   assert.match(html, /elements\.resultTitle\.textContent = buildResultTitle\(data, correct\)/);
 });
@@ -90,7 +90,7 @@ test('student screen reads token from URL params and uses Apps Script server fun
   assert.match(html, /params\.get\('t'\)/);
   assert.match(html, /params\.get\('token'\)/);
   assert.match(html, /initialToken/);
-  assert.match(html, /const initialToken = <\?!= JSON\.stringify\(typeof initialToken === 'undefined' \? '' : initialToken\) \?>/);
+  assert.match(html, /const initialToken = <\?!= JSON\.stringify\(typeof initialToken === 'undefined' \? '' : initialToken\)\.replace/);
 
   for (const method of ['initializeStudentSession', 'getPracticeProblem', 'submitAnswer']) {
     assert.match(html, new RegExp(`'${method}'`), `${method} should be available through mode-aware server dispatch`);
@@ -151,8 +151,8 @@ test('student screen prefetches one next problem and prefers it after grading', 
   assert.match(html, /function canShowPrefetchedProblem/);
   assert.match(html, /showNextProblem\(\)/);
   assert.match(html, /state\.prefetchPromise = runServer\(method, args\)/);
-  assert.match(html, /skipNextProblem: hasUsablePrefetchedProblem\(state\.selectedLevel\)/);
-  assert.match(html, /state\.pendingProblem = takePrefetchedProblem\(state\.selectedLevel\) \|\| response\.nextProblem \|\| null/);
+  assert.match(html, /skipNextProblem: state\.practiceMode !== 'auto' && hasUsablePrefetchedProblem\(state\.selectedLevel\)/);
+  assert.match(html, /state\.pendingProblem = state\.practiceMode === 'auto' \? response\.nextProblem \|\| null : takePrefetchedProblem\(state\.selectedLevel\) \|\| response\.nextProblem \|\| null/);
   assert.match(keydownBody, /if \(canShowPrefetchedProblem\(\)\)/);
   assert.match(keydownBody, /showNextProblem\(\)/);
   assert.match(keydownBody, /submitAnswer\(\)/);

@@ -4,3 +4,11 @@ node_modules/
 playwright-report/
 test-results/
 debug.log
+
+# Local Google Apps Script connection and credentials
+.clasp.json
+.clasprc.json
+.gas-test-env.json
+
+# Generated browser verification screenshots
+output/playwright/

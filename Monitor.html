@@ -479,30 +479,45 @@
       color: var(--danger-text);
     }
 
-    .split {
-      display: grid;
-      grid-template-columns: minmax(360px, 0.9fr) minmax(520px, 1.4fr);
-      gap: 14px;
-      align-items: start;
-    }
+    .review-filters { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; margin-bottom: 14px; }
+    .review-filters label { display: flex; gap: 8px; align-items: center; }
+    .review-list { display: grid; gap: 12px; margin-bottom: 14px; }
+    .review-card { border: 1px solid var(--line); border-radius: 8px; overflow-wrap: anywhere; }
+    .review-card > summary { cursor: pointer; padding: 14px; }
+    .review-card > summary:focus-visible { outline: 3px solid var(--accent); outline-offset: -3px; }
+    .review-meta { display: inline-flex; flex-wrap: wrap; gap: 8px; align-items: center; font-size: 12px; color: var(--muted); }
+    .review-question { display: block; margin-top: 10px; white-space: pre-wrap; line-height: 1.7; }
+    .review-open-label { display: block; margin-top: 8px; font-size: 12px; color: var(--muted); }
+    .review-card[open] .review-open-label { display: none; }
+    .review-detail { padding: 0 14px 14px; border-top: 1px solid var(--line); }
+    .review-answers { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; }
+    .review-answers > div { padding: 12px; background: #f5f7fa; border-radius: 6px; }
+    .review-answers dt { color: var(--muted); font-size: 12px; }
+    .review-answers dd { margin: 8px 0 0; font-size: 18px; white-space: pre-wrap; }
+    .review-reason { padding: 10px; background: var(--warn-bg); color: var(--warn-text); }
+    .review-detail h3 { font-size: 14px; }
+    .review-explanation { white-space: pre-wrap; line-height: 1.8; }
+    .review-stats { margin-top: 20px; border-top: 1px solid var(--line); padding-top: 16px; }
+    .review-stats > summary { cursor: pointer; padding-bottom: 12px; }
+    .review-stats-scroll { overflow-x: auto; }
+    .filter-summary {display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;padding:8px 14px;border-bottom:1px solid var(--line);background:#fff;}
+    .filter-summary span {font-size:13px;color:var(--muted);overflow-wrap:anywhere;}
+    .review-navigation {display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:14px;}
+    .review-navigation p {flex:1 1 180px;margin:0;font-size:13px;overflow-wrap:anywhere;}
+    #operationsDialog {width:min(760px,calc(100% - 24px));max-height:calc(100dvh - 32px);padding:0;border:1px solid var(--line);border-radius:12px;color:var(--text);box-sizing:border-box;}
+    #operationsDialog::backdrop {background:rgba(15,23,42,.5);}
+    .operations-header {display:flex;justify-content:space-between;align-items:center;gap:12px;padding:16px 20px;border-bottom:1px solid var(--line);}
+    .operations-header h2 {font-size:20px;margin:0;}
+    .operations-body {padding:16px 20px;overflow-wrap:anywhere;}
+    .operations-grid {display:grid;grid-template-columns:repeat(auto-fit,minmax(min(280px,100%),1fr));gap:12px;}
+    .operation-card {border:1px solid var(--line);border-radius:8px;padding:14px;}
+    .operation-card h3 {margin:0 0 8px;font-size:16px;}
+    .operation-card p {font-size:13px;line-height:1.7;margin:8px 0;}
+    .operation-card a,.operations-body > a {display:inline-block;padding:8px 0;color:#075985;font-weight:600;}
+    .operation-unavailable {color:var(--muted);}
 
-    .history-section h3 {
-      margin: 0 0 8px;
-      font-size: 13px;
-    }
-
-    .history-table {
-      min-width: 0;
-    }
-
-    .history-table th,
-    .history-table td {
-      padding: 6px 7px;
-    }
-
-    .question-cell {
-      max-width: 240px;
-    }
+    .history-table { min-width: 520px; }
+    .history-table th, .history-table td { padding: 6px 7px; }
 
     @media (max-width: 980px) {
       .topbar,
@@ -515,13 +530,34 @@
         grid-template-columns: 1fr 1fr;
       }
 
-      .split {
-        grid-template-columns: 1fr;
-      }
+      .modal-backdrop { padding: 8px; }
+      .modal { width: 100%; max-height: 94vh; }
     }
   </style>
 </head>
 <body>
+  <section id="reviewBenchmarkPanel" hidden style="padding:16px;background:#fff4df">
+    <strong>詳細レビューの測定専用ページ</strong>
+    <p>架空の10人・1,200解答を使います。通常の生徒・解答ログ・集計とは別の測定シートです。測定中はこのタブを表示したままにしてください。</p>
+    <button id="benchmarkPrepare" type="button">測定データを準備</button>
+    <label>反復回数 <select id="benchmarkRepeats"><option value="3">3回（動作確認）</option><option value="10">10回（比較測定）</option></select></label>
+    <button id="benchmarkRun" type="button" disabled>測定を開始</button>
+    <button id="benchmarkDownload" type="button" disabled>測定結果JSONを保存</button>
+    <p id="benchmarkStatus" role="status">測定データを準備してください。</p>
+    <div id="benchmarkSummary"></div>
+    <details><summary>測定の生データ</summary><pre id="benchmarkJson" style="white-space:pre-wrap"></pre></details>
+  </section>
+  <section id="loadBenchmarkPanel" hidden style="padding:16px;background:#eef7f3">
+    <strong>生徒の採点・保存を測定</strong>
+    <p>検証用の生徒ごとに1問を準備します。名簿・配付・通常集計には混ざりません。測定用の認証情報は終了時に失効し、途中で止めても2時間で期限切れになります。</p>
+    <label>人数 <select id="loadBenchmarkCount"><option value="2">2人（動作確認）</option><option value="5">5人</option><option value="20">20人</option><option value="40" selected>40人</option><option value="80">80人</option></select></label>
+    <label>送信方法 <select id="loadBenchmarkPattern"><option value="steady">1.5秒間隔</option><option value="burst">最大5件ずつ並行</option></select></label>
+    <button id="loadBenchmarkRun" type="button">採点の負荷測定を開始</button>
+    <button id="loadBenchmarkCancel" type="button" disabled>測定を中止</button>
+    <p id="loadBenchmarkStatus" role="status">測定中はこのタブを表示したままにしてください。</p>
+    <div id="loadBenchmarkSummary"></div>
+    <details><summary>採点測定の生データ</summary><pre id="loadBenchmarkJson" aria-label="採点測定JSON" style="white-space:pre-wrap;overflow-wrap:anywhere"></pre></details>
+  </section>
   <div class="page">
     <header class="topbar">
       <div class="title-block">
@@ -532,14 +568,12 @@
         <span id="lastUpdatedAt" class="timestamp">最終更新時刻: -</span>
         <label class="toggle-field"><input id="autoRefreshToggle" type="checkbox"> 自動更新</label>
         <button id="refreshButton" class="primary" type="button">更新</button>
-        <button id="rebuildMonitorSnapshotButton" type="button">モニターだけ更新</button>
-        <button id="rebuildCachesButton" type="button">集計から完全更新</button>
-        <button id="openSpreadsheetButton" type="button">管理スプレッドシートを開く</button>
+        <button id="openSpreadsheetButton" type="button">管理操作</button>
         <button id="downloadCsvButton" type="button">表示中一覧CSV</button>
       </div>
     </header>
 
-    <div id="statusLine" class="status-line">読み込み中...</div>
+    <div id="statusLine" class="status-line" role="status" aria-live="polite">読み込み中...</div>
 
     <section id="kpiBar" class="kpi-bar" aria-label="KPIバー">
       <div class="kpi-item"><span class="kpi-label">配付済み</span><span id="kpiDistributed" class="kpi-value">-</span></div>
@@ -579,6 +613,7 @@
       <label class="check-field"><input id="notStartedOnlyToggle" type="checkbox"> 未実施のみ</label>
     </section>
 
+    <div class="filter-summary"><span id="filterSummary" role="status" aria-live="polite"></span><button id="clearFiltersButton" type="button">絞り込みを解除</button></div>
     <main class="table-wrap">
       <table id="studentTable" aria-label="生徒一覧テーブル">
         <thead id="studentHead"></thead>
@@ -592,40 +627,61 @@
   <div id="historyModal" class="modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="historyTitle">
     <section class="modal">
       <div class="modal-header">
-        <h2 id="historyTitle">生徒別履歴</h2>
+        <h2 id="historyTitle" tabindex="-1">詳細レビュー</h2>
         <button id="closeHistoryButton" type="button">閉じる</button>
       </div>
       <div class="modal-body">
-        <div id="historyStatus" class="modal-status">読み込み中...</div>
-        <div class="split">
-          <section class="history-section">
-            <h3>問題タイプ別</h3>
+        <p class="muted">解答済みの問題を新しい順に表示します。問題を開くと解答・正答・解説を確認できます。</p>
+        <div class="review-navigation" aria-label="一覧の生徒を順に確認">
+          <button id="reviewPreviousStudent" type="button">前の生徒</button>
+          <p id="reviewPosition" aria-live="polite"></p>
+          <button id="reviewNextStudent" type="button">次の生徒</button>
+          <button id="reviewOperationsButton" type="button">この生徒の管理</button>
+        </div>
+        <div class="review-filters">
+          <label>正誤 <select id="reviewResultFilter"><option value="all">すべて</option><option value="incorrect">不正解</option><option value="correct">正解</option></select></label>
+          <label>レベル <select id="reviewLevelFilter"><option value="all">すべて</option><option value="lv1">Lv.1</option><option value="lv2">Lv.2</option><option value="lv3">Lv.3</option><option value="lv4">Lv.4</option><option value="lv5">Lv.5</option><option value="lv6">Lv.6</option></select></label>
+          <button id="reviewReloadButton" type="button">履歴を更新</button>
+        </div>
+        <div id="historyStatus" class="modal-status" role="status" aria-live="polite">読み込み中...</div>
+        <div id="answerHistoryBody" class="review-list" aria-busy="false"></div>
+        <button id="reviewMoreButton" type="button" hidden>続きを読み込む</button>
+        <details id="reviewStats" class="review-stats">
+          <summary>問題タイプ別の集計を見る（全期間・全レベル）</summary>
+          <section id="reviewLearningMetrics" hidden aria-label="取り組みと変換の確認">
+            <h3>取り組み</h3><p id="reviewEffort"></p>
+            <h3>変換の確認スコア（参考）</h3><strong id="reviewCoverageScore"></strong>
+            <progress id="reviewCoverageGauge" max="36" value="0" aria-label="確認できた変換" style="display:block;width:100%;margin:8px 0"></progress>
+            <p id="reviewCoverageLevels" class="muted"></p>
+            <p class="muted">各レベル6方向 × 6レベルの36項目。各方向の直近最大10問で、5問以上取り組み、80%以上正解した項目を数えます。未実施の項目も分母に含む、学習範囲を確認する指標です。難易度の重み付けはなく、成績とは別の目安です。</p>
+          </section>
+          <div class="review-stats-scroll">
             <table class="history-table">
               <thead><tr><th>レベル</th><th>問題タイプ</th><th class="num">解答</th><th class="num">正答</th><th class="num">正答率</th><th class="num">直近正答率</th></tr></thead>
               <tbody id="problemTypeStatsBody"><tr><td colspan="6" class="empty">未読込</td></tr></tbody>
             </table>
-          </section>
-          <section class="history-section">
-            <h3>直近履歴</h3>
-            <table class="history-table">
-              <thead><tr><th>日時</th><th>レベル</th><th>問題タイプ</th><th>結果</th><th>生徒解答</th><th>問題</th></tr></thead>
-              <tbody id="answerHistoryBody"><tr><td colspan="6" class="empty">未読込</td></tr></tbody>
-            </table>
-          </section>
-        </div>
+          </div>
+          <button id="reviewStatsRetry" type="button" hidden>集計を再読込</button>
+        </details>
       </div>
     </section>
   </div>
 
+  <dialog id="operationsDialog" aria-labelledby="operationsTitle">
+    <div class="operations-header"><h2 id="operationsTitle">管理操作</h2><button id="operationsClose" type="button">閉じる</button></div>
+    <div class="operations-body">
+      <p id="operationsContext"></p>
+      <p>目的のシートを開き、リンク先の「もるくえ！」メニューで操作します。</p>
+      <p id="operationsStatus" role="status" aria-live="polite"></p>
+      <button id="operationsRetry" type="button" hidden>管理操作を再読込</button>
+      <div id="operationsContent" class="operations-grid"></div>
+      <a id="operationsBookLink" target="_blank" rel="noopener noreferrer" hidden>管理スプレッドシートを開く</a>
+    </div>
+  </dialog>
   <script>
     const AUTO_REFRESH_INTERVAL_MS = 60000;
     const AUTO_REFRESH_STORAGE_KEY = 'molMonitorAutoRefresh';
     const DEFAULT_VIEW_MODE = 'standard';
-    const SNAPSHOT_MISSING_MESSAGE = 'モニターキャッシュが未作成です。\nまず強調表示されている「モニターだけ更新」を押してください。\nそれでも表示できない場合や、人数・集計が古い場合は「集計から完全更新」を実行してください。\n必要に応じて管理スプレッドシートを開いて確認してください。';
-    const SNAPSHOT_MISSING_STATUS = 'まず「モニターだけ更新」を押してください。それでも人数や集計が古い場合は「集計から完全更新」を実行してください。';
-    const MONITOR_REBUILD_FAILED_MESSAGE = 'モニターだけ更新では復旧できませんでした。\n強調表示されている「集計から完全更新」を実行してください。';
-    const MONITOR_SNAPSHOT_STILL_MISSING_MESSAGE = 'モニターキャッシュを作成できませんでした。「集計から完全更新」を実行してください。';
-
     const VIEW_MODE_COLUMNS = {
       standard: ['number', 'name', 'status', 'attempts', 'recentAccuracy', 'lastAnsweredAt', 'history'],
       follow: ['number', 'name', 'status', 'followReason', 'attempts', 'recentAccuracy', 'lastAnsweredAt', 'history'],
@@ -637,19 +693,17 @@
       data: null,
       rows: [],
       loading: false,
-      maintenanceRunning: false,
-      fullRebuildRecommended: false,
-      monitorSnapshotRebuildRecommended: false,
       autoRefreshTimer: null,
       viewMode: DEFAULT_VIEW_MODE,
       sortKey: '',
-      sortDirection: ''
+      sortDirection: '',
+      review: null,
+      reviewReturnFocus: null,
+      reviewReturnFocusKey: null, reviewQueue: [], preferencesRestored: false
     };
 
     const elements = {
       refreshButton: document.getElementById('refreshButton'),
-      rebuildMonitorSnapshotButton: document.getElementById('rebuildMonitorSnapshotButton'),
-      rebuildCachesButton: document.getElementById('rebuildCachesButton'),
       openSpreadsheetButton: document.getElementById('openSpreadsheetButton'),
       downloadCsvButton: document.getElementById('downloadCsvButton'),
       autoRefreshToggle: document.getElementById('autoRefreshToggle'),
@@ -766,7 +820,7 @@
         sortKey: null,
         thClass: '',
         tdClass: '',
-        render: (row) => `<button class="compact" type="button" data-history="${escapeHtml(row.rosterKey)}" data-name="${escapeHtml(row.name || '')}">履歴</button>`
+        render: (row) => `<button class="compact" type="button" data-history="${escapeHtml(row.rosterKey)}" data-name="${escapeHtml(row.name || '')}">詳細レビュー</button>`
       }
     ];
 
@@ -784,7 +838,13 @@
       { header: 'アクセス', value: (row) => row.accessStatus || '' },
       { header: '解答数', value: (row) => Number(row.totalAttempts || 0) },
       { header: '直近10問正答率', value: (row) => formatPercent(row.recent10Accuracy) },
-      { header: '初級', value: (row) => formatLevelCsv(row, 'beginner') },
+      { header: 'Lv.1', value: (row) => formatLevelCsv(row, 'lv1') },
+      { header: 'Lv.2', value: (row) => formatLevelCsv(row, 'lv2') },
+      { header: 'Lv.3', value: (row) => formatLevelCsv(row, 'lv3') },
+      { header: 'Lv.4', value: (row) => formatLevelCsv(row, 'lv4') },
+      { header: 'Lv.5', value: (row) => formatLevelCsv(row, 'lv5') },
+      { header: 'Lv.6', value: (row) => formatLevelCsv(row, 'lv6') },
+      { header: '旧初級', value: (row) => formatLevelCsv(row, 'beginner') },
       { header: '中級', value: (row) => formatLevelCsv(row, 'intermediate') },
       { header: '上級', value: (row) => formatLevelCsv(row, 'advanced') },
       { header: '最終解答', value: (row) => row.lastAnsweredAt || '' },
@@ -823,7 +883,7 @@
       if (text === '') return '-';
       const date = new Date(text);
       if (Number.isNaN(date.getTime())) return text;
-      return date.toLocaleString('ja-JP', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' });
+      return date.toLocaleString('ja-JP', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit' });
     }
 
     function formatLevelCsv(row, level) {
@@ -837,7 +897,13 @@
       const text = String(level || '').trim();
       if (text === '' || text.toLowerCase() === 'undefined' || text.toLowerCase() === 'null') return '-';
       const labels = {
-        beginner: '初級',
+        lv1: 'Lv.1',
+        lv2: 'Lv.2',
+        lv3: 'Lv.3',
+        lv4: 'Lv.4',
+        lv5: 'Lv.5',
+        lv6: 'Lv.6',
+        beginner: '旧初級',
         intermediate: '中級',
         advanced: '上級'
       };
@@ -901,11 +967,18 @@
       return `読み込みに失敗しました: ${message || '不明なエラー'}`;
     }
 
+    const reviewBenchmarkMode = <?!= JSON.stringify(typeof initialReviewBenchmark !== 'undefined' && initialReviewBenchmark === true) ?> === true;
+    const monitorAuthToken = <?!= JSON.stringify(typeof initialAdminToken === 'undefined' ? '' : initialAdminToken) ?>;
     function runServer(functionName, args) {
+      if (reviewBenchmarkMode) functionName = ({refreshMonitorDashboard:'getReviewBenchmarkDashboard', getMonitorStudentAnswerReview:'getReviewBenchmarkPage', getCurrentMonitorStudentProblemTypeStats:'getReviewBenchmarkStats'})[functionName] || functionName;
+      const startedAt = Date.now();
       return new Promise((resolve, reject) => {
         google.script.run
-          .withSuccessHandler(resolve)
-          .withFailureHandler(reject)[functionName](...(args || []));
+          .withSuccessHandler((result) => {
+            console.info('[GAS timing] ' + functionName + ': ' + (Date.now() - startedAt) + ' ms');
+            resolve(result);
+          })
+          .withFailureHandler(reject)[functionName](monitorAuthToken, ...(args || []));
       });
     }
 
@@ -915,58 +988,36 @@
         : Date.now();
     }
 
-    function formatSnapshotMode(mode) {
-      if (mode === 'snapshot') return 'snapshot';
-      if (mode === 'snapshot-missing') return 'snapshot-missing';
-      return mode || 'unknown';
-    }
-
     async function loadDashboard(options) {
       if (state.loading) return;
-      const silent = options && options.silent === true;
       state.loading = true;
       elements.refreshButton.disabled = true;
-      updateMaintenanceControls();
-      if (!silent) {
-        setStatus('生徒一覧を読み込み中です...', false);
-      }
+      elements.refreshButton.textContent = '更新中…';
+      elements.downloadCsvButton.disabled = true;
+      setStatus('最新の解答を確認しています…', false);
       try {
-        const serverStartedAt = getTimingNow();
-        const data = await runServer('getMonitorDashboardData');
-        const serverElapsedMs = Math.round(getTimingNow() - serverStartedAt);
-        state.data = data || {};
-        state.rows = Array.isArray(state.data.progressRows) ? state.data.progressRows.slice() : [];
+        let result;
+        do {
+          result = await runServer('refreshMonitorDashboard');
+          if (!result || result.ok !== true || typeof result.complete !== 'boolean') throw new Error('更新できませんでした。もう一度「更新」を押してください。');
+          console.info('[Monitor refresh] processed=' + result.processed + ' total=' + result.total + ' complete=' + result.complete);
+          if (!result.complete) setStatus(`解答を反映しています… ${Math.round(result.processed / Math.max(1, result.total) * 100)}%`, false);
+        } while (!result.complete);
         const renderStartedAt = getTimingNow();
+        state.data = result.data;
+        state.rows = Array.isArray(state.data.progressRows) ? state.data.progressRows.slice() : [];
         renderDashboard();
-        const renderElapsedMs = Math.round(getTimingNow() - renderStartedAt);
-        console.log('getMonitorDashboardData', {
-          elapsedMs: serverElapsedMs,
-          snapshotMode: state.data.snapshotMode || '',
-          snapshotGeneratedAt: state.data.snapshotGeneratedAt || '',
-          rowCount: state.rows.length
-        });
-        console.log('renderDashboard', {
-          elapsedMs: renderElapsedMs,
-          rowCount: state.rows.length,
-          viewMode: state.viewMode
-        });
-        state.monitorSnapshotRebuildRecommended = state.data.snapshotMissing === true;
-        state.fullRebuildRecommended = false;
-        if (state.data.snapshotMissing === true) {
-          setStatus(`${SNAPSHOT_MISSING_STATUS}\n${state.data.message || SNAPSHOT_MISSING_MESSAGE}`, true);
-        } else {
-          state.monitorSnapshotRebuildRecommended = false;
-          state.fullRebuildRecommended = false;
-          setStatus(`生徒一覧を表示しています: ${state.rows.length}人`, false);
-        }
+        console.log('renderDashboard', { elapsedMs: Math.round(getTimingNow() - renderStartedAt), rowCount: state.rows.length });
+        setStatus(`最新の解答を反映しました。生徒 ${state.rows.length}人`, false);
       } catch (error) {
-        const message = getFriendlyErrorMessage(error);
-        setStatus(message, true);
-        elements.studentBody.innerHTML = `<tr><td colspan="${getVisibleColumnCount()}" class="empty">生徒一覧を読み込めませんでした。更新を押して再試行できます。</td></tr>`;
+        const recovery = state.data ? '前回の表示を保持しています。「更新」で再試行できます。' : '「更新」で再試行できます。初回は管理スプレッドシートの設定も確認してください。';
+        setStatus(`${getFriendlyErrorMessage(error)} ${recovery}`, true);
       } finally {
         state.loading = false;
         elements.refreshButton.disabled = false;
-        updateMaintenanceControls();
+        elements.refreshButton.textContent = '更新';
+        elements.downloadCsvButton.disabled = state.data === null;
+        elements.openSpreadsheetButton.disabled = false;
       }
     }
 
@@ -980,21 +1031,61 @@
       document.getElementById('kpiTotalAnswers').textContent = metrics.totalAnswers ?? 0;
       document.getElementById('kpiRecentAccuracy').textContent = formatPercent(metrics.recent10AverageAccuracy);
       elements.versionLabel.textContent = state.data.appVersion ? `v${state.data.appVersion}` : '';
-      elements.lastUpdatedAt.textContent = `表示データ更新: ${formatDateTime(state.data.snapshotGeneratedAt || state.data.generatedAt || new Date().toISOString())} / ${formatSnapshotMode(state.data.snapshotMode)}`;
+      elements.lastUpdatedAt.textContent = `${formatDateTime(state.data.answersThrough || state.data.snapshotGeneratedAt)} に確認した解答を反映`;
       renderFilterOptions();
+      restoreViewPreferences();
       renderRows();
-      updateMaintenanceControls();
     }
 
+    function courseKey(row) { return String(row.courseId || ('name:' + (row.courseName || ''))); }
     function renderFilterOptions() {
       const currentCourse = elements.courseFilter.value;
       const currentStatus = elements.statusFilter.value;
-      const courses = Array.from(new Set(state.rows.map((row) => row.courseName).filter(Boolean))).sort((a, b) => a.localeCompare(b, 'ja'));
-      const statuses = Array.from(new Set(state.rows.map((row) => row.statusLabel).filter(Boolean))).sort((a, b) => a.localeCompare(b, 'ja'));
-      elements.courseFilter.innerHTML = '<option value="">すべて</option>' + courses.map((course) => `<option value="${escapeHtml(course)}">${escapeHtml(course)}</option>`).join('');
-      elements.statusFilter.innerHTML = '<option value="">すべて</option>' + statuses.map((status) => `<option value="${escapeHtml(status)}">${escapeHtml(status)}</option>`).join('');
-      elements.courseFilter.value = courses.includes(currentCourse) ? currentCourse : '';
+      const courses = new Map();
+      state.rows.forEach(row => { if(row.courseName) courses.set(courseKey(row), row.courseName); });
+      const counts = {}; courses.forEach(name => {counts[name]=(counts[name] || 0)+1;});
+      const statuses = Array.from(new Set(state.rows.map(row => row.statusLabel).filter(Boolean))).sort((a,b)=>a.localeCompare(b,'ja'));
+      elements.courseFilter.innerHTML = '<option value="">すべて</option>' + Array.from(courses).sort((a,b)=>a[1].localeCompare(b[1],'ja')).map(([key,name]) => `<option value="${escapeHtml(key)}">${escapeHtml(name + (counts[name]>1 ? '（クラスID: '+key+'）' : ''))}</option>`).join('');
+      elements.statusFilter.innerHTML = '<option value="">すべて</option>' + statuses.map(status => `<option value="${escapeHtml(status)}">${escapeHtml(status)}</option>`).join('');
+      elements.courseFilter.value = courses.has(currentCourse) ? currentCourse : '';
       elements.statusFilter.value = statuses.includes(currentStatus) ? currentStatus : '';
+    }
+
+    function viewPreferencesKey() {
+      const url = getMaintenanceSpreadsheetUrl().split('#')[0];
+      return url ? 'molMonitorView:v1:' + url + (reviewBenchmarkMode ? ':benchmark' : ':normal') : '';
+    }
+    function saveViewPreferences() {
+      const key=viewPreferencesKey();if(!key)return;
+      try {sessionStorage.setItem(key,JSON.stringify({viewMode:state.viewMode,sortKey:state.sortKey,sortDirection:state.sortDirection,
+        course:elements.courseFilter.value,status:elements.statusFilter.value,follow:elements.followOnlyToggle.checked,notStarted:elements.notStartedOnlyToggle.checked}));} catch (_) {}
+    }
+    function restoreViewPreferences() {
+      if(state.preferencesRestored)return;state.preferencesRestored=true;
+      try {
+        const key=viewPreferencesKey();const value=key?JSON.parse(sessionStorage.getItem(key) || 'null'):null;
+        if(!value || typeof value!=='object')return;
+        if(Object.hasOwn(VIEW_MODE_COLUMNS,value.viewMode)) {state.viewMode=value.viewMode;elements.viewModeSelect.value=state.viewMode;}
+        if(getVisibleColumns().some(column=>column.sortKey===value.sortKey) && ['asc','desc'].includes(value.sortDirection)) {state.sortKey=value.sortKey;state.sortDirection=value.sortDirection;}
+        for(const [element,selected] of [[elements.courseFilter,value.course],[elements.statusFilter,value.status]]) {
+          element.value=Array.from(element.options).some(option=>option.value===selected)?selected:'';
+        }
+        elements.followOnlyToggle.checked=value.follow===true;elements.notStartedOnlyToggle.checked=value.notStarted===true;
+      } catch (_) {}
+    }
+    function clearFilters() {
+      elements.searchInput.value='';elements.courseFilter.value='';elements.statusFilter.value='';
+      elements.followOnlyToggle.checked=false;elements.notStartedOnlyToggle.checked=false;renderRows();
+    }
+    function renderFilterSummary(rows) {
+      const conditions=[];
+      if(elements.searchInput.value.trim())conditions.push('検索あり');
+      if(elements.courseFilter.value)conditions.push(elements.courseFilter.selectedOptions[0].textContent);
+      if(elements.statusFilter.value)conditions.push(elements.statusFilter.value);
+      if(elements.followOnlyToggle.checked)conditions.push('要フォローのみ');
+      if(elements.notStartedOnlyToggle.checked)conditions.push('未実施のみ');
+      document.getElementById('filterSummary').textContent=`表示 ${rows.length} / 全 ${state.rows.length}人` + (conditions.length ? ' · '+conditions.join(' / ') : ' · 絞り込みなし');
+      document.getElementById('clearFiltersButton').disabled=conditions.length===0;
     }
 
     function getFilteredRows() {
@@ -1004,7 +1095,7 @@
       let rows = state.rows.filter((row) => {
         const haystack = `${row.courseName || ''} ${row.number || ''} ${row.name || ''}`.toLowerCase();
         if (query && !haystack.includes(query)) return false;
-        if (course && row.courseName !== course) return false;
+        if (course && courseKey(row) !== course) return false;
         if (status && row.statusLabel !== status) return false;
         if (elements.followOnlyToggle.checked && row.followUp !== true) return false;
         if (elements.notStartedOnlyToggle.checked && Number(row.totalAttempts || 0) > 0) return false;
@@ -1020,89 +1111,6 @@
       return String(links.spreadsheetUrl || '').trim();
     }
 
-    function recommendFullRebuildFromMonitorSnapshotFailure() {
-      state.fullRebuildRecommended = true;
-      state.monitorSnapshotRebuildRecommended = false;
-      updateMaintenanceControls();
-    }
-
-    function clearMaintenanceRecommendations() {
-      state.fullRebuildRecommended = false;
-      state.monitorSnapshotRebuildRecommended = false;
-      updateMaintenanceControls();
-    }
-
-    function updateMaintenanceControls() {
-      elements.rebuildMonitorSnapshotButton.disabled = state.loading || state.maintenanceRunning;
-      elements.rebuildMonitorSnapshotButton.classList.toggle('attention', state.monitorSnapshotRebuildRecommended === true);
-      elements.rebuildCachesButton.disabled = state.loading || state.maintenanceRunning;
-      elements.rebuildCachesButton.classList.toggle('attention', state.fullRebuildRecommended === true);
-      elements.openSpreadsheetButton.disabled = getMaintenanceSpreadsheetUrl() === '';
-      elements.downloadCsvButton.disabled = state.loading || state.data === null;
-    }
-
-    async function rebuildMonitorSnapshotFromMonitor() {
-      if (state.maintenanceRunning) return;
-      const confirmed = window.confirm('既存の集計キャッシュを使って、Webモニター表示用キャッシュだけ更新します。通常はこちらを使ってください。実行しますか？');
-      if (!confirmed) return;
-      state.maintenanceRunning = true;
-      updateMaintenanceControls();
-      setStatus('更新中...', false);
-      try {
-        const result = await runServer('rebuildMonitorSnapshotFromMonitor');
-        if (!result || result.ok !== true) {
-          if (result && (result.requiresFullRebuild === true || result.recommendedAction === 'full-rebuild')) {
-            recommendFullRebuildFromMonitorSnapshotFailure();
-            setStatus(MONITOR_REBUILD_FAILED_MESSAGE, true);
-          } else {
-            state.fullRebuildRecommended = false;
-            state.monitorSnapshotRebuildRecommended = state.data && state.data.snapshotMissing === true;
-            updateMaintenanceControls();
-            setStatus(result && result.message ? result.message : 'モニター表示用キャッシュの更新に失敗しました。少し待ってから再試行してください。', true);
-          }
-          return;
-        }
-        await loadDashboard({ silent: true });
-        if (state.data && state.data.snapshotMissing === true) {
-          recommendFullRebuildFromMonitorSnapshotFailure();
-          setStatus(MONITOR_SNAPSHOT_STILL_MISSING_MESSAGE, true);
-        } else {
-          clearMaintenanceRecommendations();
-          setStatus(`${result.message || 'モニター表示用キャッシュを更新しました。'} 生徒一覧を表示しています: ${state.rows.length}人。人数や集計が古い場合は「集計から完全更新」を実行してください。`, false);
-        }
-      } catch (error) {
-        recommendFullRebuildFromMonitorSnapshotFailure();
-        setStatus(getFriendlyErrorMessage(error), true);
-      } finally {
-        state.maintenanceRunning = false;
-        updateMaintenanceControls();
-      }
-    }
-
-    async function rebuildCachesFromMonitor() {
-      if (state.maintenanceRunning) return;
-      const confirmed = window.confirm('解答ログから集計キャッシュ、問題タイプ別キャッシュ、モニターキャッシュをすべて作り直します。時間がかかることがあります。実行しますか？');
-      if (!confirmed) return;
-      state.maintenanceRunning = true;
-      updateMaintenanceControls();
-      setStatus('更新中...', false);
-      try {
-        const result = await runServer('rebuildAggregateAndMonitorCacheFromMonitor');
-        if (!result || result.ok !== true) {
-          setStatus(result && result.message ? result.message : '集計・モニターの更新に失敗しました。', true);
-          return;
-        }
-        await loadDashboard({ silent: true });
-        clearMaintenanceRecommendations();
-        setStatus(`${result.message || '集計キャッシュとモニターキャッシュを更新しました。'} 生徒一覧を表示しています: ${state.rows.length}人`, false);
-      } catch (error) {
-        setStatus(getFriendlyErrorMessage(error), true);
-      } finally {
-        state.maintenanceRunning = false;
-        updateMaintenanceControls();
-      }
-    }
-
     function openMaintenanceSpreadsheet() {
       const url = getMaintenanceSpreadsheetUrl();
       if (!url) {
@@ -1110,6 +1118,59 @@
         return;
       }
       window.open(url, '_blank', 'noopener');
+    }
+
+    const operationState={requestId:0,context:null,returnFocus:null,overflow:''};
+    function safeManagementHref(value) {
+      const text=String(value || '');
+      return /^https:\/\/docs\.google\.com\/spreadsheets\/d\/[A-Za-z0-9_-]+\/edit(?:[?#].*)?$/.test(text) ? text : '';
+    }
+    function operationCard(title,description,links) {
+      const card=document.createElement('section');card.className='operation-card';
+      const heading=document.createElement('h3');heading.textContent=title;card.appendChild(heading);
+      const text=document.createElement('p');text.textContent=description;card.appendChild(text);
+      links.forEach(([label,value])=>{
+        const url=safeManagementHref(value);const node=document.createElement(url?'a':'p');node.textContent=label+(url?'':'（シート・対象行が見つかりません）');
+        if(url){node.href=url;node.target='_blank';node.rel='noopener noreferrer';}else node.className='operation-unavailable';
+        card.appendChild(node);card.appendChild(document.createElement('br'));
+      });return card;
+    }
+    function openOperations(context) {
+      const dialog=document.getElementById('operationsDialog');
+      operationState.context=context || null;operationState.returnFocus=document.activeElement;
+      operationState.overflow=document.body.style.overflow;document.body.style.overflow='hidden';
+      document.getElementById('operationsContext').textContent=context ? `${context.courseName || ''} ${context.number || ''}番 ${context.name || '生徒'} の個別対応。リンク先で氏名を確認してから操作してください。` : '準備・配付・確認に使う場所をまとめています。';
+      if(!dialog.open)dialog.showModal();
+      return loadOperationLinks();
+    }
+    function closeOperations() {
+      operationState.requestId++;document.getElementById('operationsDialog').close();
+      document.body.style.overflow=operationState.overflow;
+      if(operationState.returnFocus?.isConnected)operationState.returnFocus.focus();
+    }
+    async function loadOperationLinks() {
+      const requestId=++operationState.requestId,context=operationState.context;
+      const content=document.getElementById('operationsContent'),status=document.getElementById('operationsStatus'),retry=document.getElementById('operationsRetry');
+      content.replaceChildren();retry.hidden=true;status.textContent='操作場所を確認しています…';
+      const book=document.getElementById('operationsBookLink');const bookUrl=safeManagementHref(getMaintenanceSpreadsheetUrl());
+      book.hidden=!bookUrl;if(bookUrl)book.href=bookUrl;else book.removeAttribute('href');
+      try {
+        const result=await runServer('getMonitorOperationLinks',[context?.rosterKey || '']);
+        if(requestId!==operationState.requestId || !document.getElementById('operationsDialog').open)return;
+        const sheets=result.sheets || {},student=result.studentRows || {};
+        if(context)content.appendChild(operationCard('この生徒のURL・名簿','トークン管理の対象行を選択し「④ 個別対応」を使います。先生の確認、URLの再発行・停止はシート側で行います。', [['対象のトークン管理行を開く',student.tokens],['対象の名簿行を開く',student.roster]]));
+        const cards=[
+          ['名簿を準備する','「① Classroom同期」で一覧を取得し、同期対象を選んでから生徒名簿を取得します。',[['Classroom一覧を開く',sheets.classrooms],['生徒名簿を開く',sheets.roster]]],
+          ['URLの配付を確認する','「② 生徒URL」で対象を確認し、DRY_RUNを確認してから配付します。失敗分の再送も同じメニューです。',[['トークン管理を開く',sheets.tokens],['配付ログを開く',sheets.distribution]]],
+          ['設定・先生用URLを確認する','設定シートの値を確認します。先生用URLは「★ 先生用URLを設定シートに出力」で準備できます。',[['設定を開く',sheets.settings]]],
+          ['処理結果・集計を確認する','処理の失敗は実行ログで確認します。集計の修復が必要なときは「⑨ 集計キャッシュを更新」を使います。',[['実行ログを開く',sheets.execution]]]
+        ];
+        cards.forEach(([title,description,links])=>content.appendChild(operationCard(title,description,links)));
+        status.textContent='操作場所を確認しました。リンクは別タブで開きます。';
+      } catch(error) {
+        if(requestId!==operationState.requestId || !document.getElementById('operationsDialog').open)return;
+        status.textContent=getFriendlyErrorMessage(error);retry.hidden=false;
+      }
     }
 
     function escapeCsvValue(value) {
@@ -1279,11 +1340,13 @@
     }
 
     function levelSummary(row) {
-      return [
+      const current = ['lv1', 'lv2', 'lv3', 'lv4', 'lv5', 'lv6'].map(level => `${formatLevel(level)} ${Number(row[level + 'Correct'] || 0)}/${Number(row[level + 'Attempts'] || 0)}`);
+      const legacy = [
         `${formatLevel('beginner')} ${Number(row.beginnerCorrect || 0)}/${Number(row.beginnerAttempts || 0)}`,
         `${formatLevel('intermediate')} ${Number(row.intermediateCorrect || 0)}/${Number(row.intermediateAttempts || 0)}`,
         `${formatLevel('advanced')} ${Number(row.advancedCorrect || 0)}/${Number(row.advancedAttempts || 0)}`
-      ].join(' / ');
+      ];
+      return current.concat(Number(row.beginnerAttempts || 0) + Number(row.intermediateAttempts || 0) + Number(row.advancedAttempts || 0) > 0 ? legacy : []).join(' / ');
     }
 
     function followReason(row) {
@@ -1293,7 +1356,7 @@
       if (row.accessStatus !== 'アクセス済み') return '未アクセス';
       if (Number(row.totalAttempts || 0) === 0) return '未実施';
       if (Number(row.recent10Attempts || 0) >= 10 && Number(row.recent10Accuracy || 0) < 0.7) return '直近正答率が低下';
-      if (Number(row.advancedAttempts || 0) === 0 && Number(row.totalAttempts || 0) >= 10) return '上級未実施';
+      if (Number(row.lv5Attempts || 0) + Number(row.lv6Attempts || 0) + Number(row.advancedAttempts || 0) === 0 && Number(row.totalAttempts || 0) >= 10) return '有効数字の練習は未実施';
       return row.statusLabel || '要確認';
     }
 
@@ -1331,6 +1394,7 @@
       renderTableHead();
       const columns = getVisibleColumns();
       const rows = getFilteredRows();
+      renderFilterSummary(rows);saveViewPreferences();
       if (rows.length === 0) {
         elements.studentBody.innerHTML = `<tr><td colspan="${columns.length}" class="empty">条件に合う生徒はいません。</td></tr>`;
         return;
@@ -1374,47 +1438,173 @@
       renderRows();
     }
 
-    async function openHistory(rosterKey, name) {
-      if (!rosterKey) return;
-      elements.historyTitle.textContent = `${name || '生徒'} の履歴`;
-      setHistoryStatus('読み込み中...', false);
-      elements.problemTypeStatsBody.innerHTML = '<tr><td colspan="6" class="empty">読み込み中...</td></tr>';
-      elements.answerHistoryBody.innerHTML = '<tr><td colspan="6" class="empty">読み込み中...</td></tr>';
-      elements.historyModal.classList.add('open');
-      try {
-        const [history, stats] = await Promise.all([
-          runServer('getMonitorStudentAnswerHistory', [rosterKey, 20]),
-          runServer('getMonitorStudentProblemTypeStats', [rosterKey])
-        ]);
-        renderHistory(history || []);
-        renderProblemTypeStats(stats || []);
-        setHistoryStatus('読み込みました。', false);
-      } catch (error) {
-        setHistoryStatus(getFriendlyErrorMessage(error), true);
-        elements.problemTypeStatsBody.innerHTML = '<tr><td colspan="6" class="empty">問題タイプ統計を読み込めませんでした。</td></tr>';
-        elements.answerHistoryBody.innerHTML = '<tr><td colspan="6" class="empty">履歴を読み込めませんでした。</td></tr>';
+    function closeHistory() {
+      state.review = null;
+      elements.historyModal.classList.remove('open');
+      document.querySelector('.page').inert = false;
+      document.body.style.overflow = '';
+      if (state.reviewReturnFocus && state.reviewReturnFocus.isConnected) state.reviewReturnFocus.focus();
+      else {
+        const original=Array.from(elements.studentBody.querySelectorAll('[data-history]')).find(button=>button.getAttribute('data-history')===state.reviewReturnFocusKey);
+        (original || elements.refreshButton).focus();
       }
+    }
+
+    function openHistory(rosterKey, name) {
+      if (!rosterKey) return;
+      state.reviewReturnFocus = document.activeElement;
+      state.reviewReturnFocusKey = rosterKey;
+      state.reviewQueue = getFilteredRows().map(row=>({rosterKey:row.rosterKey,name:row.name,number:row.number,courseName:row.courseName}));
+      if(!state.reviewQueue.some(row=>row.rosterKey===rosterKey))state.reviewQueue=[{rosterKey,name}];
+      renderReviewNavigation(rosterKey);
+      elements.historyTitle.textContent = `${name || '生徒'} の詳細レビュー`;
+      document.getElementById('reviewResultFilter').value = 'all';
+      document.getElementById('reviewLevelFilter').value = 'all';
+      document.getElementById('reviewStats').open = false;
+      elements.historyModal.classList.add('open');
+      document.querySelector('.page').inert = true;
+      document.body.style.overflow = 'hidden';
+      document.getElementById('closeHistoryButton').focus();
+      return resetReview(rosterKey);
+    }
+
+    function renderReviewNavigation(rosterKey) {
+      const index=state.reviewQueue.findIndex(row=>row.rosterKey===rosterKey),row=state.reviewQueue[index] || {};
+      document.getElementById('reviewPreviousStudent').disabled=index<=0;
+      document.getElementById('reviewNextStudent').disabled=index<0 || index>=state.reviewQueue.length-1;
+      document.getElementById('reviewPosition').textContent=[row.courseName,row.number ? row.number+'番' : '',`一覧の ${index+1} / ${state.reviewQueue.length}人`].filter(Boolean).join(' · ');
+    }
+    function moveReviewStudent(direction) {
+      if(!state.review)return;
+      const index=state.reviewQueue.findIndex(row=>row.rosterKey===state.review.rosterKey);
+      const target=state.reviewQueue[index+direction];if(!target)return;
+      elements.historyTitle.textContent=`${target.name || '生徒'} の詳細レビュー`;
+      renderReviewNavigation(target.rosterKey);
+      elements.historyTitle.focus();
+      return resetReview(target.rosterKey);
+    }
+
+    function resetReview(rosterKey) {
+      const previous = state.review;
+      const review = state.review = {
+        rosterKey: rosterKey || previous.rosterKey,
+        result: document.getElementById('reviewResultFilter').value,
+        level: document.getElementById('reviewLevelFilter').value,
+        rows: [], nextBeforeRow: null, loading: false, statsLoading: false, statsLoaded: false
+      };
+      document.getElementById('reviewLearningMetrics').hidden = true;
+      elements.answerHistoryBody.innerHTML = '';
+      elements.problemTypeStatsBody.innerHTML = '<tr><td colspan="6" class="empty">未読込</td></tr>';
+      document.getElementById('reviewStatsRetry').hidden = true;
+      const pending = loadReviewPage(review);
+      if (document.getElementById('reviewStats').open) loadReviewStats();
+      return pending;
+    }
+
+    async function loadReviewPage(review) {
+      if (!review || review !== state.review || review.loading) return;
+      review.loading = true;
+      const more = document.getElementById('reviewMoreButton');
+      more.hidden = true;
+      elements.answerHistoryBody.setAttribute('aria-busy', 'true');
+      document.getElementById('reviewReloadButton').disabled = true;
+      setHistoryStatus('履歴を読み込み中...', false);
+      try {
+        const page = await runServer('getMonitorStudentAnswerReview', [review.rosterKey, {
+          result: review.result, level: review.level, beforeRow: review.nextBeforeRow
+        }]);
+        if (review !== state.review) return;
+        review.rows.push(...page.rows);
+        review.nextBeforeRow = page.nextBeforeRow;
+        // Append cards so already expanded explanations stay open when loading more.
+        elements.answerHistoryBody.querySelector('.empty')?.remove();
+        elements.answerHistoryBody.insertAdjacentHTML('beforeend', renderHistory(page.rows));
+        if (!review.rows.length) elements.answerHistoryBody.innerHTML = `<p class="empty">${page.nextBeforeRow ? 'ここまでに条件に合う履歴はありません。続きを確認できます。' : '条件に合う解答履歴はありません。'}</p>`;
+        setHistoryStatus(`${review.rows.length}件を表示しています。${page.nextBeforeRow ? 'さらに古い履歴を読み込めます。' : 'この条件の履歴は以上です。'}`, false);
+        more.textContent = '続きを読み込む';
+        more.hidden = !page.nextBeforeRow;
+      } catch (error) {
+        if (review !== state.review) return;
+        setHistoryStatus(getFriendlyErrorMessage(error) + ' 表示済みの履歴は保持しています。', true);
+        more.textContent = '再試行';
+        more.hidden = false;
+      } finally {
+        if (review === state.review) {
+          review.loading = false;
+          elements.answerHistoryBody.setAttribute('aria-busy', 'false');
+          document.getElementById('reviewReloadButton').disabled = false;
+        }
+      }
+    }
+
+    async function loadReviewStats() {
+      const review = state.review;
+      if (!review || review.statsLoading || review.statsLoaded) return;
+      review.statsLoading = true;
+      document.getElementById('reviewStatsRetry').hidden = true;
+      elements.problemTypeStatsBody.innerHTML = '<tr><td colspan="6" class="empty">読み込み中...</td></tr>';
+      try {
+        const rows = await runServer('getCurrentMonitorStudentProblemTypeStats', [review.rosterKey]);
+        if (review !== state.review) return;
+        renderProblemTypeStats(rows || []);
+        review.statsLoaded = true;
+      } catch (error) {
+        if (review !== state.review) return;
+        elements.problemTypeStatsBody.innerHTML = `<tr><td colspan="6" class="empty">${escapeHtml(getFriendlyErrorMessage(error))}</td></tr>`;
+        document.getElementById('reviewStatsRetry').hidden = false;
+      } finally {
+        review.statsLoading = false;
+      }
+    }
+
+    function formatReviewDateTime(value) {
+      const date = new Date(value);
+      return Number.isNaN(date.getTime()) ? '-' : `${date.getFullYear()}/${formatDateTime(value)}`;
     }
 
     function renderHistory(rows) {
-      if (!rows.length) {
-        elements.answerHistoryBody.innerHTML = '<tr><td colspan="6" class="empty">直近履歴はありません。</td></tr>';
-        return;
-      }
-      elements.answerHistoryBody.innerHTML = rows.map((row) => {
-        const question = compactText(row.questionText || stripHtml(row.questionHtml), 42);
-        return `<tr>
-          <td class="nowrap">${escapeHtml(formatDateTime(row.timestamp))}</td>
-          <td>${escapeHtml(formatLevel(row.level))}</td>
-          <td>${escapeHtml(formatProblemType(row.problemType))}</td>
-          <td>${row.isCorrect === true ? '正解' : '不正解'}</td>
-          <td>${escapeHtml(compactText(row.submittedAnswer, 24))}</td>
-          <td class="question-cell">${escapeHtml(question)}</td>
-        </tr>`;
+      return rows.map((row) => {
+        const correct = row.isCorrect === true;
+        const reason = row.acceptedAnswerType === 'precision' && !correct
+          ? `数値は合っていますが、有効数字${row.significantDigits || 3}桁の指定を満たしていません。`
+          : correct && row.acceptedAnswerType === 'rounded' ? '丸めた解答として正解と判定されています。' : '';
+        const expected = row.expectedAnswerText || (row.expectedAnswer !== '' && row.expectedAnswer != null ? `${row.expectedAnswer} ${row.unit || ''}` : '記録なし');
+        return `<details class="review-card">
+          <summary>
+            <span class="review-meta"><span class="badge ${correct ? 'status-good' : 'status-follow'}">${correct ? '正解' : '不正解'}</span><span>${escapeHtml(formatLevel(row.level))} · ${escapeHtml(formatProblemType(row.problemType))}</span><time>${escapeHtml(formatReviewDateTime(row.timestamp))}</time></span>
+            <span class="review-question">${escapeHtml(row.questionText || '問題文の記録がありません。')}</span>
+            <span class="review-open-label">解答・解説を開く</span>
+          </summary>
+          <div class="review-detail">
+            <dl class="review-answers"><div><dt>生徒の解答</dt><dd>${escapeHtml(row.submittedAnswer === '' || row.submittedAnswer == null ? '記録なし' : row.submittedAnswer)} <small>${escapeHtml(row.unit || '')}</small></dd></div><div><dt>正答</dt><dd>${escapeHtml(expected)}</dd></div></dl>
+            ${reason ? `<p class="review-reason">${escapeHtml(reason)}</p>` : ''}
+            <p class="muted">解答時間：${Number(row.elapsedMs) > 0 ? `${(Number(row.elapsedMs) / 1000).toFixed(1)}秒` : '記録なし'}</p>
+            <h3>解説</h3><p class="review-explanation">${escapeHtml(row.explanation || 'この履歴には解説が保存されていません。')}</p>
+          </div>
+        </details>`;
       }).join('');
     }
 
+    function renderLearningMetrics(rows) {
+      const basic=['mol_to_mass','mass_to_mol','mol_to_particles','particles_to_mol','mol_to_gas_volume','gas_volume_to_mol'];
+      const combined=['mass_to_particles','particles_to_mass','mass_to_gas_volume','gas_volume_to_mass','gas_volume_to_particles','particles_to_gas_volume'];
+      const byLevel={lv1:new Set(),lv2:new Set(),lv3:new Set(),lv4:new Set(),lv5:new Set(),lv6:new Set()};
+      let attempts=0,correct=0;
+      rows.forEach(function(row) {
+        attempts+=Number(row.attempts || 0);correct+=Number(row.correct || 0);
+        const allowed=['lv1','lv2','lv5'].includes(row.level)?basic:combined;
+        if(byLevel[row.level] && allowed.includes(row.problemType) && Number(row.recentAttempts)>=5 && Number(row.recentCorrect)/Number(row.recentAttempts)>=0.8) byLevel[row.level].add(row.problemType);
+      });
+      const count=Object.values(byLevel).reduce((sum,set)=>sum+set.size,0);
+      document.getElementById('reviewEffort').textContent='解答 '+attempts+'問 ／ 正解 '+correct+'問（全期間）';
+      document.getElementById('reviewCoverageScore').textContent=Math.round(count/36*100)+' / 100（'+count+' / 36項目）';
+      document.getElementById('reviewCoverageGauge').setAttribute('value',String(count));
+      document.getElementById('reviewCoverageLevels').textContent=Object.keys(byLevel).map(level=>formatLevel(level)+': '+byLevel[level].size+' / 6').join('　');
+      document.getElementById('reviewLearningMetrics').hidden=false;
+    }
+
     function renderProblemTypeStats(rows) {
+      renderLearningMetrics(rows);
       if (!rows.length) {
         elements.problemTypeStatsBody.innerHTML = '<tr><td colspan="6" class="empty">問題タイプ統計はありません。</td></tr>';
         return;
@@ -1465,9 +1655,16 @@
     }
 
     elements.refreshButton.addEventListener('click', () => loadDashboard());
-    elements.rebuildMonitorSnapshotButton.addEventListener('click', rebuildMonitorSnapshotFromMonitor);
-    elements.rebuildCachesButton.addEventListener('click', rebuildCachesFromMonitor);
-    elements.openSpreadsheetButton.addEventListener('click', openMaintenanceSpreadsheet);
+    elements.openSpreadsheetButton.addEventListener('click', () => openOperations());
+    document.getElementById('clearFiltersButton').addEventListener('click', clearFilters);
+    document.getElementById('reviewPreviousStudent').addEventListener('click', () => moveReviewStudent(-1));
+    document.getElementById('reviewNextStudent').addEventListener('click', () => moveReviewStudent(1));
+    document.getElementById('reviewOperationsButton').addEventListener('click', () => {
+      const row=state.reviewQueue.find(row=>row.rosterKey===state.review?.rosterKey);if(row)openOperations(row);
+    });
+    document.getElementById('operationsClose').addEventListener('click', closeOperations);
+    document.getElementById('operationsDialog').addEventListener('cancel', event => {event.preventDefault();closeOperations();});
+    document.getElementById('operationsRetry').addEventListener('click', loadOperationLinks);
     elements.downloadCsvButton.addEventListener('click', downloadVisibleRowsCsv);
     elements.autoRefreshToggle.addEventListener('change', () => {
       if (elements.autoRefreshToggle.checked) {
@@ -1490,10 +1687,23 @@
       if (!button) return;
       handleSortHeaderClick(button.getAttribute('data-sort-key'));
     });
-    document.getElementById('closeHistoryButton').addEventListener('click', () => elements.historyModal.classList.remove('open'));
+    document.getElementById('closeHistoryButton').addEventListener('click', closeHistory);
+    document.getElementById('reviewMoreButton').addEventListener('click', () => loadReviewPage(state.review));
+    document.getElementById('reviewReloadButton').addEventListener('click', () => resetReview());
+    ['reviewResultFilter', 'reviewLevelFilter'].forEach(id => document.getElementById(id).addEventListener('change', () => resetReview()));
+    document.getElementById('reviewStats').addEventListener('toggle', (event) => { if (event.target.open) loadReviewStats(); });
+    document.getElementById('reviewStatsRetry').addEventListener('click', loadReviewStats);
+    elements.historyModal.addEventListener('keydown', (event) => {
+      if (event.key === 'Escape') { event.preventDefault(); closeHistory(); }
+      if (event.key !== 'Tab') return;
+      const controls = Array.from(elements.historyModal.querySelectorAll('button, select, summary')).filter(el => !el.disabled && el.getClientRects().length);
+      const first = controls[0], last = controls[controls.length - 1];
+      if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last.focus(); }
+      else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first.focus(); }
+    });
     elements.historyModal.addEventListener('click', (event) => {
       if (event.target === elements.historyModal) {
-        elements.historyModal.classList.remove('open');
+        closeHistory();
       }
     });
     elements.studentBody.addEventListener('click', (event) => {
@@ -1505,9 +1715,183 @@
     });
     window.addEventListener('beforeunload', stopAutoRefresh);
 
+    const loadBenchmark={running:false,cancelled:false};
+    async function runStudentLoadMeasurement() {
+      if(loadBenchmark.running || benchmark.running || !reviewBenchmarkMode) return;
+      loadBenchmark.running=true;loadBenchmark.cancelled=false;
+      const status=document.getElementById('loadBenchmarkStatus');
+      const controls=['loadBenchmarkRun','loadBenchmarkCount','loadBenchmarkPattern','benchmarkPrepare','benchmarkRun'];
+      controls.forEach(id=>document.getElementById(id).disabled=true);
+      document.getElementById('loadBenchmarkCancel').disabled=false;
+      document.getElementById('loadBenchmarkJson').textContent='';
+      document.getElementById('loadBenchmarkSummary').textContent='';
+      const count=Number(document.getElementById('loadBenchmarkCount').value);
+      const pattern=document.getElementById('loadBenchmarkPattern').value;
+      const report={schemaVersion:1,kind:'student-load',count,pattern,spacingMs:pattern==='steady'?1500:0,
+        startedAt:new Date().toISOString(),complete:false,samples:[],initialFailures:0,retryFailures:0};
+      let run,finished=0;
+      try {
+        status.textContent=count+'人分の測定問題を準備しています…';
+        run=await runServer('prepareStudentLoadBenchmark',[{count}]);
+        const started=getTimingNow();
+        async function submit(index,retry) {
+          const began=getTimingNow();let sample={index,retry,operation:'submit-student',startedMs:Math.round(began-started),budgetMs:5000};
+          try {
+            const result=await runServer('submitStudentLoadBenchmark',[run.runId,index]);
+            sample={...sample,ok:true,elapsedMs:Math.round(getTimingNow()-began),isCorrect:result.isCorrect,expectedCorrect:result.expectedCorrect,duplicate:result.duplicate,performance:result.performance};
+          } catch(error) {sample={...sample,ok:false,elapsedMs:Math.round(getTimingNow()-began),error:getFriendlyErrorMessage(error)};}
+          report.samples.push(sample);
+          if(!retry) finished++;
+          status.textContent=(retry?'再送を確認中… ':'測定中… ')+finished+' / '+count+'件';
+          return sample;
+        }
+        if(pattern==='steady') {
+          const pending=[];
+          for(let index=0;index<count && !loadBenchmark.cancelled;index++) {
+            const delay=index*1500-(getTimingNow()-started);
+            if(delay>0)await new Promise(resolve=>setTimeout(resolve,delay));
+            if(loadBenchmark.cancelled)break;
+            pending.push(submit(index,false));
+          }
+          await Promise.all(pending);
+        } else {
+          let cursor=0;
+          await Promise.all(Array.from({length:Math.min(5,count)},async()=>{
+            while(cursor<count && !loadBenchmark.cancelled) {const index=cursor++;await submit(index,false);}
+          }));
+        }
+        const failures=report.samples.filter(sample=>!sample.ok);
+        report.initialFailures=failures.length;
+        for(const sample of failures)if(!loadBenchmark.cancelled)await submit(sample.index,true);
+        report.retryFailures=report.samples.filter(sample=>sample.retry && !sample.ok).length;
+        status.textContent='保存件数と判定を照合しています…';
+        report.integrity=await runServer('finishStudentLoadBenchmark',[run.runId]);
+        report.durationMs=Math.round(getTimingNow()-started);
+        report.cancelled=loadBenchmark.cancelled;
+        report.complete=!report.cancelled && finished===count;
+        report.summary=summarizeBenchmark(report.samples.filter(sample=>!sample.retry));
+        const summary=report.summary[0];
+        status.textContent=(report.cancelled?'中止しました。':'測定完了。')+' 保存 '+report.integrity.recorded+' / '+count+'件。初回の通信失敗 '+report.initialFailures+'件、再送失敗 '+report.retryFailures+'件。';
+        document.getElementById('loadBenchmarkSummary').textContent=summary
+          ? '初回送信の中央値 '+summary.p50Ms+' ms ／ p95 '+summary.p95Ms+' ms ／ 5秒超 '+summary.overBudget+'件。重複保存 '+report.integrity.duplicates+'件、判定不一致 '+report.integrity.gradingErrors+'件。'
+          : '送信前に中止しました。';
+      } catch(error) {
+        report.error=getFriendlyErrorMessage(error);
+        status.textContent='測定を完了できませんでした。'+report.error;
+        if(run)try {report.integrity=await runServer('finishStudentLoadBenchmark',[run.runId]);}catch(_){}
+      } finally {
+        document.getElementById('loadBenchmarkJson').textContent=JSON.stringify(report,null,2);
+        loadBenchmark.running=false;
+        controls.forEach(id=>document.getElementById(id).disabled=false);
+        document.getElementById('benchmarkRun').disabled=!state.data;
+        document.getElementById('loadBenchmarkCancel').disabled=true;
+      }
+    }
+    document.getElementById('loadBenchmarkPanel').hidden=!reviewBenchmarkMode;
+    document.getElementById('loadBenchmarkRun').addEventListener('click',runStudentLoadMeasurement);
+    document.getElementById('loadBenchmarkCancel').addEventListener('click',()=>{loadBenchmark.cancelled=true;document.getElementById('loadBenchmarkStatus').textContent='実行中の保存を確認してから終了します…';});
+
+    const benchmark = {running:false, report:null};
+    function summarizeBenchmark(samples) {
+      return [...new Set(samples.map(s => s.operation))].map(operation => {
+        const group = samples.filter(s => s.operation === operation);
+        const times = group.filter(s => s.ok).map(s => s.elapsedMs).sort((a,b) => a-b);
+        const percentile = p => times.length ? times[Math.ceil(times.length*p)-1] : null;
+        return {operation, samples:group.length, failures:group.filter(s=>!s.ok).length,
+          overBudget:group.filter(s=>s.ok && s.elapsedMs>s.budgetMs).length,
+          p50Ms:times.length ? (times[Math.floor((times.length-1)/2)] + times[Math.floor(times.length/2)]) / 2 : null, p95Ms:percentile(0.95), maxMs:times.length ? times[times.length-1] : null};
+      });
+    }
+    async function benchmarkPaint() {
+      await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+    }
+    async function runReviewBenchmark() {
+      if (benchmark.running || loadBenchmark.running || !reviewBenchmarkMode) return;
+      benchmark.running = true;
+      const runButton = document.getElementById('benchmarkRun');
+      runButton.disabled = true;
+      document.getElementById('benchmarkPrepare').disabled = true;
+      document.getElementById('benchmarkDownload').disabled = true;
+      stopAutoRefresh();
+      const samples = [], startedAt = new Date().toISOString();
+      const repetitions = Number(document.getElementById('benchmarkRepeats').value);
+      const status = document.getElementById('benchmarkStatus');
+      const step = async (operation, budgetMs, action, verify) => {
+        const start = performance.now();
+        let timeout, actionElapsedMs = null;
+        const visibility = () => { if(document.visibilityState !== 'visible') hidden = true; };
+        let hidden = false;
+        document.addEventListener('visibilitychange', visibility);
+        try {
+          if (document.visibilityState !== 'visible') throw Error('background-tab');
+          await Promise.race([(async()=>{await action();actionElapsedMs=Math.round(performance.now()-start);await benchmarkPaint();})(), new Promise((_,reject)=>{timeout=setTimeout(()=>reject(Error('timeout')),20000);})]);
+          if(hidden || document.visibilityState !== 'visible') throw Error('background-tab');
+          if(!verify()) throw Error('unexpected-result');
+          const elapsedMs=Math.round(performance.now()-start);
+          samples.push({operation, elapsedMs, actionElapsedMs, frameWaitMs:elapsedMs-actionElapsedMs, budgetMs, ok:true});
+        } catch(error) {
+          samples.push({operation, elapsedMs:Math.round(performance.now()-start), actionElapsedMs, budgetMs, ok:false, error:['timeout','background-tab'].includes(error.message) ? error.message : 'operation-failed'});
+          throw error;
+        } finally {clearTimeout(timeout);document.removeEventListener('visibilitychange',visibility);}
+      };
+      const ready = () => state.review && !state.review.loading && !elements.historyStatus.classList.contains('error') && state.review.rows.length > 0;
+      try {
+        for(let i=0;i<repetitions;i++) {
+          status.textContent = `測定中 ${i+1}/${repetitions}回`;
+          await step('open-review',5000,()=>openHistory('benchmark::s0','測定生徒1'),()=>ready() && state.review.rows.length===20);
+          await step('expand-explanation',100,async()=>elements.answerHistoryBody.querySelector('summary').click(),()=>!!elements.answerHistoryBody.querySelector('details[open] .review-explanation'));
+          await step('filter-incorrect',5000,async()=>{document.getElementById('reviewResultFilter').value='incorrect';await resetReview();},()=>ready() && state.review.rows.every(row=>!row.isCorrect));
+          await step('filter-level',5000,async()=>{document.getElementById('reviewLevelFilter').value='lv5';await resetReview();},()=>ready() && state.review.rows.every(row=>row.level==='lv5' && !row.isCorrect));
+          const count = state.review.rows.length;
+          await step('load-more',5000,()=>loadReviewPage(state.review),()=>ready() && state.review.rows.length>count && new Set(state.review.rows.map(row=>row.attemptId)).size===state.review.rows.length);
+          closeHistory();
+        }
+      } catch(error) {
+        status.textContent = '測定を中断しました。失敗した操作を結果で確認してください。';
+      } finally {
+        if(state.review) closeHistory();
+        benchmark.report = {schemaVersion:1, complete:samples.length===repetitions*5 && samples.every(sample=>sample.ok), target:'GAS test deployment', fixture:{version:1,students:10,answers:1200}, startedAt,
+          completedAt:new Date().toISOString(), requestedRepetitions:repetitions,
+          timing:'UI handler start through two animation frames after rendered response; excludes page navigation and fixture preparation',
+          viewport:{width:innerWidth,height:innerHeight}, summary:summarizeBenchmark(samples), samples};
+        const summary = benchmark.report.summary;
+        const failed = summary.reduce((sum,row)=>sum+row.failures,0), slow = summary.reduce((sum,row)=>sum+row.overBudget,0);
+        status.textContent = `測定完了：${samples.length}/${repetitions*5}操作、失敗${failed}件、目安超過${slow}件。`;
+        document.getElementById('benchmarkJson').textContent = JSON.stringify(benchmark.report,null,2);
+        document.getElementById('benchmarkSummary').innerHTML = '<p>通信を伴う操作は5秒以内、解説の展開は100ms以内を暫定の目安にします。少数回のp95は参考値です。失敗は時間集計から除外し、別に表示します。</p><div style="overflow:auto"><table><thead><tr><th>操作</th><th>回数</th><th>中央値 ms</th><th>p95 ms</th><th>失敗</th><th>目安超過</th></tr></thead><tbody>' + summary.map(row=>`<tr><td>${escapeHtml(row.operation)}</td><td>${row.samples}</td><td>${row.p50Ms ?? '-'}</td><td>${row.p95Ms ?? '-'}</td><td>${row.failures}</td><td>${row.overBudget}</td></tr>`).join('') + '</tbody></table></div>';
+        benchmark.running = false;
+        runButton.disabled = false;
+        document.getElementById('benchmarkPrepare').disabled = false;
+        document.getElementById('benchmarkDownload').disabled = false;
+      }
+    }
+    if (reviewBenchmarkMode) {
+      document.getElementById('reviewBenchmarkPanel').hidden = false;
+      elements.autoRefreshToggle.disabled = true;
+      document.getElementById('benchmarkPrepare').addEventListener('click',async()=>{
+        const button=document.getElementById('benchmarkPrepare');button.disabled=true;
+        const status=document.getElementById('benchmarkStatus');status.textContent='測定データを準備中...';
+        try {
+          await runServer('prepareMonitorReviewBenchmark');
+          await loadDashboard();
+          document.getElementById('benchmarkRun').disabled=!state.data;
+          status.textContent=state.data ? '準備できました。測定を開始できます。' : '一覧の取得に失敗しました。再度準備してください。';
+        } catch(error) {status.textContent=getFriendlyErrorMessage(error);}
+        finally {button.disabled=false;}
+      });
+      document.getElementById('benchmarkRun').addEventListener('click',runReviewBenchmark);
+      document.getElementById('benchmarkDownload').addEventListener('click',()=>{
+        if(!benchmark.report)return;
+        const url=URL.createObjectURL(new Blob([JSON.stringify(benchmark.report,null,2)],{type:'application/json'}));
+        const link=document.createElement('a');link.href=url;link.download='review-performance-'+Date.now()+'.json';link.click();
+        setTimeout(()=>URL.revokeObjectURL(url),1000);
+      });
+      setStatus('測定データを準備してください。',false);
+    } else {
+      restoreAutoRefreshPreference();
+      loadDashboard();
+    }
     initializeViewMode();
-    restoreAutoRefreshPreference();
-    loadDashboard();
   </script>
 </body>
 </html>

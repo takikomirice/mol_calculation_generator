@@ -2,17 +2,17 @@
 
 const MOL_DRILL_APP_NAME = 'もるくえ！';
 const MOL_DRILL_FORMAL_DESCRIPTION = 'Classroom連携型モル計算練習アプリ';
-const MOL_DRILL_APP_VERSION = '2.0.0';
+const MOL_DRILL_APP_VERSION = '3.0.0';
 const MOL_DRILL_DEFAULT_CLASSROOM_SEND_BATCH_SIZE = 40;
 const MOL_DRILL_ADMIN_TOKEN_SETTING_KEY = 'ADMIN_TOKEN';
 const MOL_DRILL_ADMIN_TOKEN_PROPERTY_KEY = 'MOL_DRILL_ADMIN_TOKEN';
 const MOL_DRILL_AUTO_REBUILD_CACHE_ENABLED_SETTING_KEY = 'AUTO_REBUILD_CACHE_ENABLED';
 const MOL_DRILL_AUTO_REBUILD_CACHE_INTERVAL_MINUTES_SETTING_KEY = 'AUTO_REBUILD_CACHE_INTERVAL_MINUTES';
-const MOL_DRILL_AUTO_REBUILD_TRIGGER_HANDLER = 'rebuildAggregateAndMonitorCacheForTrigger';
+const MOL_DRILL_AUTO_REBUILD_TRIGGER_HANDLER = 'rebuildAggregateAndMonitorCacheForTrigger_';
 const MOL_DRILL_AUTO_REBUILD_ALLOWED_INTERVAL_MINUTES = [1, 5, 10, 15, 30, 60];
 const MOL_DRILL_TOKEN_ROW_CACHE_TTL_SECONDS = 120;
 const MOL_DRILL_MONITOR_DASHBOARD_CACHE_KEY = 'dashboard';
-const MOL_DRILL_MONITOR_SNAPSHOT_VERSION = 1;
+const MOL_DRILL_MONITOR_SNAPSHOT_VERSION = 2;
 const MOL_DRILL_DEFAULT_POST_TEXT_TEMPLATE = 'もるくえ！(モル計算ドリル)の入場URLです。\n\n{{氏名}} さん専用URL:\n{{studentUrl}}\n\nこのURLは本人専用です。他の人に共有しないでください。\n※大きい数は「6.0×10^23」または「6.0x10^23」の形で入力できます。';
 const MOL_DRILL_ADMIN_ACTION_LOCK_WAIT_MS = 1000;
 const MOL_DRILL_ADMIN_ACTION_LOCK_ERROR_MESSAGE = '別の処理が実行中です。少し待ってから再実行してください。';
@@ -243,7 +243,7 @@ const MOL_DRILL_SHEETS = [
       'first10AverageElapsedMs',
       'speedImprovementRate',
       'lastElapsedMs'
-    ],
+    ].concat(['lv1', 'lv2', 'lv3', 'lv4', 'lv5', 'lv6'].flatMap(level => [level + 'Attempts', level + 'Correct', level + 'Accuracy'])),
     description: '管理画面で使う生徒別集計を保持します。',
     columnWidths: [
       { header: 'updatedAt', width: 180 },
@@ -601,10 +601,10 @@ class AdminService {
   static assertAdminAccess(authToken) {
     const configured = this.getAdminToken();
     if (configured === '') {
-      throw new Error('管理ダッシュボードの内部認証を初期化できていません。Spreadsheetのメニューから管理ダッシュボードを開き直してください。');
+      throw new Error('先生用の内部認証が未設定です。スプレッドシートの「★ 先生用URLを設定シートに出力」を実行し、設定シートの MONITOR_URL を開いてください。');
     }
     if (String(authToken || '').trim() !== configured) {
-      throw new Error('管理ダッシュボードの内部認証が一致しません。Spreadsheetのメニューから管理ダッシュボードを開き直してください。');
+      throw new Error('先生用の内部認証が一致しません。設定シートの MONITOR_URL を開いてください。生徒は先生から配付された本人用URLを使ってください。');
     }
     return true;
   }
@@ -930,6 +930,10 @@ class SheetRepository {
 
   static reinitializeSheets() {
     this.resetExecutionCaches_();
+    const cache = AnswerService.getStudentAccessCache_();
+    if (cache) {
+      try { for (const row of this.readTokenRows()) cache.remove(AnswerService.runtimeSummaryKey_(row)); } catch (_) { /* Missing sheets may be repaired below. */ }
+    }
     const spreadsheet = SpreadsheetApp.getActiveSpreadsheet();
     for (const definition of MOL_DRILL_SHEETS) {
       const sheet = this.ensureSheet_(spreadsheet, definition);
@@ -1216,7 +1220,7 @@ class SheetRepository {
   static appendAnswerLog(entry) {
     const sheet = this.getStudentRuntimeSheet_('解答ログ');
     const headerMap = this.getHeaderColumnMap_(sheet);
-    const row = this.createBlankRow_(sheet);
+    const row = new Array(Math.max(1, ...Object.values(headerMap))).fill('');
     const values = {
       timestamp: entry.timestamp,
       attemptId: entry.attemptId,
@@ -1248,7 +1252,8 @@ class SheetRepository {
         row[headerMap[key] - 1] = values[key];
       }
     }
-    this.appendRows_(sheet, [row]);
+    // Single-row append avoids last-row/capacity RPCs while the shared lock is held.
+    sheet.appendRow(row);
   }
 
   static findAnswerLogByAttemptId(rosterKey, attemptId) {
@@ -1274,7 +1279,7 @@ class SheetRepository {
       return [];
     }
     // 解答送信後の集計は生徒別ログだけで足りるため、全行読み込みを避ける。
-    return this.findObjectsByHeaderValue_('解答ログ', 'rosterKey', normalizedRosterKey, { matchCase: true })
+    return this.findObjectsByHeaderValueInSheet_(this.getManagedSheetWithoutSchemaCheck_('解答ログ'), 'rosterKey', normalizedRosterKey, { matchCase: true })
       .map((row) => this.answerLogObjectToRow_(row))
       .filter((row) => row.rosterKey === normalizedRosterKey);
   }
@@ -1450,7 +1455,7 @@ class SheetRepository {
       row.first10AverageElapsedMs || 0,
       row.speedImprovementRate || 0,
       row.lastElapsedMs || 0
-    ]);
+    ].concat(Object.values(MolProblemService.practiceLevelMetrics_(row))));
     this.writeRowsByHeaders_(sheet, headerMap, headers, values);
   }
 
@@ -1472,6 +1477,7 @@ class SheetRepository {
         recent10Attempts: Number(row[headerMap.recent10Attempts - 1] || 0),
         recent10Correct: Number(row[headerMap.recent10Correct - 1] || 0),
         recent10Accuracy: Number(row[headerMap.recent10Accuracy - 1] || 0),
+        ...MolProblemService.practiceLevelMetrics_(this.rowValuesToObject_(headerMap, row)),
         beginnerAttempts: Number(row[headerMap.beginnerAttempts - 1] || 0),
         beginnerCorrect: headerMap.beginnerCorrect ? Number(row[headerMap.beginnerCorrect - 1] || 0) : 0,
         beginnerAccuracy: headerMap.beginnerAccuracy ? Number(row[headerMap.beginnerAccuracy - 1] || 0) : 0,
@@ -1528,6 +1534,7 @@ class SheetRepository {
       recent10Attempts: Number(source.recent10Attempts || 0),
       recent10Correct: Number(source.recent10Correct || 0),
       recent10Accuracy: Number(source.recent10Accuracy || 0),
+      ...MolProblemService.practiceLevelMetrics_(source),
       beginnerAttempts: Number(source.beginnerAttempts || 0),
       beginnerCorrect: Number(source.beginnerCorrect || 0),
       beginnerAccuracy: Number(source.beginnerAccuracy || 0),
@@ -1558,6 +1565,7 @@ class SheetRepository {
   static aggregateCacheSummaryToHeaderValues_(summary) {
     const row = summary || {};
     return {
+      ...MolProblemService.practiceLevelMetrics_(row),
       updatedAt: row.updatedAt,
       courseId: row.courseId,
       courseName: row.courseName,
@@ -1770,11 +1778,12 @@ class SheetRepository {
     if (normalizedKey === '') {
       return null;
     }
-    const rowIndex = this.findRowIndexByHeaderValue_('モニターキャッシュ', 'key', normalizedKey, { matchCase: true });
+    const sheet = this.getManagedSheetWithoutSchemaCheck_('モニターキャッシュ');
+    const rowIndex = this.findRowIndexByHeaderValueInSheet_(sheet, 'key', normalizedKey, { matchCase: true });
     if (!rowIndex) {
       return null;
     }
-    return this.monitorCacheObjectToRow_(this.readObjectAtRow_('モニターキャッシュ', rowIndex) || {});
+    return this.monitorCacheObjectToRow_(this.readObjectAtRowFromSheet_(sheet, rowIndex) || {});
   }
 
   static upsertMonitorCacheRow(row) {
@@ -1929,18 +1938,18 @@ class SheetRepository {
   }
 
   static withDocumentLock(callback) {
-    if (typeof LockService === 'undefined' || !LockService.getDocumentLock) {
-      return callback();
-    }
-    const lock = LockService.getDocumentLock();
+    // Web apps may have no document lock. Student writes and teacher actions
+    // share the script lock so buffered rows are visible before another writer.
+    if (typeof LockService === 'undefined' || !LockService.getScriptLock) return callback();
+    const lock = LockService.getScriptLock();
+    lock.waitLock(10000);
     try {
-      lock.waitLock(10000);
       return callback();
     } finally {
       try {
+        if (typeof SpreadsheetApp !== 'undefined' && SpreadsheetApp.flush) SpreadsheetApp.flush();
+      } finally {
         lock.releaseLock();
-      } catch (_ignored) {
-        // Ignore release failures to preserve the original operation result.
       }
     }
   }
@@ -2165,14 +2174,13 @@ class SheetRepository {
   }
 
   static getHeaderColumnMap_(sheet) {
-    if (!sheet || sheet.getLastColumn() < 1 || sheet.getLastRow() < 1) {
-      return {};
-    }
+    if (!sheet) return {};
     const cacheKey = this.getSheetCacheKey_(sheet);
     const cache = this.getHeaderColumnMapCache_();
     if (cacheKey && cache[cacheKey]) {
       return cache[cacheKey];
     }
+    if (sheet.getLastColumn() < 1 || sheet.getLastRow() < 1) return {};
     const headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
     const map = {};
     headers.forEach((header, index) => {
@@ -2235,23 +2243,22 @@ class SheetRepository {
     if (finder.matchCase) {
       finder.matchCase(options && options.matchCase === true);
     }
-    const rows = [];
-    const seenRows = {};
-    const maxMatches = lastRow - 1;
-    for (let count = 0; count < maxMatches; count += 1) {
-      const found = finder.findNext();
-      if (!found || !found.getRow) {
-        break;
+    // Search once, then retrieve nearby matches in bounded blocks. Reading each
+    // row separately also repeats header/size RPCs and makes cold starts slow.
+    const indices=Array.from(new Set(finder.findAll().map(cell=>cell.getRow())))
+      .filter(index=>index>=2 && index<=lastRow).sort((a,b)=>a-b);
+    const rows=[];
+    const lastColumn=sheet.getLastColumn();
+    let offset=0;
+    while(offset<indices.length) {
+      const start=indices[offset];
+      let endOffset=offset;
+      while(endOffset+1<indices.length && indices[endOffset+1]-start<500) endOffset+=1;
+      const values=sheet.getRange(start,1,indices[endOffset]-start+1,lastColumn).getValues();
+      for(let index=offset;index<=endOffset;index+=1) {
+        rows.push(this.rowValuesToObject_(headerMap,values[indices[index]-start]));
       }
-      const rowIndex = found.getRow();
-      if (seenRows[rowIndex]) {
-        break;
-      }
-      seenRows[rowIndex] = true;
-      const row = this.readObjectAtRowFromSheet_(sheet, rowIndex);
-      if (row) {
-        rows.push(row);
-      }
+      offset=endOffset+1;
     }
     return rows;
   }
@@ -2598,7 +2605,8 @@ class TokenService {
   }
 
   static isTeacherTestStudentRosterKey(rosterKey) {
-    return String(rosterKey || '').trim() === MOL_DRILL_TEACHER_TEST_STUDENT.rosterKey;
+    const key=String(rosterKey || '').trim();
+    return key === MOL_DRILL_TEACHER_TEST_STUDENT.rosterKey || key.startsWith('__TEST_LOAD__::');
   }
 
   static generateToken() {
@@ -2659,7 +2667,7 @@ class TokenService {
     const normalizedBaseUrl = String(baseUrl || '').trim();
     const issuedAt = new Date().toISOString();
     const existingRows = SheetRepository.readTokenRows();
-    const existing = existingRows.find((row) => this.isTeacherTestStudentRosterKey(row.rosterKey)) || null;
+    const existing = existingRows.find((row) => row.rosterKey === MOL_DRILL_TEACHER_TEST_STUDENT.rosterKey) || null;
     const reuseExisting = existing && !SheetRepository.isFlagEnabled_(existing.revoked) && String(existing.token || '').trim() !== '';
     const token = reuseExisting ? String(existing.token).trim() : this.generateToken();
     const note = this.ensureTeacherTestStudentNote_(reuseExisting ? existing.note : '');
@@ -2680,7 +2688,7 @@ class TokenService {
       postDeletionStatus: '',
       note
     };
-    const preservedRows = existingRows.filter((row) => !this.isTeacherTestStudentRosterKey(row.rosterKey));
+    const preservedRows = existingRows.filter((row) => row.rosterKey !== MOL_DRILL_TEACHER_TEST_STUDENT.rosterKey);
     SheetRepository.writeTokenRows([...preservedRows, testRow]);
     this.clearTokenRowCachesForRows_([existing, testRow]);
     return testRow;
@@ -2829,6 +2837,7 @@ class TokenService {
     if (String(tokenRow.rosterKey || '').trim() === '') {
       throw new Error('tokenに対応するrosterKeyが空です。');
     }
+    if(String(tokenRow.rosterKey).startsWith('__TEST_LOAD__::') && !(Date.now()-Date.parse(tokenRow.issuedAt)<2*60*60*1000)) throw new Error('測定用URLの期限が切れています。');
     return tokenRow;
   }
 
@@ -2994,9 +3003,54 @@ class TokenService {
 }
 
 class MolProblemService {
+  static isPracticeLevel_(level) { return /^lv[1-6]$/.test(String(level)); }
+  static needsSignificantDigits_(level) { return ['advanced', 'lv5', 'lv6'].includes(level); }
+  static practiceGroups_(level) {
+    return ['lv1', 'lv2', 'lv5'].includes(level)
+      ? { mol_mass: [1, 2], mol_particles: [3, 4], mol_volume: [5, 6] }
+      : { mass_particles: [7, 8], mass_volume: [9, 10], volume_particles: [11, 12] };
+  }
+  static practiceLevelMetrics_(row) {
+    const out = {};
+    for (const level of ['lv1', 'lv2', 'lv3', 'lv4', 'lv5', 'lv6']) {
+      for (const suffix of ['Attempts', 'Correct', 'Accuracy']) out[level + suffix] = Number((row || {})[level + suffix] || 0);
+    }
+    return out;
+  }
+  static countSignificantDigits_(input) {
+    const text = String(input).normalize('NFKC').trim().replace(/×/g, 'x').replace(/\s+/g, '');
+    const match = text.match(/^[+]?((?:\d+(?:\.\d*)?|\.\d+))(?:(?:e|[x*]10\^)[+-]?\d+)?$/i);
+    return match ? match[1].replace('.', '').replace(/^0+/, '').length : 0;
+  }
+  static strictPracticeGrade_(input, expected, level) {
+    const text = String(input).normalize('NFKC').trim().replace(/×/g, 'x').replace(/\s+/g, '');
+    const valid = /^[+]?(?:\d+(?:\.\d*)?|\.\d+)(?:(?:e|[x*]10\^)[+-]?\d+)?$/i.test(text);
+    const value = valid ? this.normalizeNumericInput(text) : NaN;
+    const target = Number(expected);
+    const hard = this.needsSignificantDigits_(level);
+    const compared = hard ? this.roundToSignificantDigits(value, 3) : value;
+    const numericCorrect = Number.isFinite(value) && value > 0 && Math.abs(compared - target) <= Math.abs(target) * 1e-12;
+    const precisionCorrect = !hard || this.countSignificantDigits_(text) === 3;
+    return { isCorrect: numericCorrect && precisionCorrect,
+      acceptedAnswerType: numericCorrect && !precisionCorrect ? 'precision' : numericCorrect ? 'exact' : '',
+      acceptedAnswer: numericCorrect ? value : '', exactAnswer: target,
+      normalizedSubmittedAnswer: Number.isFinite(value) ? value : '' };
+  }
+
   static generateProblem(levelOrOptions) {
     const options = typeof levelOrOptions === 'object' && levelOrOptions !== null ? levelOrOptions : { level: levelOrOptions };
     const level = this.normalizeLevel_(options.level);
+    if (this.isPracticeLevel_(level)) {
+      const groups = this.practiceGroups_(level);
+      const focused = ['lv1', 'lv3'].includes(level);
+      const category = focused ? (options.category || Object.keys(groups)[0]) : '';
+      if (focused && !groups[category]) throw new Error('選択した変換はこのレベルでは使えません。');
+      const profile = this.getLevelProfile_(level);
+      if (focused) profile.typeIds = groups[category];
+      const problem = this.generateLevelProblem_(profile, {});
+      problem.category = category;
+      return problem;
+    }
     if (level === 'intermediate') {
       return this.generateIntermediateProblem(options);
     }
@@ -3046,6 +3100,7 @@ class MolProblemService {
       level: problem.level,
       problemType: problem.problemType,
       problemTypeId: problem.problemTypeId,
+      category: problem.category || '',
       questionText: problem.questionText,
       questionHtml: this.formatChemicalTextHtml_(problem.questionText, [problem.substance && problem.substance.formula]),
       givenValuesTitle: this.getGivenValuesTitle_(problem),
@@ -3170,7 +3225,9 @@ class MolProblemService {
   static createProblemByType_(type, profile) {
     const avogadroConstant = profile.avogadroConstant;
     const molarVolume = 22.4;
-    const substance = this.pickSubstance_(type.requiresGasAtSTP === true);
+    const substance = this.isPracticeLevel_(profile.level) && !this.needsSignificantDigits_(profile.level)
+      ? this.pickNumber_(this.getSubstances_().filter(item => (!type.requiresGasAtSTP || item.isGasAtSTP) && [2, 16, 18, 28, 32, 44, 100].includes(item.molarMass)))
+      : this.pickSubstance_(type.requiresGasAtSTP === true);
     const mol = this.pickNumber_(type.advancedOnly === true ? profile.advancedMolValues : profile.molValues);
     const mass = mol * substance.molarMass;
     const particles = mol * avogadroConstant;
@@ -3200,7 +3257,7 @@ class MolProblemService {
     } else if (type.key === 'particles_to_mol') {
       expectedAnswer = mol;
       unit = 'mol';
-      given = { value: this.roundToSignificantDigits(particles, significantDigits), unit: '個' };
+      given = { value: (this.isPracticeLevel_(profile.level) && !this.needsSignificantDigits_(profile.level) ? particles : this.roundToSignificantDigits(particles, significantDigits)), unit: '個' };
       questionText = `${substance.name} ${substance.formula} ${this.formatScientific_(given.value, significantDigits)} 個は何 mol ですか。`;
     } else if (type.key === 'mol_to_gas_volume') {
       expectedAnswer = gasVolume;
@@ -3220,7 +3277,7 @@ class MolProblemService {
     } else if (type.key === 'particles_to_mass') {
       expectedAnswer = mass;
       unit = 'g';
-      given = { value: this.roundToSignificantDigits(particles, significantDigits), unit: '個' };
+      given = { value: (this.isPracticeLevel_(profile.level) && !this.needsSignificantDigits_(profile.level) ? particles : this.roundToSignificantDigits(particles, significantDigits)), unit: '個' };
       questionText = `${substance.name} ${substance.formula} ${this.formatScientific_(given.value, significantDigits)} 個の質量は何 g ですか。`;
     } else if (type.key === 'mass_to_gas_volume') {
       expectedAnswer = gasVolume;
@@ -3240,7 +3297,7 @@ class MolProblemService {
     } else if (type.key === 'particles_to_gas_volume') {
       expectedAnswer = gasVolume;
       unit = 'L';
-      given = { value: this.roundToSignificantDigits(particles, significantDigits), unit: '個' };
+      given = { value: (this.isPracticeLevel_(profile.level) && !this.needsSignificantDigits_(profile.level) ? particles : this.roundToSignificantDigits(particles, significantDigits)), unit: '個' };
       questionText = `${substance.name} ${substance.formula} ${this.formatScientific_(given.value, significantDigits)} 個は、標準状態で何 L ですか。`;
     } else if (type.key === 'atomic_mass_to_atom_mass') {
       const element = this.pickElement_();
@@ -3298,6 +3355,13 @@ class MolProblemService {
   }
 
   static finalizeProblem_(profile, type, questionText, substance, given, expectedAnswer, unit) {
+    if (this.isPracticeLevel_(profile.level)) {
+      const amount = given.unit === 'mol' ? given.value : given.unit === 'g' ? given.value / substance.molarMass
+        : given.unit === 'L' ? given.value / 22.4 : given.value / profile.avogadroConstant;
+      expectedAnswer = unit === 'mol' ? amount : unit === 'g' ? amount * substance.molarMass
+        : unit === 'L' ? amount * 22.4 : amount * profile.avogadroConstant;
+    }
+    if (this.isPracticeLevel_(profile.level)) questionText = questionText.replace('標準状態', '標準状態（0 ℃・1 atm）');
     const rawExpected = this.normalizeExactExpectedAnswer_(expectedAnswer);
     const roundedExpected = this.roundToSignificantDigits(rawExpected, profile.significantDigits);
     const storedExpected = this.getExpectedAnswerForLevel_(rawExpected, roundedExpected, profile.level);
@@ -3324,7 +3388,7 @@ class MolProblemService {
       significantDigits: profile.significantDigits,
       avogadroConstant: profile.avogadroConstant,
       molarVolume: 22.4,
-      requiresRounding: profile.level === 'advanced' && this.requiresRounding_(expectedAnswer, roundedExpected),
+      requiresRounding: this.needsSignificantDigits_(profile.level) && this.requiresRounding_(expectedAnswer, roundedExpected),
       explanation: ''
     };
     problem.givenValues = this.buildGivenValues_(problem, profile);
@@ -3333,7 +3397,7 @@ class MolProblemService {
   }
 
   static getExpectedAnswerForLevel_(rawExpected, roundedExpected, level) {
-    return this.normalizeLevel_(level) === 'advanced' ? roundedExpected : Number(rawExpected);
+    return this.needsSignificantDigits_(this.normalizeLevel_(level)) ? roundedExpected : Number(rawExpected);
   }
 
   static normalizeExactExpectedAnswer_(value) {
@@ -3349,7 +3413,7 @@ class MolProblemService {
   }
 
   static formatExpectedAnswerForDisplay_(expectedAnswer, profile) {
-    if (this.normalizeLevel_(profile && profile.level) === 'advanced') {
+    if (this.needsSignificantDigits_(this.normalizeLevel_(profile && profile.level))) {
       return this.formatNumberForDisplay_(expectedAnswer, profile && profile.significantDigits);
     }
     return this.formatPlain_(expectedAnswer);
@@ -3596,6 +3660,7 @@ class MolProblemService {
       normalizedTolerance = 0.01;
     }
     const normalizedLevel = this.normalizeLevel_(level || 'advanced');
+    if (this.isPracticeLevel_(normalizedLevel)) return this.strictPracticeGrade_(submitted, expected, normalizedLevel).isCorrect;
     if (normalizedLevel === 'advanced') {
       const roundedSubmitted = this.roundToSignificantDigits(submittedNumber, 3);
       const roundedExpected = this.roundToSignificantDigits(expectedNumber, 3);
@@ -3709,6 +3774,7 @@ class MolProblemService {
     }
     const normalizedSubmittedAnswer = this.normalizeNumericInput(submittedAnswer);
     const level = this.normalizeLevel_(problem.level);
+    if (this.isPracticeLevel_(level)) return { ...this.strictPracticeGrade_(submittedAnswer, problem.expectedAnswer, level), tolerance: 1e-12 };
     const expectedForGrading = level === 'advanced'
       ? problem.expectedAnswer
       : (Number.isFinite(Number(problem.rawExpectedAnswer)) ? problem.rawExpectedAnswer : problem.expectedAnswer);
@@ -3914,6 +3980,13 @@ class MolProblemService {
   }
 
   static getLevelProfile_(level) {
+    if (this.isPracticeLevel_(level)) {
+      const hard = this.needsSignificantDigits_(level);
+      return { level, typeIds: Object.values(this.practiceGroups_(level)).flat(),
+        avogadroConstant: hard ? 6.02e23 : 6.0e23, significantDigits: 3,
+        tolerance: 1e-12, molValues: hard ? [0.137, 0.286, 0.734, 1.37, 2.48, 3.16] : [0.5, 1, 2, 3],
+        advancedMolValues: [] };
+    }
     if (level === 'intermediate') {
       return this.applyConfiguredLevelSettings_({
         level: 'intermediate',
@@ -4147,7 +4220,8 @@ class MolProblemService {
   }
 
   static normalizeLevel_(level) {
-    const normalized = String(level || 'beginner').trim().toLowerCase();
+    const normalized = String(level || 'lv1').trim().toLowerCase();
+    if (this.isPracticeLevel_(normalized)) return normalized;
     if (['初級', 'basic', 'beginner'].includes(normalized)) {
       return 'beginner';
     }
@@ -4161,6 +4235,7 @@ class MolProblemService {
   }
 
   static roundForProblem_(value, profile) {
+    if (this.isPracticeLevel_(profile.level)) return this.needsSignificantDigits_(profile.level) ? this.roundToSignificantDigits(value, 3) : this.normalizeExactExpectedAnswer_(value);
     return profile.level === 'advanced' ? this.roundToSignificantDigits(value, profile.significantDigits) : this.roundToSignificantDigits(value, Math.max(profile.significantDigits, 3));
   }
 
@@ -4187,7 +4262,7 @@ class MolProblemService {
   }
 
   static createInputHint_(problem) {
-    if (problem.level === 'advanced') {
+    if (this.needsSignificantDigits_(problem.level)) {
       if (problem.unit === '個' || Math.abs(Number(problem.expectedAnswer || 0)) >= 100000) {
         return '有効数字3桁で答えよう。例: 6.02×10^23 または 6.02x10^23';
       }
@@ -4518,7 +4593,214 @@ class AdaptiveProblemService {
   }
 }
 
+// Versioned, deterministic policy. Progress is derived only from server-issued
+// automatic questions and persisted answers, never from browser-supplied scores.
+class AutoPracticeService {
+  static initial_() { return {version:1, level:'lv1', category:'mol_mass', stageId:0, recent:[], resume:null, reason:'start'}; }
+  static groups_(level) { return MolProblemService.practiceGroups_(level); }
+  static focused_(level) { return ['lv1','lv3'].includes(level); }
+  static types_(state) { const groups=this.groups_(state.level); return this.focused_(state.level) ? groups[state.category] : Object.values(groups).flat(); }
+  static metadata_(state) { return {version:1, level:state.level, category:state.category, stageId:state.stageId}; }
+  static move_(state, level, category, reason) {
+    state.level=level; state.category=this.focused_(level) ? (category || Object.keys(this.groups_(level))[0]) : '';
+    state.stageId++; state.recent=[]; state.reason=reason;
+  }
+  static apply_(state, row) {
+    const info=AnswerService.parseClientInfo_(row.clientInfo), meta=info.autoPractice;
+    if(!meta || meta.version!==1 || meta.stageId!==state.stageId || meta.level!==state.level || meta.category!==state.category || row.level!==state.level) return state;
+    const type=MolProblemService.getProblemTypes_().find(item=>item.key===row.problemType);
+    if(!type || !this.types_(state).includes(type.id)) return state;
+    state.recent.push({type:type.id, correct:row.isCorrect===true, precision:row.isCorrect!==true && info.acceptedAnswerType==='precision'});
+    state.recent=state.recent.slice(-10);
+    const focused=this.focused_(state.level), window=state.recent.slice(focused ? -5 : -10);
+    const types=this.types_(state);
+    const ready=window.length >= (focused ? 5 : 10)
+      && window.filter(item=>item.correct).length >= (focused ? 4 : 8)
+      && types.every(id=>window.filter(item=>item.type===id).length >= (focused ? 2 : 1));
+    state.reason=window.slice(-2).some(item=>item.precision) ? 'precision' : 'practice';
+    if(ready) {
+      if(state.resume) {
+        const resume=state.resume; state.resume=null;
+        this.move_(state,resume.level,resume.category,'return');
+      } else if(focused) {
+        const groups=Object.keys(this.groups_(state.level)), index=groups.indexOf(state.category);
+        if(index<groups.length-1) this.move_(state,state.level,groups[index+1],'new-category');
+        else this.move_(state,'lv'+(Number(state.level.slice(2))+1),'','advance');
+      } else if(state.level!=='lv6') this.move_(state,'lv'+(Number(state.level.slice(2))+1),'','advance');
+      else state.reason='steady';
+    } else if(!state.resume && state.recent.length>=5 && state.recent.slice(-3).every(item=>!item.correct && !item.precision) && state.level!=='lv1') {
+      // Precision-only mistakes keep the current numerical difficulty. Support
+      // preserves the skill family: Lv.5 -> Lv.2, Lv.6 -> Lv.4.
+      const lower={lv2:'lv1',lv3:'lv1',lv4:'lv3',lv5:'lv2',lv6:'lv4'}[state.level];
+      const lastType=type.id;
+      let category=Object.keys(this.groups_(lower)).find(key=>this.groups_(lower)[key].includes(lastType));
+      if(!category) category=state.category==='volume_particles' ? 'mol_volume' : 'mol_mass';
+      state.resume={level:state.level,category:state.category};
+      this.move_(state,lower,category,'support');
+    }
+    return state;
+  }
+  static rebuild_(rows) {
+    const state=this.initial_();
+    rows.forEach(row=>this.apply_(state,row));
+    return state;
+  }
+  static plan_(state) {
+    const messages={start:'まずはmolと質量の変換から。できたことを積み上げていこう。',
+      practice:'今の変換を練習中。あせらず、式を確かめながら進めよう。',
+      'new-category':'この変換はいい感じ！ 次は別の変換を試してみよう。',
+      advance:'いろいろな向きでできてきたね。次のレベルを試してみよう。',
+      support:'いったん基礎の変換で確認しよう。できてきたら元の練習に戻れるよ。',
+      return:'基礎の確認ができたね。さっきの練習をもう一度試してみよう。',
+      precision:'数値が合っている問題もあるね。最後に有効数字3桁を確認しよう。',
+      steady:'Lv.6でもできてきたね。いろいろな変換を続けて確かめよう。'};
+    return {mode:'auto', version:1, level:state.level, category:state.category, stageId:state.stageId,
+      focusLabel:({mol_mass:'mol ⇔ 質量',mol_particles:'mol ⇔ 個数',mol_volume:'mol ⇔ 体積',mass_particles:'質量 ⇔ 個数',mass_volume:'質量 ⇔ 体積',volume_particles:'体積 ⇔ 個数'})[state.category] || 'いろいろな変換',
+      message:messages[state.reason] || messages.practice, support:!!state.resume};
+  }
+  static issue_(tokenRow) {
+    const data=AnswerService.runtimeData_(tokenRow);
+    const state=data.autoPractice || this.initial_(), types=this.types_(state);
+    // Cover both directions before moving up; favor less-practiced directions.
+    const score=id=>state.recent.filter(item=>item.type===id).reduce((sum,item)=>sum+(item.correct?1:0.75),0);
+    const type=types.slice().sort((a,b)=>score(a)-score(b)||a-b)[0];
+    const profile=MolProblemService.getLevelProfile_(state.level);
+    profile.typeIds=types;
+    const problem=MolProblemService.generateLevelProblem_(profile,{problemType:type});
+    problem.category=state.category;
+    problem.autoPractice=this.metadata_(state);
+    MolProblemService.storeProblemForToken(tokenRow.token,problem);
+    const publicProblem=MolProblemService.toPublicProblem(problem);
+    publicProblem.learningPlan=this.plan_(state);
+    return {problem,publicProblem};
+  }
+}
+
+// Compact, deterministic evidence for self-study. Only recorded, graded answers enter here.
+class StudentLearningService {
+  static initial_() { return {cells:{},mistakes:[]}; }
+  static label_(key) {
+    const units={mol:'mol',mass:'質量',particles:'個数',gas_volume:'体積'};
+    return String(key).split('_to_').map(part=>units[part] || part).join(' → ');
+  }
+  static apply_(data, row) {
+    const result=data || this.initial_();
+    if (!/^lv[1-6]$/.test(String(row.level))) return result;
+    const type=MolProblemService.getProblemTypes_().find(item=>item.key===row.problemType);
+    const groups=MolProblemService.practiceGroups_(row.level);
+    if (!type || !Object.keys(groups).some(key=>groups[key].includes(type.id))) return result;
+    const key=row.level+':'+type.key;
+    const cell=result.cells[key] || {attempts:0,correct:0,recent:[]};
+    const correct=row.isCorrect===true;
+    const acceptance=AnswerService.extractAnswerAcceptanceFromClientInfo_(row.clientInfo);
+    const precision=!correct && acceptance.acceptedAnswerType==='precision';
+    cell.attempts+=1;cell.correct+=correct?1:0;
+    cell.recent=cell.recent.concat({correct,precision}).slice(-5);result.cells[key]=cell;
+    if(!correct) result.mistakes=result.mistakes.concat({
+      timestamp:String(row.timestamp || ''), level:row.level, problemType:row.problemType,
+      questionText:String(row.questionText || '').slice(0,900),
+      submittedAnswer:String(row.submittedAnswer == null ? '' : row.submittedAnswer).slice(0,120),
+      expectedAnswerText:row.expectedAnswer==='' || row.expectedAnswer==null ? '記録なし' : AnswerService.formatAnswerText_(row.expectedAnswer,row.unit,row.significantDigits,row.level),
+      unit:String(row.unit || ''),explanation:String(row.explanation || '').slice(0,1500),
+      acceptedAnswerType:precision?'precision':''
+    }).slice(-5);
+    return result;
+  }
+  static rebuild_(rows) { return rows.reduce((data,row)=>this.apply_(data,row),this.initial_()); }
+  static check_(data, summary, requestedLevel) {
+    const level=String(requestedLevel || 'lv1');
+    if(!/^lv[1-6]$/.test(level)) throw new Error('確認するレベルを選んでください。');
+    const groups=MolProblemService.practiceGroups_(level);
+    const rows=[];
+    for(const category of Object.keys(groups)) for(const id of groups[category]) {
+      const type=MolProblemService.getProblemTypeById_(id);
+      const cell=data.cells[level+':'+type.key] || {attempts:0,correct:0,recent:[]};
+      const recentCorrect=cell.recent.filter(item=>item.correct).length;
+      rows.push({problemType:type.key,label:this.label_(type.key),category,attempts:cell.attempts,correct:cell.correct,
+        recentAttempts:cell.recent.length,recentCorrect,precision:cell.recent.filter(item=>item.precision).length,
+        confirmed:cell.recent.length===5 && recentCorrect>=4});
+    }
+    const confirmed=rows.filter(row=>row.confirmed).length;
+    const precision=rows.find(row=>row.recentAttempts>=3 && row.precision>=2);
+    const weak=rows.filter(row=>row.recentAttempts>=3 && row.recentAttempts-row.recentCorrect-row.precision>=2)
+      .sort((a,b)=>a.recentCorrect/a.recentAttempts-b.recentCorrect/b.recentAttempts)[0];
+    const next=rows.slice().sort((a,b)=>a.recentAttempts-b.recentAttempts || a.recentCorrect-b.recentCorrect)[0];
+    let advice;
+    if(precision) advice={kind:'precision',message:'計算の数値は合っています。有効数字を一緒に確認しよう。',
+      evidence:precision.label+'の直近'+precision.recentAttempts+'問で、有効数字だけの違いが'+precision.precision+'問あります。',
+      tip:'最後に有効数字3桁へ。末尾の0も大切です（例：1.20、6.00×10^23）。',target:{level,category:precision.category}};
+    else if(weak) {
+      const targetLevel=({lv2:'lv1',lv4:'lv3',lv5:'lv1',lv6:'lv3'})[level] || level;
+      advice={kind:'practice',message:weak.label+'を、もう少し試してみよう。',
+        evidence:'この変換の直近'+weak.recentAttempts+'問は'+weak.recentCorrect+'問正解です。',
+        tip:weak.problemType.startsWith('mol_to_')?'molから求める量の「1 mol分」を掛けてみよう。'
+          :weak.problemType.endsWith('_to_mol')?'まず「1 mol分の量」で割ると、molに直せます。'
+          :'まずmolに直してから、求める量の「1 mol分」を掛けてみよう。',target:{level:targetLevel,category:weak.category}};
+    } else if(confirmed===6 && level!=='lv6') advice={kind:'challenge',message:'そろそろ次のレベルを試してみてもよさそう！',
+      evidence:'6方向すべてで直近5問中4問以上正解しています。',tip:'難しければ、いつでも好きなレベルへ戻れます。',
+      target:{level:'lv'+(Number(level.slice(2))+1),category:['lv2','lv5'].includes(level)?'mass_particles':'mol_mass'}};
+    else advice={kind:'explore',message:confirmed===6?'ここまでよく取り組めています。この調子で続けよう。':(['lv1','lv3'].includes(level)?'次は'+next.label+'を試してみよう。':'ランダムでいろいろな変換を試してみよう。'),
+      evidence:next.recentAttempts<3?'まだ記録が少ない変換があります。苦手かどうかは、もう少し試してから。':'この変換の直近'+next.recentAttempts+'問は'+next.recentCorrect+'問正解です。',
+      tip:'途中で終わっても、これまでの正解は残ります。自分のペースでどうぞ。',target:{level,category:next.category}};
+    return {level,summary:{totalAttempts:Number(summary.totalAttempts || 0),totalCorrect:Number(summary.totalCorrect || 0)},
+      advice,coverage:{confirmed,total:6},rows,mistakes:data.mistakes.slice().reverse()};
+  }
+}
+
 class AnswerService {
+  static runtimeSummaryKey_(tokenRow) { return 'studentSummary:v6:' + String(tokenRow.token); }
+  static readRuntimeSummaryCache_(tokenRow) {
+    try {
+      const cache = this.getStudentAccessCache_();
+      const data = JSON.parse(cache ? cache.get(this.runtimeSummaryKey_(tokenRow)) || 'null' : 'null');
+      return data && data.rosterKey === tokenRow.rosterKey && Array.isArray(data.recent) && data.learning ? data : null;
+    } catch (_) { return null; }
+  }
+  static writeRuntimeSummaryCache_(tokenRow, data) {
+    const cache = this.getStudentAccessCache_();
+    if (!cache) return;
+    try { cache.put(this.runtimeSummaryKey_(tokenRow), JSON.stringify(data), 21600); }
+    catch (_) { try { cache.remove(this.runtimeSummaryKey_(tokenRow)); } catch (ignored) {} }
+  }
+  static rebuildRuntimeSummary_(tokenRow) {
+    const rows = SheetRepository.readAnswerLogsForRosterKey(tokenRow.rosterKey);
+    const summary = this.summarizeAnswerLogsForStudent(tokenRow.rosterKey, rows);
+    const recent = rows.slice().sort((a,b) => String(a.timestamp).localeCompare(String(b.timestamp))).slice(-10)
+      .map(row => ({ isCorrect: row.isCorrect === true, level: row.level }));
+    const data = { rosterKey: tokenRow.rosterKey, summary, recent, autoPractice:AutoPracticeService.rebuild_(rows), learning:StudentLearningService.rebuild_(rows) };
+    this.writeRuntimeSummaryCache_(tokenRow, data);
+    return data;
+  }
+  static runtimeData_(tokenRow) {
+    const hit = this.readRuntimeSummaryCache_(tokenRow);
+    if (hit) return hit;
+    let data;
+    SheetRepository.withDocumentLock(() => { data = this.readRuntimeSummaryCache_(tokenRow) || this.rebuildRuntimeSummary_(tokenRow); });
+    return data;
+  }
+  static runtimeSummary_(tokenRow) { return this.runtimeData_(tokenRow).summary; }
+  static updateRuntimeSummary_(tokenRow, entry, duplicate) {
+    let data = this.readRuntimeSummaryCache_(tokenRow);
+    if (!data) return this.rebuildRuntimeSummary_(tokenRow).summary;
+    if (!duplicate) {
+      const summary = data.summary;
+      data.recent = data.recent.concat({isCorrect: entry.isCorrect === true, level: entry.level}).slice(-10);
+      summary.totalAttempts += 1;
+      summary.totalCorrect += entry.isCorrect === true ? 1 : 0;
+      summary.totalAccuracy = this.roundRate_(summary.totalCorrect, summary.totalAttempts);
+      summary.recent10Attempts = data.recent.length;
+      summary.recent10Correct = data.recent.filter(item => item.isCorrect).length;
+      summary.recent10Accuracy = this.roundRate_(summary.recent10Correct, data.recent.length);
+      summary.currentCorrectStreak = entry.isCorrect ? Number(summary.currentCorrectStreak || 0) + 1 : 0;
+      summary.lastAnsweredAt = entry.timestamp;
+      summary.lastLevel = entry.level;
+      data.autoPractice=AutoPracticeService.apply_(data.autoPractice || AutoPracticeService.initial_(),entry);
+      data.learning=StudentLearningService.apply_(data.learning,entry);
+      this.writeRuntimeSummaryCache_(tokenRow, data);
+    }
+    return data.summary;
+  }
+
   static initializeTeacherPreviewSession(authToken, options) {
     const startedAtMs = Date.now();
     let problemElapsedMs = 0;
@@ -4613,7 +4895,7 @@ class AnswerService {
       const nextProblem = skipNextProblem
         ? null
         : MolProblemService.issueProblemForToken(this.createTeacherPreviewProblemKey_(authToken), {
-          level: source.nextLevel || problem.level
+          level: source.nextLevel || problem.level, category: source.category
         }).publicProblem;
       timings.nextProblemElapsedMs = Date.now() - nextProblemStartedAtMs;
       return this.buildSubmitAnswerResponse(entry, this.buildTeacherPreviewSummary_(student), nextProblem);
@@ -4666,7 +4948,7 @@ class AnswerService {
       tokenRow = this.requireActiveToken_(token, tokenTimings);
       tokenElapsedMs = Date.now() - tokenStartedAtMs;
       const summaryStartedAtMs = Date.now();
-      const summary = this.buildStudentSummaryFromAggregate_(tokenRow, {});
+      const summary = this.runtimeSummary_(tokenRow);
       summaryElapsedMs = Date.now() - summaryStartedAtMs;
       const issuedWithTiming = this.issueProblemForStudentWithTiming_(tokenRow, options || {});
       adaptiveElapsedMs = issuedWithTiming.adaptiveElapsedMs;
@@ -4748,11 +5030,17 @@ class AnswerService {
     return `studentAccess:${(hash >>> 0).toString(36)}`;
   }
 
+  static getStudentLearningCheck(token, options) {
+    const tokenRow=this.requireActiveToken_(token,{});
+    const data=this.runtimeData_(tokenRow);
+    return StudentLearningService.check_(data.learning,data.summary,options && options.level);
+  }
+
   static getStudentState(token) {
     const tokenRow = this.requireActiveToken_(token, {});
     return {
       student: this.toPublicStudent_(tokenRow),
-      summary: this.buildStudentSummaryFromAggregate_(tokenRow, {})
+      summary: this.runtimeSummary_(tokenRow)
     };
   }
 
@@ -4780,12 +5068,46 @@ class AnswerService {
     }
   }
 
+  static firstSubmissionKey_(token, attemptId) {
+    return 'firstSubmission:' + MolProblemService.createStoredProblemKey_(token, attemptId);
+  }
+
+  static markNewStudentAttempt_(tokenRow, issued) {
+    // Called only immediately after generating a new UUID, never when restoring
+    // a cached problem or retrying. Missing markers simply use the log lookup.
+    try {
+      const cache=this.getStudentAccessCache_();
+      if(cache) cache.put(this.firstSubmissionKey_(tokenRow.token,issued.problem.attemptId),'fresh',1800);
+    } catch (_) {}
+  }
+
+  static consumeFirstSubmission_(tokenRow, attemptId) {
+    if(typeof CacheService==='undefined') return false;
+    const cache=this.getStudentAccessCache_();
+    if(!cache) throw new Error('保存の準備を確認できません。もう一度送信してください。');
+    const key=this.firstSubmissionKey_(tokenRow.token,attemptId);
+    if(cache.get(key)!=='fresh') return false;
+    // Consume under the shared write lock BEFORE the first durable write.
+    // On interruption a retry has no marker and must consult the durable log.
+    // Never proceed to write if deletion failed: a surviving marker could let a
+    // later request wrongly skip duplicate detection.
+    cache.remove(key);
+    if(cache.get(key)==='fresh') throw new Error('保存の準備を確認できません。もう一度送信してください。');
+    return true;
+  }
+
   static issueProblemForStudent_(tokenRow, options) {
     return this.issueProblemForStudentWithTiming_(tokenRow, options || {}).issued;
   }
 
   static issueProblemForStudentWithTiming_(tokenRow, options) {
     const sourceOptions = options || {};
+    if(sourceOptions.practiceMode==='auto') {
+      const started=Date.now();
+      const issued=AutoPracticeService.issue_(tokenRow);
+      this.markNewStudentAttempt_(tokenRow,issued);
+      return {issued,adaptiveElapsedMs:Date.now()-started,problemElapsedMs:0};
+    }
     const adaptiveElapsedMs = 0;
     const issueOptions = {
       ...sourceOptions,
@@ -4793,6 +5115,7 @@ class AnswerService {
     };
     const problemStartedAtMs = Date.now();
     const issued = MolProblemService.issueProblemForToken(tokenRow.token, issueOptions);
+    this.markNewStudentAttempt_(tokenRow,issued);
     const problemElapsedMs = Date.now() - problemStartedAtMs;
     return {
       issued,
@@ -4821,6 +5144,8 @@ class AnswerService {
       storedProblemElapsedMs: 0,
       gradingElapsedMs: 0,
       lockElapsedMs: 0,
+      lockWaitElapsedMs: 0,
+      summaryElapsedMs: 0,
       appendLogElapsedMs: 0,
       duplicateCheckElapsedMs: 0,
       appendOnlyElapsedMs: 0,
@@ -4872,7 +5197,7 @@ class AnswerService {
         requiresRounding: problem.requiresRounding === true,
         explanation: String(problem.explanation || ''),
         elapsedMs: Number(request.elapsedMs || 0),
-        clientInfo: JSON.stringify(this.buildAnswerClientInfo_(request.clientInfo, grade))
+        clientInfo: JSON.stringify(this.buildAnswerClientInfo_(request.clientInfo, grade, problem.autoPractice))
       };
       attemptId = entry.attemptId;
       let logEntry = entry;
@@ -4880,9 +5205,11 @@ class AnswerService {
       const lockStartedAtMs = Date.now();
       try {
         SheetRepository.withDocumentLock(() => {
+          timings.lockWaitElapsedMs = Date.now() - lockStartedAtMs;
           const duplicateCheckStartedAtMs = Date.now();
           // 同じattemptIdの再送は既存ログを返し、解答ログを二重に増やさない。
-          const existingLog = SheetRepository.findAnswerLogByAttemptId(entry.rosterKey, entry.attemptId);
+          const existingLog = this.consumeFirstSubmission_(tokenRow,entry.attemptId)
+            ? null : SheetRepository.findAnswerLogByAttemptId(entry.rosterKey, entry.attemptId);
           timings.duplicateCheckElapsedMs += Date.now() - duplicateCheckStartedAtMs;
           if (existingLog) {
             logEntry = this.toEntryFromExistingLog_(existingLog);
@@ -4892,20 +5219,43 @@ class AnswerService {
             SheetRepository.appendAnswerLog(entry);
             timings.appendOnlyElapsedMs += Date.now() - appendOnlyStartedAtMs;
           }
+          const summaryStartedAtMs = Date.now();
+          summary = this.updateRuntimeSummary_(tokenRow, logEntry, duplicate);
+          timings.summaryElapsedMs = Date.now() - summaryStartedAtMs;
           timings.appendLogElapsedMs += timings.duplicateCheckElapsedMs + timings.appendOnlyElapsedMs;
         });
+      } catch (error) {
+        // A write/flush failure has an uncertain outcome. Retry reconstructs
+        // from the durable log instead of displaying a possibly ahead cache.
+        try { const cache=this.getStudentAccessCache_(); if(cache) cache.remove(this.runtimeSummaryKey_(tokenRow)); } catch (_) {}
+        throw error;
       } finally {
         timings.lockElapsedMs = Date.now() - lockStartedAtMs;
         timings.documentLockWaitAndRunElapsedMs = timings.lockElapsedMs;
       }
-      summary = this.buildStudentRuntimeApproxSummary_(tokenRow, {}, logEntry, !duplicate);
+      // Summary was updated under the same lock as the authoritative log append.
       deferredSummaryUpdate = true;
-      const nextProblem = null;
-      nextProblemIncluded = false;
+      const nextStarted=Date.now();
+      const nextProblem = problem.autoPractice
+        ? this.issueProblemForStudent_(tokenRow,{practiceMode:'auto'}).publicProblem : null;
+      timings.nextProblemElapsedMs=Date.now()-nextStarted;
+      nextProblemIncluded = !!nextProblem;
       return {
         ...this.buildSubmitAnswerResponse(logEntry, summary, nextProblem),
         duplicate,
-        deferredSummaryUpdate
+        deferredSummaryUpdate,
+        performance: {
+          serverElapsedMs: Date.now() - startedAtMs,
+          tokenElapsedMs: timings.tokenElapsedMs,
+          storedProblemElapsedMs: timings.storedProblemElapsedMs,
+          gradingElapsedMs: timings.gradingElapsedMs,
+          lockWaitElapsedMs: timings.lockWaitElapsedMs,
+          lockElapsedMs: timings.lockElapsedMs,
+          duplicateCheckElapsedMs: timings.duplicateCheckElapsedMs,
+          appendOnlyElapsedMs: timings.appendOnlyElapsedMs,
+          summaryElapsedMs: timings.summaryElapsedMs,
+          nextProblemElapsedMs: timings.nextProblemElapsedMs
+        }
       };
     } finally {
       LoggerService.logDeveloperInfo(`submitAnswer elapsedMs=${Date.now() - startedAtMs} mode=student studentRoute=fast tokenElapsedMs=${timings.tokenElapsedMs} tokenCacheReadElapsedMs=${tokenTimings.tokenCacheReadElapsedMs} tokenSheetFindElapsedMs=${tokenTimings.tokenSheetFindElapsedMs} tokenCacheWriteElapsedMs=${tokenTimings.tokenCacheWriteElapsedMs} storedProblemElapsedMs=${timings.storedProblemElapsedMs} gradingElapsedMs=${timings.gradingElapsedMs} lockElapsedMs=${timings.lockElapsedMs} documentLockWaitAndRunElapsedMs=${timings.documentLockWaitAndRunElapsedMs} appendLogElapsedMs=${timings.appendLogElapsedMs} duplicateCheckElapsedMs=${timings.duplicateCheckElapsedMs} appendOnlyElapsedMs=${timings.appendOnlyElapsedMs} aggregateUpdateElapsedMs=${timings.aggregateUpdateElapsedMs} problemTypeCacheUpdateElapsedMs=${timings.problemTypeCacheUpdateElapsedMs} nextProblemElapsedMs=${timings.nextProblemElapsedMs} nextProblemIncluded=${nextProblemIncluded} rosterKey=${tokenRow ? tokenRow.rosterKey : ''} attemptId=${attemptId} duplicate=${duplicate} aggregatePath=${aggregatePath} cacheUpdated=${cacheUpdated} problemTypeCacheUpdated=${problemTypeCacheUpdated}`);
@@ -5140,7 +5490,7 @@ class AnswerService {
   static incrementApproxLevelMetricsFromAggregate_(base, entry, appended, recent10Attempts) {
     const output = {};
     const entryLevel = String(entry && entry.level || '').trim();
-    ['beginner', 'intermediate', 'advanced'].forEach((level) => {
+    ['beginner', 'intermediate', 'advanced', 'lv1', 'lv2', 'lv3', 'lv4', 'lv5', 'lv6'].forEach((level) => {
       const key = `${level[0].toUpperCase()}${level.slice(1)}`;
       const attemptKey = `${level}Attempts`;
       const correctKey = `${level}Correct`;
@@ -5197,7 +5547,7 @@ class AnswerService {
 
   static incrementLevelMetricsFromAggregate_(base, entry, appended, recentSummary) {
     const output = {};
-    ['beginner', 'intermediate', 'advanced'].forEach((level) => {
+    ['beginner', 'intermediate', 'advanced', 'lv1', 'lv2', 'lv3', 'lv4', 'lv5', 'lv6'].forEach((level) => {
       const key = `${level[0].toUpperCase()}${level.slice(1)}`;
       const attemptKey = `${level}Attempts`;
       const correctKey = `${level}Correct`;
@@ -5313,7 +5663,8 @@ class AnswerService {
     return {
       ...this.summarizeSingleLevelMetrics_(rows, recentRows, 'beginner'),
       ...this.summarizeSingleLevelMetrics_(rows, recentRows, 'intermediate'),
-      ...this.summarizeSingleLevelMetrics_(rows, recentRows, 'advanced')
+      ...this.summarizeSingleLevelMetrics_(rows, recentRows, 'advanced'),
+      ...Object.assign({}, ...['lv1','lv2','lv3','lv4','lv5','lv6'].map(level => this.summarizeSingleLevelMetrics_(rows, recentRows, level)))
     };
   }
 
@@ -5397,7 +5748,7 @@ class AnswerService {
       result: {
         isCorrect: entry.isCorrect === true,
         expectedAnswerText: this.formatAnswerText_(entry.expectedAnswer, entry.unit, entry.significantDigits, entry.level),
-        submittedAnswerText: this.formatAnswerText_(entry.normalizedSubmittedAnswer || entry.submittedAnswer, entry.unit, entry.significantDigits, entry.level),
+        submittedAnswerText: `${String(entry.submittedAnswer || '').replace(/e\+?(-?\d+)/i, '×10^$1')} ${String(entry.unit || '')}`.trim(),
         acceptedAnswerType: String(entry.acceptedAnswerType || ''),
         exactAnswerText: Number.isFinite(Number(entry.exactAnswer))
           ? this.formatAnswerText_(entry.exactAnswer, entry.unit, entry.significantDigits, entry.level)
@@ -5451,6 +5802,7 @@ class AnswerService {
       recent10Correct: this.numberOrZero_(row.recent10Correct),
       recent10Accuracy: this.numberOrZero_(row.recent10Accuracy),
       currentCorrectStreak: this.numberOrZero_(row.currentCorrectStreak),
+      ...MolProblemService.practiceLevelMetrics_(row),
       beginnerAttempts: this.numberOrZero_(row.beginnerAttempts),
       beginnerCorrect: this.numberOrZero_(row.beginnerCorrect),
       beginnerAccuracy: this.numberOrZero_(row.beginnerAccuracy),
@@ -5539,8 +5891,13 @@ class AnswerService {
     };
   }
 
-  static buildAnswerClientInfo_(clientInfo, grade) {
+  static buildAnswerClientInfo_(clientInfo, grade, autoPractice) {
     const base = this.parseClientInfo_(clientInfo);
+    delete base.autoPractice;
+    delete base.acceptedAnswerType;
+    delete base.acceptedAnswer;
+    delete base.exactAnswer;
+    if(autoPractice && autoPractice.version===1) base.autoPractice={...autoPractice};
     const acceptedAnswerType = String(grade && grade.acceptedAnswerType || '');
     const exactAnswer = grade && grade.exactAnswer;
     if (acceptedAnswerType !== '') {
@@ -5584,7 +5941,7 @@ class AnswerService {
     const numeric = Number(value);
     let formatted = String(value == null ? '' : value);
     if (Number.isFinite(numeric)) {
-      formatted = MolProblemService.normalizeLevel_(level) === 'advanced'
+      formatted = MolProblemService.needsSignificantDigits_(MolProblemService.normalizeLevel_(level))
         ? MolProblemService.formatNumberForDisplay_(numeric, Number(significantDigits || 3))
         : MolProblemService.formatPlain_(numeric);
     }
@@ -5721,7 +6078,7 @@ class AggregationService {
           recent10Accuracy,
           totalAccuracy,
           speedImprovementRate,
-          advancedAttempts
+          advancedAttempts, lv5Attempts: summary.lv5Attempts, lv6Attempts: summary.lv6Attempts
         });
         const followUp = this.isFollowUpStatus_(statusLabel);
         return {
@@ -5739,6 +6096,7 @@ class AggregationService {
           recent10Attempts,
           recent10Correct: Number(summary.recent10Correct || 0),
           recent10Accuracy,
+          ...MolProblemService.practiceLevelMetrics_(summary),
           beginnerAttempts: Number(summary.beginnerAttempts || 0),
           beginnerCorrect: Number(summary.beginnerCorrect || 0),
           beginnerAccuracy: Number(summary.beginnerAccuracy || 0),
@@ -5811,7 +6169,7 @@ class AggregationService {
     if (row.recent10Attempts >= 10 && row.speedImprovementRate >= 0.2 && row.recent10Accuracy < row.totalAccuracy && row.recent10Accuracy < 0.7) {
       return '速度上昇・正答率低下';
     }
-    if (row.advancedAttempts > 0 && row.recent10Attempts >= 10 && row.recent10Accuracy >= 0.7) {
+    if ((Number(row.advancedAttempts || 0) + Number(row.lv5Attempts || 0) + Number(row.lv6Attempts || 0)) > 0 && row.recent10Attempts >= 10 && row.recent10Accuracy >= 0.7) {
       return '上級挑戦中';
     }
     if (row.recent10Attempts < 10) {
@@ -6770,6 +7128,211 @@ class MonitorSnapshotService {
   }
 }
 
+// The teacher refresh cursor is durable. Cache eviction never loses the aggregation position.
+class MonitorRefreshService {
+  static emptyState_() {
+    return { version: 1, cursor: 1, firstAttempt: '', lastAttempt: '', students: {}, target: 1, cutoffAt: '' };
+  }
+
+  static isUsableState_(state) {
+    return state && state.version === 1 && Number.isInteger(state.cursor) && state.cursor >= 1
+      && Number.isInteger(state.target) && state.target >= state.cursor && state.students && !Array.isArray(state.students)
+      && typeof state.students === 'object';
+  }
+
+  static readState_(sheet) {
+    this.stateValues_ = null;
+    try {
+      const cache = MonitorSnapshotService.getScriptCache_();
+      const keys = JSON.parse(cache ? cache.get('monitorRefresh:manifest:v1') || 'null' : 'null');
+      if (Array.isArray(keys) && keys.length && keys.length <= 200) {
+        const parts = cache.getAll(keys);
+        if (keys.every(key => typeof parts[key] === 'string')) {
+          const state = JSON.parse(keys.map(key => parts[key]).join(''));
+          if (this.isUsableState_(state)) return state;
+        }
+      }
+    } catch (_) { /* Durable state remains the source if any cache piece is missing. */ }
+    const headers = SheetRepository.getHeaderColumnMap_(sheet);
+    if (!headers.key || !headers.json || !headers.updatedAt || !headers.note) throw new Error('管理スプレッドシートで「管理シートを作成・補修」を実行してください。');
+    this.stateValues_ = sheet.getDataRange().getValues();
+    const values = this.stateValues_.slice(1);
+    const pieces = values.filter(row => String(row[headers.key - 1] || '').startsWith('refresh-state:'))
+      .sort((a, b) => Number(String(a[headers.key - 1]).split(':')[1]) - Number(String(b[headers.key - 1]).split(':')[1]));
+    try {
+      const state = JSON.parse(pieces.map(row => String(row[headers.json - 1] || '')).join(''));
+      if (this.isUsableState_(state)) { this.cacheState_(state); return state; }
+    } catch (_) { /* Rebuild in bounded batches if the derived state is absent or damaged. */ }
+    return this.emptyState_();
+  }
+
+  static cacheState_(state) {
+    const cache = MonitorSnapshotService.getScriptCache_();
+    if (!cache) return;
+    try {
+      const json = JSON.stringify(state);
+      const revision = Utilities.getUuid();
+      const pieces = {};
+      const keys = [];
+      for (let offset = 0; offset < json.length; offset += 25000) {
+        const key = 'monitorRefresh:' + revision + ':' + keys.length;
+        keys.push(key);
+        pieces[key] = json.slice(offset, offset + 25000);
+      }
+      pieces['monitorRefresh:manifest:v1'] = JSON.stringify(keys);
+      cache.putAll(pieces, 90);
+    } catch (_) { try { cache.remove('monitorRefresh:manifest:v1'); } catch (ignored) {} }
+  }
+
+  static writeState_(sheet, state) {
+    const headers = SheetRepository.getHeaderColumnMap_(sheet);
+    const values = this.stateValues_ || sheet.getDataRange().getValues();
+    const width = values[0].length;
+    const kept = values.slice(1).filter(row => !String(row[headers.key - 1] || '').startsWith('refresh-state:'));
+    const json = JSON.stringify(state);
+    for (let offset = 0, index = 0; offset < json.length; offset += 30000, index++) {
+      const row = new Array(width).fill('');
+      row[headers.key - 1] = 'refresh-state:' + index;
+      row[headers.json - 1] = json.slice(offset, offset + 30000);
+      row[headers.updatedAt - 1] = new Date().toISOString();
+      row[headers.note - 1] = '自動生成。直接編集しない';
+      kept.push(row);
+    }
+    // One write commits the cursor together with its counters. Blank obsolete chunks in the same write.
+    while (kept.length < values.length - 1) kept.push(new Array(width).fill(''));
+    sheet.getRange(2, 1, kept.length, width).setValues(kept);
+    this.stateValues_ = null;
+    this.cacheState_(state);
+  }
+
+  static readRows_(name) {
+    const sheet = SheetRepository.getManagedSheetWithoutSchemaCheck_(name);
+    const values = sheet.getDataRange().getValues();
+    const headers = values.shift() || [];
+    return values.map(row => Object.fromEntries(headers.map((key, index) => [String(key), row[index]])));
+  }
+
+  static compare_(a, b) {
+    return String(a.timestamp).localeCompare(String(b.timestamp)) || a.order - b.order;
+  }
+
+  static add_(state, entry, order) {
+    const key = String(entry.rosterKey || '').trim();
+    if (!key || TokenService.isTeacherTestStudentRosterKey(key)) return;
+    if (!Object.prototype.hasOwnProperty.call(state.students, key)) {
+      Object.defineProperty(state.students, key, { enumerable: true, writable: true, configurable: true,
+        value: { attempts: 0, correct: 0, levels: {}, elapsedSum: 0, elapsedCount: 0,
+          correctElapsedSum: 0, correctElapsedCount: 0, first: [], recent: [], lastValid: null } });
+    }
+    const item = state.students[key];
+    const log = { timestamp: String(entry.timestamp || ''), order, level: String(entry.level || ''),
+      problemType: String(entry.problemType || ''), isCorrect: entry.isCorrect === true, elapsedMs: Number(entry.elapsedMs || 0) };
+    item.attempts++;
+    item.correct += log.isCorrect ? 1 : 0;
+    if (['beginner', 'intermediate', 'advanced', 'lv1', 'lv2', 'lv3', 'lv4', 'lv5', 'lv6'].includes(log.level)) {
+      const level = item.levels[log.level] || (item.levels[log.level] = { attempts: 0, correct: 0 });
+      level.attempts++;
+      level.correct += log.isCorrect ? 1 : 0;
+    }
+    item.first = item.first.concat(log).sort(this.compare_).slice(0, 10);
+    item.recent = item.recent.concat(log).sort(this.compare_).slice(-10);
+    if (AnswerService.isValidElapsedMs_(log.elapsedMs)) {
+      item.elapsedSum += log.elapsedMs;
+      item.elapsedCount++;
+      if (log.isCorrect) { item.correctElapsedSum += log.elapsedMs; item.correctElapsedCount++; }
+      if (!item.lastValid || this.compare_(item.lastValid, log) <= 0) item.lastValid = log;
+    }
+  }
+
+  static summaries_(state) {
+    return Object.entries(state.students).map(([rosterKey, item]) => {
+      const latest = item.recent[item.recent.length - 1] || {};
+      const recentCorrect = item.recent.filter(row => row.isCorrect).length;
+      const firstAverage = AnswerService.averageElapsedMs_(item.first);
+      const recentAverage = AnswerService.averageElapsedMs_(item.recent);
+      const levels = {};
+      for (const level of ['beginner', 'intermediate', 'advanced', 'lv1', 'lv2', 'lv3', 'lv4', 'lv5', 'lv6']) {
+        const count = item.levels[level] || { attempts: 0, correct: 0 };
+        levels[level + 'Attempts'] = count.attempts;
+        levels[level + 'Correct'] = count.correct;
+        levels[level + 'Accuracy'] = AnswerService.roundRate_(count.correct, count.attempts);
+        levels['recent10' + level[0].toUpperCase() + level.slice(1) + 'Attempts'] = item.recent.filter(row => row.level === level).length;
+      }
+      return { rosterKey, totalAttempts: item.attempts, totalCorrect: item.correct,
+        totalAccuracy: AnswerService.roundRate_(item.correct, item.attempts), recent10Attempts: item.recent.length,
+        recent10Correct: recentCorrect, recent10Accuracy: AnswerService.roundRate_(recentCorrect, item.recent.length), ...levels,
+        lastAnsweredAt: latest.timestamp || '', lastLevel: latest.level || '', lastProblemType: latest.problemType || '',
+        averageElapsedMs: item.elapsedCount ? Math.round(item.elapsedSum / item.elapsedCount) : 0,
+        correctAverageElapsedMs: item.correctElapsedCount ? Math.round(item.correctElapsedSum / item.correctElapsedCount) : 0,
+        recent10AverageElapsedMs: recentAverage, recent10MedianElapsedMs: AnswerService.medianElapsedMs_(item.recent),
+        correctRecent10AverageElapsedMs: AnswerService.averageElapsedMs_(item.recent.filter(row => row.isCorrect)),
+        first10AverageElapsedMs: firstAverage,
+        speedImprovementRate: firstAverage > 0 && recentAverage > 0 ? AnswerService.roundDecimal_((firstAverage - recentAverage) / firstAverage, 4) : 0,
+        lastElapsedMs: item.lastValid ? item.lastValid.elapsedMs : 0 };
+    });
+  }
+
+  static dashboard_(state) {
+    const students = this.readRows_('生徒名簿').map(row => ({ courseId: row.courseId, courseName: row.courseName,
+      rosterKey: row.rosterKey, studentId: row.studentId, number: row['出席番号'], name: row['氏名'], status: row['状態'] }))
+      .filter(row => row.rosterKey && !TokenService.isTeacherTestStudentRosterKey(row.rosterKey));
+    const tokens = this.readRows_('トークン管理').map(row => SheetRepository.tokenObjectToRow_(row))
+      .filter(row => row.rosterKey && !TokenService.isTeacherTestStudentRosterKey(row.rosterKey));
+    const courses = this.readRows_('Classroom一覧').filter(row => row.courseId);
+    const distribution = this.readRows_('配付ログ').map(row => ({ rosterKey: row.rosterKey, status: row.status }));
+    const progressRows = AggregationService.buildAdminProgressRows(students, this.summaries_(state), tokens, distribution);
+    const activeCount = students.filter(row => row.status !== '退籍').length;
+    // The monitor has no all-time median column; do not report an uncomputed value as zero.
+    progressRows.forEach(row => { delete row.medianElapsedMs; });
+    return attachMonitorMaintenanceLinks_({ appName: MOL_DRILL_APP_NAME, appVersion: MOL_DRILL_APP_VERSION,
+      generatedAt: new Date().toISOString(), snapshotGeneratedAt: state.cutoffAt, answersThrough: state.cutoffAt,
+      snapshotMode: 'current', snapshotMissing: false, source: 'incremental-monitor', progressRows,
+      courseOverview: { totalCount: courses.length, checkedCount: courses.filter(row => SheetRepository.isFlagEnabled_(row['同期対象'])).length },
+      studentOverview: { totalCount: students.length, activeCount, retiredCount: students.length - activeCount },
+      tokenOverview: { totalCount: tokens.length, activeCount: tokens.filter(row => row.token && !row.revoked).length, revokedCount: tokens.filter(row => row.revoked).length },
+      dashboardMetrics: AggregationService.buildAdminDashboardMetrics(progressRows) });
+  }
+
+  static refresh_() {
+    const stateSheet = SheetRepository.getManagedSheetWithoutSchemaCheck_('モニターキャッシュ');
+    const logSheet = SheetRepository.getManagedSheetWithoutSchemaCheck_('解答ログ');
+    const headers = SheetRepository.getHeaderColumnMap_(logSheet);
+    if (!headers.attemptId || !headers.rosterKey || !headers.timestamp) throw new Error('管理スプレッドシートで「管理シートを作成・補修」を実行してください。');
+    const observedAt = new Date().toISOString();
+    const lastRow = Math.max(1, logSheet.getLastRow());
+    let state = this.readState_(stateSheet);
+    const attemptAt = row => row > 1 ? String(logSheet.getRange(row, headers.attemptId).getValue() || '') : '';
+    if (state.cursor > lastRow || (state.cursor > 1 && (attemptAt(2) !== state.firstAttempt || attemptAt(state.cursor) !== state.lastAttempt))) {
+      state = this.emptyState_();
+    }
+    if (state.cursor >= state.target) { state.target = lastRow; state.cutoffAt = observedAt; }
+    const end = Math.min(state.target, state.cursor + 500);
+    if (end > state.cursor) {
+      const values = logSheet.getRange(state.cursor + 1, 1, end - state.cursor, logSheet.getLastColumn()).getValues();
+      values.forEach((row, index) => this.add_(state, SheetRepository.answerLogObjectToRow_(SheetRepository.rowValuesToObject_(headers, row)), state.cursor + 1 + index));
+      state.firstAttempt = attemptAt(2);
+      state.lastAttempt = String(values[values.length - 1][headers.attemptId - 1] || '');
+      state.cursor = end;
+      this.writeState_(stateSheet, state);
+    }
+    const complete = state.cursor >= state.target;
+    return { ok: true, complete, processed: Math.max(0, state.cursor - 1), total: Math.max(0, state.target - 1),
+      data: complete ? this.dashboard_(state) : null };
+  }
+}
+
+function refreshMonitorDashboard(authToken) {
+  MonitorService.assertMonitorAccess(authToken);
+  return AdminService.withAdminActionLock('refreshMonitorDashboard', () => MonitorRefreshService.refresh_());
+}
+
+function getCurrentMonitorStudentProblemTypeStats(authToken, rosterKey) {
+  MonitorService.assertMonitorAccess(authToken);
+  const key = String(rosterKey || '').trim();
+  if (!key || TokenService.isTeacherTestStudentRosterKey(key)) return [];
+  return AggregationService.buildProblemTypeStatsRows(SheetRepository.readAnswerLogsForRosterKey(key), new Date().toISOString());
+}
+
 class MonitorService {
   static isMonitorRoute(e) {
     const params = e && e.parameter ? e.parameter : {};
@@ -6777,8 +7340,9 @@ class MonitorService {
       || String(params.monitor || '').trim() === '1';
   }
 
-  static assertMonitorAccess() {
-    SheetRepository.assertManagementSheetsReady();
+  static assertMonitorAccess(authToken) {
+    // Check authorization on every call; schema repair is a separate teacher operation.
+    AdminService.assertAdminAccess(authToken);
   }
 
   static buildMonitorAccessDeniedHtml_(message) {
@@ -6869,8 +7433,12 @@ function doGet(e) {
   }
   if (MonitorService.isMonitorRoute(e)) {
     try {
-      MonitorService.assertMonitorAccess();
+      const authToken = String(params.auth || '');
+      MonitorService.assertMonitorAccess(authToken);
       const monitorTemplate = HtmlService.createTemplateFromFile('Monitor');
+      monitorTemplate.initialAdminToken = authToken;
+      monitorTemplate.initialReviewBenchmark = String(params.benchmark || '') === '1';
+      if (monitorTemplate.initialReviewBenchmark) ReviewBenchmarkService.assertTestProject_();
       return monitorTemplate.evaluate().setTitle('もるくえ！ モニター').setSandboxMode(HtmlService.SandboxMode.IFRAME);
     } catch (error) {
       return MonitorService.buildMonitorAccessDeniedHtml_(String(error && error.message ? error.message : error));
@@ -6893,7 +7461,7 @@ function buildMonitorWebAppUrl_(webAppUrl) {
     throw new Error('設定シートの WEB_APP_URL を先に設定してください。WebアプリをデプロイしたURLを入れてください。');
   }
   const separator = normalizedWebAppUrl.includes('?') ? '&' : '?';
-  return `${normalizedWebAppUrl}${separator}page=monitor`;
+  return `${normalizedWebAppUrl}${separator}page=monitor&auth=${encodeURIComponent(AdminService.getOrCreateAdminToken())}`;
 }
 
 function writeTeacherUrlsToSettings_() {
@@ -6966,7 +7534,7 @@ function writeTeacherUrlsToSettingsFromMenu() {
   return runMenuOperation_(
     '先生用URLを設定シートに出力',
     'MENU_WRITE_TEACHER_URLS_TO_SETTINGS',
-    () => writeTeacherUrlsToSettings_(),
+    () => AdminService.withAdminActionLock('writeTeacherUrlsToSettingsFromMenu', () => writeTeacherUrlsToSettings_()),
     formatTeacherUrlsToSettingsMenuMessage_,
     { summarizeResult: summarizeTeacherUrlsToSettingsResult_ }
   );
@@ -7121,6 +7689,7 @@ function revokeSelectedStudentTokenFromMenu() {
 }
 
 function setupSheets() {
+  SpreadsheetApp.getUi(); // Spreadsheet/editor context only; unavailable to Web App RPC.
   return SheetRepository.ensureSheets();
 }
 
@@ -7399,6 +7968,7 @@ function configureProblemSettingsFromMenu() {
 }
 
 function reinitializeSheets() {
+  SpreadsheetApp.getUi(); // Spreadsheet/editor context only; unavailable to Web App RPC.
   return SheetRepository.reinitializeSheets();
 }
 
@@ -7710,7 +8280,11 @@ function rebuildAggregateCacheFromMenu() {
   return runMenuOperation_(
     '集計キャッシュを更新',
     'MENU_REBUILD_AGGREGATE_CACHE',
-    () => AdminService.withAdminActionLock('rebuildAggregateCacheFromMenu', () => rebuildAggregateAndMonitorCacheCore_()),
+    () => AdminService.withAdminActionLock('rebuildAggregateCacheFromMenu', () => {
+      const result = rebuildAggregateAndMonitorCacheCore_();
+      MonitorRefreshService.writeState_(SheetRepository.getManagedSheetWithoutSchemaCheck_('モニターキャッシュ'), MonitorRefreshService.emptyState_());
+      return result;
+    }),
     (result) => `集計キャッシュを更新しました: ${result.updated || 0}人 / 問題タイプ別 ${result.problemTypeUpdated || 0}行 / モニターキャッシュ ${result.monitorSnapshotUpdatedAt || '未更新'}`,
     { summarizeResult: summarizeAggregateMonitorCacheResult_ }
   );
@@ -7759,9 +8333,9 @@ function formatMonitorSnapshotRebuildResponse_(result) {
   };
 }
 
-function rebuildMonitorSnapshotFromMonitor() {
+function rebuildMonitorSnapshotFromMonitor(authToken) {
   try {
-    MonitorService.assertMonitorAccess();
+    MonitorService.assertMonitorAccess(authToken);
     const result = AdminService.runLoggedOperation(
       'MONITOR_REBUILD_MONITOR_SNAPSHOT',
       () => AdminService.withAdminActionLock(
@@ -7793,9 +8367,9 @@ function rebuildMonitorSnapshotFromMonitor() {
   }
 }
 
-function rebuildAggregateAndMonitorCacheFromMonitor() {
+function rebuildAggregateAndMonitorCacheFromMonitor(authToken) {
   try {
-    MonitorService.assertMonitorAccess();
+    MonitorService.assertMonitorAccess(authToken);
     const result = AdminService.runLoggedOperation(
       'MONITOR_REBUILD_AGGREGATE_MONITOR_CACHE',
       () => AdminService.withAdminActionLock(
@@ -7817,7 +8391,7 @@ function rebuildAggregateAndMonitorCacheFromMonitor() {
   }
 }
 
-function rebuildAggregateAndMonitorCacheForTrigger() {
+function rebuildAggregateAndMonitorCacheForTrigger_() {
   if (!isAutoRebuildCacheEnabled_()) {
     return AdminService.runLoggedOperation(
       'AUTO_REBUILD_AGGREGATE_MONITOR_CACHE_SKIPPED',
@@ -7832,7 +8406,7 @@ function rebuildAggregateAndMonitorCacheForTrigger() {
   return AdminService.runLoggedOperation(
     'AUTO_REBUILD_AGGREGATE_MONITOR_CACHE',
     () => AdminService.withAdminActionLock(
-      'rebuildAggregateAndMonitorCacheForTrigger',
+      'rebuildAggregateAndMonitorCacheForTrigger_',
       () => rebuildAggregateAndMonitorCacheCore_()
     ),
     summarizeAggregateMonitorCacheResult_
@@ -7848,7 +8422,7 @@ function getAggregateMonitorAutoRefreshTriggers_() {
       try {
         return trigger
           && typeof trigger.getHandlerFunction === 'function'
-          && trigger.getHandlerFunction() === MOL_DRILL_AUTO_REBUILD_TRIGGER_HANDLER;
+          && [MOL_DRILL_AUTO_REBUILD_TRIGGER_HANDLER, 'rebuildAggregateAndMonitorCacheForTrigger'].includes(trigger.getHandlerFunction());
       } catch (_ignored) {
         return false;
       }
@@ -8067,12 +8641,12 @@ function attachMonitorMaintenanceLinks_(data) {
   };
 }
 
-function getMonitorDashboardData() {
+function getMonitorDashboardData(authToken) {
   const startedAtMs = Date.now();
   const metrics = MonitorSnapshotService.createReadMetrics_();
   let response = null;
   try {
-    MonitorService.assertMonitorAccess();
+    MonitorService.assertMonitorAccess(authToken);
     const snapshot = MonitorSnapshotService.readDashboardSnapshot(metrics);
     response = attachMonitorMaintenanceLinks_(snapshot || buildMonitorDashboardSnapshotMissingResponse_());
     return response;
@@ -8105,8 +8679,136 @@ function buildMonitorDashboardSnapshotMissingResponse_() {
   };
 }
 
-function getMonitorStudentAnswerHistory(rosterKey, limit) {
-  MonitorService.assertMonitorAccess();
+// Read-only, bounded review pages. Cursor is a physical log row; new answers do not
+// shift pages already being reviewed. Never return tokens or raw client metadata.
+function getMonitorStudentAnswerReview(authToken, rosterKey, options) {
+  MonitorService.assertMonitorAccess(authToken);
+  const key = String(rosterKey || '').trim();
+  if (!key || TokenService.isTeacherTestStudentRosterKey(key)) return { rows: [], nextBeforeRow: null };
+  return readMonitorStudentAnswerReview_(SheetRepository.getManagedSheetWithoutSchemaCheck_('解答ログ'), key, options);
+}
+
+function readMonitorStudentAnswerReview_(sheet, key, options) {
+  const opts = options || {};
+  const result = String(opts.result || 'all');
+  const level = String(opts.level || 'all');
+  if (!['all', 'correct', 'incorrect'].includes(result) || !['all', 'lv1', 'lv2', 'lv3', 'lv4', 'lv5', 'lv6'].includes(level)) {
+    throw new Error('レビューの絞り込み条件が不正です。');
+  }
+  const headers = SheetRepository.getHeaderColumnMap_(sheet);
+  if (!headers.rosterKey || !headers.isCorrect || !headers.level) throw new Error('解答ログの列を確認してください。');
+  const lastRow = sheet.getLastRow();
+  let end = lastRow;
+  if (opts.beforeRow != null) {
+    const cursor = Number(opts.beforeRow);
+    if (!Number.isSafeInteger(cursor) || cursor < 2) throw new Error('レビューの続き位置が不正です。');
+    end = Math.min(lastRow, cursor - 1);
+  }
+  if (end < 2) return { rows: [], nextBeforeRow: null };
+  const start = Math.max(2, end - 499);
+  const values = sheet.getRange(start, 1, end - start + 1, sheet.getLastColumn()).getValues();
+  const rows = [];
+  let next = start;
+  for (let i = values.length - 1; i >= 0; i -= 1) {
+    next = start + i;
+    if (String(values[i][headers.rosterKey - 1] || '').trim() !== key) continue;
+    const row = SheetRepository.answerLogObjectToRow_(SheetRepository.rowValuesToObject_(headers, values[i]));
+    if (level !== 'all' && row.level !== level) continue;
+    if (result === 'correct' && !row.isCorrect || result === 'incorrect' && row.isCorrect) continue;
+    const acceptance = AnswerService.extractAnswerAcceptanceFromClientInfo_(row.clientInfo);
+    rows.push({
+      timestamp: row.timestamp, attemptId: row.attemptId, level: row.level,
+      problemType: row.problemType, questionText: row.questionText,
+      submittedAnswer: row.submittedAnswer, expectedAnswer: row.expectedAnswer,
+      expectedAnswerText: row.expectedAnswer === '' ? '' : AnswerService.formatAnswerText_(row.expectedAnswer, row.unit, row.significantDigits, row.level),
+      unit: row.unit, isCorrect: row.isCorrect, explanation: row.explanation,
+      elapsedMs: row.elapsedMs, significantDigits: row.significantDigits,
+      acceptedAnswerType: ['exact', 'rounded', 'precision'].includes(acceptance.acceptedAnswerType) ? acceptance.acceptedAnswerType : ''
+    });
+    if (rows.length >= 20) break;
+  }
+  return { rows: rows, nextBeforeRow: next > 2 ? next : null };
+}
+
+// Only the explicitly configured test project can create or read this isolated
+// fixture sheet. No tokens, roster rows or real answer-log rows are created.
+class ReviewBenchmarkService {
+  static assertTestProject_() {
+    if (ScriptApp.getScriptId() !== '1opnwxGruF4ZYiVvQxADm2-oJcE_ZCLBkPlysFBAx-CTi2GQKN-wMgCnp') {
+      throw new Error('測定ページは指定のGAS検証プロジェクトでのみ利用できます。');
+    }
+  }
+  static sheetName_() { return '検証_詳細レビュー_v1'; }
+  static headers_() { return MOL_DRILL_SHEETS.find(def => def.name === '解答ログ').headers; }
+  static sheet_() {
+    const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(this.sheetName_());
+    if (!sheet || sheet.getLastRow() !== 1201) throw new Error('先に「測定データを準備」を実行してください。');
+    const header = sheet.getRange(1, 1, 1, this.headers_().length).getValues()[0];
+    if (JSON.stringify(header) !== JSON.stringify(this.headers_())) throw new Error('測定シートの列が一致しません。');
+    return sheet;
+  }
+  static fixture_() {
+    return Array.from({length: 1200}, (_, i) => {
+      const attempt = Math.floor(i / 10), level = 'lv' + (attempt % 6 + 1);
+      const correct = attempt % 4 < 2, precision = !correct && ['lv5', 'lv6'].includes(level);
+      return { timestamp: new Date(Date.UTC(2026, 0, 1) + i * 1000).toISOString(), attemptId: 'benchmark-v1-' + i,
+        rosterKey: 'benchmark::s' + (i % 10), level: level, problemType: 'mass_to_mol',
+        questionText: '水のモル質量は18.0 g/molです。水36.0 gの物質量を求めなさい。' + (['lv5', 'lv6'].includes(level) ? '有効数字3桁で答えなさい。' : ''),
+        expectedAnswer: '2', submittedAnswer: correct ? '2.00' : precision ? '2.0' : '3',
+        unit: 'mol', isCorrect: correct, significantDigits: '3', elapsedMs: 12000,
+        explanation: '物質量 = 質量 ÷ モル質量。36.0 ÷ 18.0 = 2.00 mol。',
+        clientInfo: JSON.stringify({acceptedAnswerType: correct ? 'exact' : precision ? 'precision' : ''}) };
+    });
+  }
+}
+
+function prepareMonitorReviewBenchmark(authToken) {
+  MonitorService.assertMonitorAccess(authToken);
+  ReviewBenchmarkService.assertTestProject_();
+  return AdminService.withAdminActionLock('prepareMonitorReviewBenchmark', () => {
+    const spreadsheet = SpreadsheetApp.getActiveSpreadsheet();
+    if (!spreadsheet.getSheetByName(ReviewBenchmarkService.sheetName_())) {
+      const sheet = spreadsheet.insertSheet(ReviewBenchmarkService.sheetName_());
+      const headers = ReviewBenchmarkService.headers_();
+      const values = [headers].concat(ReviewBenchmarkService.fixture_().map(row => headers.map(key => row[key] == null ? '' : row[key])));
+      if (sheet.getMaxRows() < values.length) sheet.insertRowsAfter(sheet.getMaxRows(), values.length - sheet.getMaxRows());
+      if (sheet.getMaxColumns() < headers.length) sheet.insertColumnsAfter(sheet.getMaxColumns(), headers.length - sheet.getMaxColumns());
+      sheet.getRange(1, 1, values.length, headers.length).setValues(values);
+    }
+    ReviewBenchmarkService.sheet_(); // Never overwrite an existing, unexpected sheet.
+    return {ok: true, students: 10, answers: 1200, fixtureVersion: 1};
+  });
+}
+
+function getReviewBenchmarkDashboard(authToken) {
+  MonitorService.assertMonitorAccess(authToken);
+  ReviewBenchmarkService.assertTestProject_();
+  ReviewBenchmarkService.sheet_();
+  const rows = Array.from({length: 10}, (_, i) => ({rosterKey:'benchmark::s' + i, name:'測定生徒' + (i + 1), number:i + 1, courseName:'測定専用', totalAttempts:120, totalCorrect:60, totalAccuracy:0.5}));
+  return {ok:true, complete:true, processed:1200, total:1200, data:{appVersion:MOL_DRILL_APP_VERSION,
+    answersThrough:new Date().toISOString(), maintenanceLinks:buildMonitorMaintenanceLinks_(), progressRows:rows, dashboardMetrics:AggregationService.buildAdminDashboardMetrics(rows)}};
+}
+
+function getReviewBenchmarkPage(authToken, rosterKey, options) {
+  MonitorService.assertMonitorAccess(authToken);
+  ReviewBenchmarkService.assertTestProject_();
+  if (!/^benchmark::s[0-9]$/.test(String(rosterKey))) throw new Error('測定用の生徒を指定してください。');
+  return readMonitorStudentAnswerReview_(ReviewBenchmarkService.sheet_(), String(rosterKey), options);
+}
+
+function getReviewBenchmarkStats(authToken, rosterKey) {
+  MonitorService.assertMonitorAccess(authToken);
+  ReviewBenchmarkService.assertTestProject_();
+  if (!/^benchmark::s[0-9]$/.test(String(rosterKey))) throw new Error('測定用の生徒を指定してください。');
+  const sheet = ReviewBenchmarkService.sheet_(), headers = SheetRepository.getHeaderColumnMap_(sheet);
+  const rows = sheet.getRange(2, 1, 1200, sheet.getLastColumn()).getValues()
+    .map(row => SheetRepository.answerLogObjectToRow_(SheetRepository.rowValuesToObject_(headers, row)))
+    .filter(row => row.rosterKey === rosterKey);
+  return AggregationService.buildProblemTypeStatsRows(rows, new Date().toISOString());
+}
+
+function getMonitorStudentAnswerHistory(authToken, rosterKey, limit) {
+  MonitorService.assertMonitorAccess(authToken);
   SheetRepository.assertManagementSheetsReady();
   const normalizedRosterKey = String(rosterKey || '').trim();
   const defaultLimit = 20;
@@ -8140,8 +8842,8 @@ function getMonitorStudentAnswerHistory(rosterKey, limit) {
     }));
 }
 
-function getMonitorStudentProblemTypeStats(rosterKey) {
-  MonitorService.assertMonitorAccess();
+function getMonitorStudentProblemTypeStats(authToken, rosterKey) {
+  MonitorService.assertMonitorAccess(authToken);
   SheetRepository.assertManagementSheetsReady();
   const normalizedRosterKey = String(rosterKey || '').trim();
   if (normalizedRosterKey === '') {
@@ -8240,4 +8942,120 @@ function generateSampleProblemsForTest() {
 
 function validateProblemGenerationSamplesForTest(count) {
   return MolProblemService.validateProblemGenerationSamplesForTest(count);
+}
+
+function getStudentLearningCheck(token, options) {
+  return AnswerService.getStudentLearningCheck(token, options);
+}
+
+
+// Real student submission path, restricted to disposable identities in the test
+// project. No Classroom roster or distribution records are created.
+class StudentLoadBenchmarkService {
+  static cache_() { return CacheService.getScriptCache(); }
+  static key_(runId) { return 'studentLoad:'+runId; }
+  static run_(runId) {
+    if(!/^[A-Za-z0-9-]{1,80}$/.test(String(runId))) throw new Error('測定IDが不正です。');
+    const run=JSON.parse(this.cache_().get(this.key_(runId)) || 'null');
+    if(!run) throw new Error('測定データの期限が切れています。再準備してください。');
+    return run;
+  }
+  static prepare_(options) {
+    const count=Number(options && options.count || 40);
+    if(![2,5,20,40,80].includes(count)) throw new Error('測定人数は2・5・20・40・80人から選んでください。');
+    const runId=Utilities.getUuid();const issuedAt=new Date().toISOString();
+    const tokens=Array.from({length:count},(_,index)=>({token:TokenService.generateToken(),courseId:'__TEST_LOAD__',courseName:'採点測定専用',
+      rosterKey:'__TEST_LOAD__::'+runId+':'+index,studentId:runId+':'+index,number:String(index+1),name:'測定専用'+(index+1),
+      issuedAt,revoked:false,note:'自動測定用。Classroomには配付しない。2時間で期限切れ。'}));
+    const sheet=SheetRepository.getStudentRuntimeSheet_('トークン管理');
+    const headers=SheetRepository.getHeaderColumnMap_(sheet);const width=sheet.getLastColumn();
+    let tokenStart;
+    SheetRepository.withDocumentLock(()=>{
+      tokenStart=sheet.getLastRow()+1;
+      SheetRepository.appendRows_(sheet,tokens.map(row=>{
+        const output=new Array(width).fill('');const fields={...row,'氏名':row.name,'出席番号':row.number};
+        Object.keys(fields).forEach(key=>{if(headers[key])output[headers[key]-1]=fields[key];});return output;
+      }));
+    });
+    const run={runId,count,tokens,tokenStart,answerStart:SheetRepository.getStudentRuntimeSheet_('解答ログ').getLastRow()+1,attempts:[]};
+    this.cache_().put(this.key_(runId),JSON.stringify(run),21600);
+    for(let index=0;index<count;index++) {
+      const level='lv'+(index%6+1);
+      const session=AnswerService.initializeStudentSession(tokens[index].token,{level,practiceMode:'manual'});
+      const problem=MolProblemService.getStoredProblemForToken(tokens[index].token,session.problem.attemptId);
+      const correct=index%5!==0;
+      const submittedAnswer=correct ? (index%6>=4?Number(problem.expectedAnswer).toExponential(2):String(problem.expectedAnswer)) : String(Number(problem.expectedAnswer)*1.1);
+      const slot={token:tokens[index].token,problem:session.problem,submittedAnswer,correct};
+      this.cache_().put(this.key_(runId)+':'+index,JSON.stringify(slot),21600);
+      run.attempts.push({attemptId:problem.attemptId,rosterKey:tokens[index].rosterKey,correct});
+    }
+    this.cache_().put(this.key_(runId),JSON.stringify(run),21600);
+    return {runId,count};
+  }
+  static submit_(runId,index) {
+    const run=this.run_(runId);const slotIndex=Number(index);
+    if(!Number.isSafeInteger(slotIndex) || slotIndex<0 || slotIndex>=run.count) throw new Error('測定番号が不正です。');
+    const slot=JSON.parse(this.cache_().get(this.key_(runId)+':'+slotIndex) || 'null');
+    if(!slot) throw new Error('測定問題の期限が切れています。');
+    const response=AnswerService.submitAnswer({token:slot.token,problem:slot.problem,submittedAnswer:slot.submittedAnswer,elapsedMs:15000,
+      clientInfo:{benchmarkRunId:runId},skipNextProblem:true});
+    return {isCorrect:response.result.isCorrect,expectedCorrect:slot.correct,duplicate:response.duplicate,performance:response.performance};
+  }
+  static finish_(runId) {
+    const run=this.run_(runId);const sheet=SheetRepository.getStudentRuntimeSheet_('解答ログ');
+    const headers=SheetRepository.getHeaderColumnMap_(sheet);const last=sheet.getLastRow();const width=sheet.getLastColumn();
+    const expected=new Map(run.attempts.map(row=>[row.attemptId,row]));const counts={};let recorded=0,gradingErrors=0;
+    for(let start=run.answerStart;start<=last;start+=500) {
+      const values=sheet.getRange(start,1,Math.min(500,last-start+1),width).getValues();
+      for(const valuesRow of values) {
+        const row=SheetRepository.answerLogObjectToRow_(SheetRepository.rowValuesToObject_(headers,valuesRow));
+        const target=expected.get(row.attemptId);if(!target || row.rosterKey!==target.rosterKey)continue;
+        recorded++;counts[row.attemptId]=(counts[row.attemptId] || 0)+1;
+        if(row.isCorrect!==target.correct)gradingErrors++;
+      }
+    }
+    const tokenSheet=SheetRepository.getStudentRuntimeSheet_('トークン管理');const tokenHeaders=SheetRepository.getHeaderColumnMap_(tokenSheet);
+    SheetRepository.withDocumentLock(()=>{
+      const rows=tokenSheet.getRange(run.tokenStart,1,run.count,tokenSheet.getLastColumn()).getValues();
+      if(rows.some((row,index)=>row[tokenHeaders.token-1]!==run.tokens[index].token || row[tokenHeaders.rosterKey-1]!==run.tokens[index].rosterKey)) throw new Error('測定用トークンの行位置が変更されています。');
+      tokenSheet.getRange(run.tokenStart,tokenHeaders.revoked,run.count,1).setValues(run.tokens.map(()=>[true]));
+      run.tokens.forEach(row=>TokenService.clearTokenRowCache_(row.token));
+    });
+    return {recorded,uniqueAttempts:Object.keys(counts).length,duplicates:recorded-Object.keys(counts).length,gradingErrors,expected:run.count,closed:true};
+  }
+}
+function prepareStudentLoadBenchmark(authToken,options) {
+  MonitorService.assertMonitorAccess(authToken);ReviewBenchmarkService.assertTestProject_();
+  return StudentLoadBenchmarkService.prepare_(options);
+}
+function submitStudentLoadBenchmark(authToken,runId,index) {
+  MonitorService.assertMonitorAccess(authToken);ReviewBenchmarkService.assertTestProject_();
+  return StudentLoadBenchmarkService.submit_(runId,index);
+}
+function finishStudentLoadBenchmark(authToken,runId) {
+  MonitorService.assertMonitorAccess(authToken);ReviewBenchmarkService.assertTestProject_();
+  return StudentLoadBenchmarkService.finish_(runId);
+}
+
+
+// On-demand navigation only. No credentials, settings values or answer rows leave this API.
+function getMonitorOperationLinks(authToken, rosterKey) {
+  MonitorService.assertMonitorAccess(authToken);
+  if (rosterKey != null && (typeof rosterKey !== 'string' || rosterKey.length > 300)) throw new Error('対象の生徒を確認してください。');
+  const spreadsheet = SpreadsheetApp.getActiveSpreadsheet();
+  const baseUrl = String(spreadsheet.getUrl() || '').split('#')[0];
+  const names = {classrooms:'Classroom一覧', roster:'生徒名簿', tokens:'トークン管理', distribution:'配付ログ', settings:'設定', execution:'実行ログ'};
+  const sheets = {}, found = {};
+  Object.keys(names).forEach(key => {
+    const sheet = spreadsheet.getSheetByName(names[key]);
+    found[key] = sheet;
+    sheets[key] = sheet ? baseUrl + '#gid=' + sheet.getSheetId() : '';
+  });
+  const studentRows = {tokens:'',roster:''};
+  if (rosterKey) for (const key of Object.keys(studentRows)) {
+    if (!found[key]) continue;
+    const row = SheetRepository.findRowIndexByHeaderValueInSheet_(found[key], 'rosterKey', rosterKey, {matchCase:true});
+    if (row) studentRows[key] = sheets[key] + '&range=A' + row;
+  }
+  return {sheets, studentRows};
 }

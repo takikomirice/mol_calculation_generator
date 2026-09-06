@@ -191,6 +191,7 @@ test('answer submission appends an attemptId and returns the always-fast approxi
     throw new Error('upsertProblemTypeStatsRow should not run in the student route');
   };
 
+  AnswerService.readRuntimeSummaryCache_ = row => ({rosterKey:row.rosterKey,summary:{totalAttempts:0,totalCorrect:0},recent:[]});
   const response = AnswerService.submitAnswer({
     token: 'active-token',
     problem: issued.publicProblem,

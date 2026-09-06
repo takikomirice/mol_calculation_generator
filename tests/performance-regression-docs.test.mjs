@@ -59,76 +59,20 @@ test('performance-sensitive paths keep maintainer comments explaining the avoide
   assert.match(extractFunctionBody(code, 'submitAnswer'), /同じattemptId/);
 });
 
-test('README documents the lightweight monitor and sheet-centered design after performance work', async () => {
-  const readme = await readText('README.md');
-
-  assertIncludesAll(readme, [
-    /Webモニター.*モニターだけ更新/,
-    /Webモニター.*集計から完全更新/,
-    /Webモニター.*表示中一覧CSV/,
-    /Webモニター.*管理スプレッドシート/,
-    /書き込み系操作.*モニターだけ更新[\s\S]*集計から完全更新/,
-    /ログや生データ.*各管理シート/,
-    /token検索.*高速化/,
-    /lastAccessedAt.*即時書き込み.*行わ/,
-    /管理シート全体チェック/,
-    /集計キャッシュ.*読み書き/,
-    /問題タイプ別キャッシュ.*読み書き/,
-    /生徒画面.*次問先読み/,
-    /2問目以降.*先読み/,
-    /直前の解答結果.*反映されない場合/
-  ], 'README');
+test('current teacher docs describe one refresh action, incremental progress and recovery', async () => {
+  const docs = (await readText('README.md')) + (await readText('運用手順.md'));
+  assertIncludesAll(docs, [
+    /更新操作は「更新」1つ/, /差分集計/, /500行ずつ/, /進捗/, /再試行/,
+    /⑨ 集計キャッシュを更新/, /モニターキャッシュ/, /JSON/, /直接編集しない/,
+    /確認ダイアログは出しません/, /生徒の解答ログ保存処理は変更していません/,
+    /表示中一覧CSV/, /各管理シート/, /自動更新/, /60秒/
+  ], 'single refresh docs');
+  assert.doesNotMatch(docs, /モニターだけ更新|集計から完全更新|再取得するだけで、集計処理自体は行いません/);
 });
 
-test('teacher-facing docs explain always-fast student runtime reflection delay and cache rebuild recovery', async () => {
-  const readme = await readText('README.md');
-  const guide = await readText('運用手順.md');
-  const docs = `${readme}\n${guide}`;
-
-  assertIncludesAll(docs, [
-    /生徒画面.*常時高速ルート[\s\S]*採点レスポンス.*優先/,
-    /通常\/高速切替設定.*存在しない|通常.*高速.*切替設定.*存在しない/,
-    /集計.*反映.*遅れる|反映.*遅れる[\s\S]*集計/,
-    /苦手傾向|問題タイプ別/,
-    /⑨ 集計キャッシュを更新[\s\S]*(整合|最新化|復旧|整え)/,
-    /Webモニター[\s\S]*モニターだけ更新[\s\S]*(復旧|更新|再生成)/,
-    /Webモニター[\s\S]*集計から完全更新[\s\S]*(整合|最新化|復旧|整え|作り直)/,
-    /表示中一覧CSV[\s\S]*(表示|絞り込み|軽量)/,
-    /解答ログ[\s\S]*(同期保存|記録されます)|同期保存[\s\S]*解答ログ/,
-    /快適性.*優先/
-  ], 'student runtime docs');
-
-  assert.doesNotMatch(docs, new RegExp(legacyStudentRouteSettingKeyForTest()));
-  assert.doesNotMatch(docs, /通常\/高速切替.*設定で|高速モードをOFF|切り戻しスイッチ/);
-  assert.doesNotMatch(docs, /Webモニターで分析/);
-});
-
-test('teacher-facing docs explain monitor snapshot cache and source data recovery', async () => {
-  const readme = await readText('README.md');
-  const guide = await readText('運用手順.md');
-  const adminRetirement = await readText('docs/admin-retirement.md');
-  const docs = `${readme}\n${guide}\n${adminRetirement}`;
-
-  assertIncludesAll(docs, [
-    /Webモニター[\s\S]*モニターキャッシュ[\s\S]*JSON/,
-    /Webモニター[\s\S]*スナップショットだけを読/,
-    /1セルJSON|1セルのJSON/,
-    /スナップショット[\s\S]*(未作成|壊れ)[\s\S]*ライブ構築[\s\S]*行わ/,
-    /snapshot-missing/,
-    /60秒自動更新[\s\S]*スナップショット[\s\S]*再取得[\s\S]*集計処理[\s\S]*行いません/,
-    /getMonitorDashboardData elapsedMs[\s\S]*cacheReadElapsedMs[\s\S]*sheetReadElapsedMs[\s\S]*jsonParseElapsedMs/,
-    /モニターキャッシュ[\s\S]*自動生成[\s\S]*直接編集しない/,
-    /正本データ[\s\S]*解答ログ[\s\S]*トークン管理[\s\S]*生徒名簿[\s\S]*配付ログ/,
-    /⑨ 集計キャッシュを更新[\s\S]*集計キャッシュ[\s\S]*問題タイプ別キャッシュ[\s\S]*モニターキャッシュ/,
-    /モニターだけ更新[\s\S]*モニターキャッシュ/,
-    /集計から完全更新[\s\S]*集計キャッシュ[\s\S]*問題タイプ別キャッシュ[\s\S]*モニターキャッシュ/,
-    /管理スプレッドシートを開/,
-    /表示中一覧CSV[\s\S]*(解答ログ全履歴CSV|分析CSV)/,
-    /MONITOR_URL[\s\S]*TEST_STUDENT_URL/,
-    /苦手傾向Classroom通知|Classroom通知[\s\S]*今後/
-  ], 'monitor snapshot docs');
-
-  assert.doesNotMatch(docs, /Webモニターで分析/);
+test('teacher docs identify source data and distinguish monitor refresh from full repair', async () => {
+  const docs = (await readText('README.md')) + (await readText('運用手順.md'));
+  assertIncludesAll(docs, [/モニターキャッシュ/, /JSONを分割保存/, /途中結果/, /500行ずつ/, /正本データ/, /解答ログ/, /トークン管理/, /生徒名簿/, /配付ログ/, /⑨ 集計キャッシュを更新/, /全履歴から復旧/, /60秒/, /読み込み開始後.*次回の更新/], 'refresh source data');
 });
 
 test('teacher-facing docs explain optional aggregate monitor auto refresh operations', async () => {
@@ -144,7 +88,7 @@ test('teacher-facing docs explain optional aggregate monitor auto refresh operat
     /通常は5分|5分程度/,
     /自動更新[\s\S]*生徒.*採点レスポンス.*別実行/,
     /生徒画面.*常時高速ルート[\s\S]*採点直後.*反映.*遅れる/,
-    /すぐ表示用スナップショット[\s\S]*モニターだけ更新/,
+    /すぐ新しい解答[\s\S]*Webモニター[\s\S]*更新/,
     /解答ログから正確[\s\S]*⑨ 集計キャッシュを更新/,
     /Admin\.html[\s\S]*削除済み/,
     /表示中一覧CSV[\s\S]*軽量/,
@@ -312,7 +256,7 @@ test('README and operation guide describe the teacher web monitor route and depl
     /TEST_STUDENT_URL/,
     /(MONITOR_URL|Webモニター).*ブックマーク/,
     /表示.*読み取り中心/,
-    /書き込み系操作.*モニターだけ更新[\s\S]*集計から完全更新/,
+    /更新操作は「更新」1つ/,
     /WebモニターURL.*先生用/,
     /WebモニターURL.*生徒には共有しない/,
     /TEST_STUDENT_URL[\s\S]*Classroomには配付しません/,
@@ -337,10 +281,10 @@ test('admin retirement inventory document records completed Admin.html removal',
     /各管理シート/,
     /表示中一覧CSV/,
     /通常.*Webモニター.*設定シート.*onOpenメニュー/,
-    /Webモニター[\s\S]*モニターだけ更新/,
-    /Webモニター[\s\S]*集計から完全更新/,
+    /Webモニター[\s\S]*差分集計/,
+    /全履歴から復旧[\s\S]*⑨ 集計キャッシュを更新/,
     /解答ログ全履歴CSV[\s\S]*対象外|分析CSV[\s\S]*対象外/,
-    /分析[\s\S]*実装しない/
+    /分析CSV[\s\S]*対象外/
   ], 'admin retirement inventory');
 
   assert.doesNotMatch(inventory, /今回は削除しない/);
@@ -462,7 +406,7 @@ test('operation guide keeps the full classroom regression scenario and in-class 
     /DRY_RUN/,
     /URL配付/,
     /生徒URL初回アクセス/,
-    /初級.*中級.*上級/,
+    /Lv\.1〜Lv\.6/,
     /解答送信/,
     /次の問題/,
     /集計キャッシュ更新/,

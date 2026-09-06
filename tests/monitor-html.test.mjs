@@ -12,8 +12,8 @@ test('monitor screen exposes read-only classroom monitor layout', async () => {
   assert.match(html, /もるくえ！ モニター/);
   assert.match(html, /id="refreshButton"/);
   assert.match(html, /id="autoRefreshToggle"/);
-  assert.match(html, /id="rebuildMonitorSnapshotButton"/);
-  assert.match(html, /id="rebuildCachesButton"/);
+  assert.doesNotMatch(html, /id="rebuildMonitorSnapshotButton"/);
+  assert.doesNotMatch(html, /id="rebuildCachesButton"/);
   assert.match(html, /id="openSpreadsheetButton"/);
   assert.match(html, /id="downloadCsvButton"/);
   assert.match(html, /id="lastUpdatedAt"/);
@@ -38,8 +38,6 @@ test('monitor screen exposes read-only classroom monitor layout', async () => {
     '総解答',
     '直近正答率',
     '自動更新',
-    'モニターだけ更新',
-    '集計から完全更新',
     '管理スプレッドシートを開く',
     '表示中一覧CSV',
     '表示',
@@ -127,17 +125,20 @@ test('monitor screen supports sortable table headers', async () => {
   assert.match(html, /localeCompare\(String\(b \|\| ''\), 'ja'\)/);
 });
 
-test('monitor screen calls only monitor read APIs through google.script.run', async () => {
+test('monitor screen calls only monitoring and isolated measurement APIs through google.script.run', async () => {
   const html = await loadMonitorHtml();
 
   assert.match(html, /google\.script\.run/);
   const serverCalls = Array.from(html.matchAll(/runServer\('([^']+)'/g), (match) => match[1]);
   assert.deepEqual(new Set(serverCalls), new Set([
-    'getMonitorDashboardData',
-    'getMonitorStudentAnswerHistory',
-    'getMonitorStudentProblemTypeStats',
-    'rebuildMonitorSnapshotFromMonitor',
-    'rebuildAggregateAndMonitorCacheFromMonitor'
+    'refreshMonitorDashboard',
+    'getMonitorStudentAnswerReview',
+    'getMonitorOperationLinks',
+    'getCurrentMonitorStudentProblemTypeStats',
+    'prepareMonitorReviewBenchmark',
+    'prepareStudentLoadBenchmark',
+    'submitStudentLoadBenchmark',
+    'finishStudentLoadBenchmark'
   ]));
   assert.equal(serverCalls.some((name) => /csv/i.test(name)), false, 'CSV export should not call a server function');
 
@@ -188,7 +189,7 @@ test('monitor screen formats levels and problem types for teachers', async () =>
   const html = await loadMonitorHtml();
 
   assert.match(html, /function formatLevel\(level\)/);
-  assert.match(html, /beginner:\s*'初級'/);
+  assert.match(html, /beginner:\s*'旧初級'/);
   assert.match(html, /intermediate:\s*'中級'/);
   assert.match(html, /advanced:\s*'上級'/);
   assert.match(html, /function formatProblemType\(problemType\)/);
@@ -210,62 +211,19 @@ test('monitor screen supports read-only auto refresh without overlapping loads',
   assert.match(html, /window\.addEventListener\('beforeunload', stopAutoRefresh\)/);
 });
 
-test('monitor screen displays snapshot status and logs server and render timings', async () => {
+test('monitor presents one refresh action and reports actual answer confirmation time', async () => {
   const html = await loadMonitorHtml();
-
-  assert.match(html, /snapshotMode/);
-  assert.match(html, /snapshotGeneratedAt/);
-  assert.match(html, /snapshot-missing/);
-  assert.match(html, /モニターキャッシュが未作成です/);
-  assert.match(html, /まず強調表示されている「モニターだけ更新」を押してください。/);
-  assert.match(html, /それでも表示できない場合や、人数・集計が古い場合は「集計から完全更新」を実行してください。/);
-  assert.match(html, /必要に応じて管理スプレッドシートを開いて確認してください。/);
-  assert.match(html, /performance\.now\(\)/);
-  assert.match(html, /console\.log\(\s*'getMonitorDashboardData'/);
-  assert.match(html, /console\.log\(\s*'renderDashboard'/);
-  assert.match(html, /表示データ更新:/);
-});
-
-test('monitor screen highlights the next recommended maintenance action', async () => {
-  const html = await loadMonitorHtml();
-
-  assert.match(html, /fullRebuildRecommended:\s*false/);
-  assert.match(html, /monitorSnapshotRebuildRecommended:\s*false/);
-  assert.match(html, /state\.monitorSnapshotRebuildRecommended = state\.data\.snapshotMissing === true/);
-  assert.match(html, /state\.fullRebuildRecommended = false/);
-  assert.match(html, /elements\.rebuildMonitorSnapshotButton\.classList\.toggle\('attention', state\.monitorSnapshotRebuildRecommended === true\)/);
-  assert.match(html, /elements\.rebuildCachesButton\.classList\.toggle\('attention', state\.fullRebuildRecommended === true\)/);
-  assert.match(html, /state\.fullRebuildRecommended = true/);
-  assert.match(html, /state\.monitorSnapshotRebuildRecommended = false/);
-  assert.match(html, /モニターだけ更新では復旧できませんでした。/);
-  assert.match(html, /強調表示されている「集計から完全更新」を実行してください。/);
-  assert.match(html, /モニターキャッシュを作成できませんでした。「集計から完全更新」を実行してください。/);
-  assert.match(html, /まず「モニターだけ更新」を押してください。それでも人数や集計が古い場合は「集計から完全更新」を実行してください。/);
-});
-
-test('monitor screen provides teacher maintenance controls without exposing other write operations', async () => {
-  const html = await loadMonitorHtml();
-
-  assert.match(html, /id="rebuildMonitorSnapshotButton"/);
-  assert.match(html, /id="rebuildCachesButton"/);
-  assert.match(html, /id="openSpreadsheetButton"/);
-  assert.match(html, /id="downloadCsvButton"/);
-  assert.match(html, /function rebuildMonitorSnapshotFromMonitor\(/);
-  assert.match(html, /function rebuildCachesFromMonitor\(/);
-  assert.match(html, /window\.confirm\(/);
-  assert.match(html, /既存の集計キャッシュを使って、Webモニター表示用キャッシュだけ更新します。通常はこちらを使ってください。実行しますか？/);
-  assert.match(html, /解答ログから集計キャッシュ、問題タイプ別キャッシュ、モニターキャッシュをすべて作り直します。時間がかかることがあります。実行しますか？/);
-  assert.match(html, /runServer\('rebuildMonitorSnapshotFromMonitor'\)/);
-  assert.match(html, /runServer\('rebuildAggregateAndMonitorCacheFromMonitor'\)/);
-  assert.match(html, /state\.maintenanceRunning/);
-  assert.match(html, /更新中\.\.\./);
-  assert.match(html, /loadDashboard\(\)/);
-  assert.match(html, /maintenanceLinks/);
-  assert.match(html, /spreadsheetUrl/);
-  assert.match(html, /window\.open\(url, '_blank', 'noopener'\)/);
-  assert.doesNotMatch(html, /runServer\('rebuildAggregateCacheFromMenu'/);
-  assert.doesNotMatch(html, /runServer\('installAggregateMonitorAutoRefreshTriggerFromMenu'/);
-  assert.doesNotMatch(html, /runServer\('uninstallAggregateMonitorAutoRefreshTriggerFromMenu'/);
+  assert.match(html, /id="refreshButton"/);
+  assert.doesNotMatch(html, /rebuildCachesButton|rebuildMonitorSnapshotButton|fullRebuildRecommended/);
+  assert.match(html, /answersThrough/);
+  assert.match(html, /確認した解答を反映/);
+  assert.match(html, /result.processed/);
+  assert.match(html, /前回の表示を保持/);
+  const load = html.slice(html.indexOf('async function loadDashboard'), html.indexOf('function renderDashboard'));
+  assert.doesNotMatch(load, /window.confirm/);
+  assert.match(load, /refreshMonitorDashboard/);
+  assert.match(load, /refreshButton.disabled = true/);
+  assert.match(load, /refreshButton.disabled = false/);
 });
 
 test('monitor screen builds visible rows CSV on the client only', async () => {
@@ -348,9 +306,9 @@ test('monitor documentation explains classroom-oriented monitor controls', async
   assert.match(docs, /WebモニターURL.*先生用/);
   assert.match(docs, /WebモニターURL.*生徒には共有しない/);
   assert.match(docs, /アクセス範囲.*Webアプリ.*デプロイ設定/);
-  assert.match(docs, /モニターだけ更新/);
-  assert.match(docs, /集計から完全更新/);
-  assert.match(docs, /snapshot-missing[\s\S]*モニターだけ更新/);
+  assert.match(docs, /更新操作は「更新」1つ/);
+  assert.match(docs, /差分集計/);
+  assert.match(docs, /通信失敗時[\s\S]*再試行/);
   assert.match(docs, /管理スプレッドシートを開/);
   assert.match(docs, /表示中一覧CSV/);
   assert.match(docs, /解答ログ全履歴CSV|分析CSV/);
