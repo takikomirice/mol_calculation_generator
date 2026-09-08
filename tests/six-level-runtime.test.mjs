@@ -152,7 +152,7 @@ test('monitor snapshot reads stay authorized without scanning unrelated sheets',
   const r=await runtime();
   r.SheetRepository.assertManagementSheetsReady=()=>{throw Error('unrelated sheet scan');};
   let reads=0;
-  const snapshot={appVersion:'4.0.1',progressRows:[],dashboardMetrics:{},courseOverview:{},studentOverview:{},tokenOverview:{}};
+  const snapshot={appVersion:'4.0.2',progressRows:[],dashboardMetrics:{},courseOverview:{},studentOverview:{},tokenOverview:{}};
   r.SheetRepository.readMonitorCacheRow=()=>{reads++;return {json:JSON.stringify(snapshot)};};
   assert.equal(r.getMonitorDashboardData('teacher-secret').snapshotMode,'snapshot');
   assert.equal(reads,1);

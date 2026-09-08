@@ -510,6 +510,16 @@
     .operations-header h2 {font-size:20px;margin:0;}
     .operations-body {padding:16px 20px;overflow-wrap:anywhere;}
     .operations-grid {display:grid;grid-template-columns:repeat(auto-fit,minmax(min(280px,100%),1fr));gap:12px;}
+    #columnDialog { width:min(640px,calc(100vw - 24px)); max-height:calc(100dvh - 32px); box-sizing:border-box; border:0; border-radius:12px; padding:0; color:var(--text); }
+    #columnDialog::backdrop { background:rgba(15,23,42,.45); }
+    .column-dialog-body { padding:16px; }
+    .column-dialog-actions { position:sticky; bottom:0; display:flex; gap:8px; flex-wrap:wrap; justify-content:flex-end; padding:12px 16px; background:white; border-top:1px solid var(--line); }
+    #columnEditorList { list-style:none; padding:0; margin:12px 0; }
+    .column-editor-row { display:flex; align-items:center; gap:8px; border-bottom:1px solid var(--line); padding:4px; }
+    .column-editor-row label { flex:1; min-width:0; display:flex; align-items:center; gap:8px; min-height:44px; overflow-wrap:anywhere; }
+    .column-editor-row button { min-width:44px; min-height:44px; }
+    .column-editor-row[draggable="true"] { cursor:grab; }
+    .column-editor-row:focus-within { background:#eef4ff; }
     .operation-card {border:1px solid var(--line);border-radius:8px;padding:14px;}
     .operation-card h3 {margin:0 0 8px;font-size:16px;}
     .operation-card p {font-size:13px;line-height:1.7;margin:8px 0;}
@@ -607,13 +617,14 @@
           <option value="follow">フォロー</option>
           <option value="detail">詳細</option>
           <option value="distribution">配付確認</option>
+          <option value="custom">カスタム</option>
         </select>
       </div>
       <label class="check-field"><input id="followOnlyToggle" type="checkbox"> 要フォローのみ</label>
       <label class="check-field"><input id="notStartedOnlyToggle" type="checkbox"> 未実施のみ</label>
     </section>
 
-    <div class="filter-summary"><span id="filterSummary" role="status" aria-live="polite"></span><button id="clearFiltersButton" type="button">絞り込みを解除</button></div>
+    <div class="filter-summary"><span id="filterSummary" role="status" aria-live="polite"></span><button id="editColumnsButton" type="button" disabled>表示項目を編集</button><button id="clearFiltersButton" type="button">絞り込みを解除</button></div>
     <main class="table-wrap">
       <table id="studentTable" aria-label="生徒一覧テーブル">
         <thead id="studentHead"></thead>
@@ -667,6 +678,18 @@
     </section>
   </div>
 
+  <dialog id="columnDialog" aria-labelledby="columnDialogTitle" aria-describedby="columnDialogHelp">
+    <div class="column-dialog-body">
+      <h2 id="columnDialogTitle">表示項目を編集</h2>
+      <p id="columnDialogHelp">番号・氏名は先頭に固定します。表示する項目を選び、↑↓またはドラッグで順番を変更できます。</p>
+      <p class="muted">このブラウザー・このスプレッドシート用に保存します。他の端末には同期されません。</p>
+      <p class="muted">時間は全期間・全レベル（旧記録を含む）が対象です。0.5秒未満・30分超・時間未記録の解答を除きます。途中で手を止めた時間も含むため、正答率やレベルとあわせて確認してください。直近10問は最新10解答のうち時間のある記録です。</p>
+      <p class="muted">レベル別成績は現行カリキュラムのみ。CSVは表示中のデータ列と同じ順番で出力し、操作ボタンの列は含みません。</p>
+      <ul id="columnEditorList"></ul>
+      <p id="columnEditorStatus" role="status" aria-live="polite"></p>
+    </div>
+    <div class="column-dialog-actions"><button id="resetColumnsButton" type="button">標準に戻す</button><button id="cancelColumnsButton" type="button">キャンセル</button><button id="applyColumnsButton" class="primary" type="button">適用</button></div>
+  </dialog>
   <dialog id="operationsDialog" aria-labelledby="operationsTitle">
     <div class="operations-header"><h2 id="operationsTitle">管理操作</h2><button id="operationsClose" type="button">閉じる</button></div>
     <div class="operations-body">
@@ -689,7 +712,7 @@
       standard: ['number', 'name', 'status', 'attempts', 'recentAccuracy', 'autoProgress', 'lastAnsweredAt', 'history'],
       follow: ['number', 'name', 'status', 'followReason', 'attempts', 'recentAccuracy', 'autoProgress', 'lastAnsweredAt', 'history'],
       detail: ['number', 'name', 'status', 'distribution', 'access', 'attempts', 'recentAccuracy', 'levelSummary', 'autoProgress', 'lastAnsweredAt', 'history'],
-      distribution: ['courseName', 'number', 'name', 'distribution', 'access', 'history']
+      distribution: ['number', 'name', 'courseName', 'distribution', 'access', 'history']
     };
 
     const state = {
@@ -702,7 +725,8 @@
       sortDirection: '',
       review: null,
       reviewReturnFocus: null,
-      reviewReturnFocusKey: null, reviewQueue: [], preferencesRestored: false
+      reviewReturnFocusKey: null, reviewQueue: [], preferencesRestored: false,
+      customColumns: null, columnDraft: null, draggedColumn: null
     };
 
     const elements = {
@@ -830,25 +854,41 @@
       }
     ];
 
+    COLUMN_DEFINITIONS.push(
+      {key:'totalCorrect',label:'累計正解数',sortKey:'totalCorrect',thClass:'num',tdClass:'num',numericValue:row=>Number(row.totalCorrect || 0),render:row=>String(Number(row.totalCorrect || 0)),csvValue:row=>Number(row.totalCorrect || 0)},
+      {key:'totalAccuracy',label:'全期間正答率',sortKey:'totalAccuracy',thClass:'num',tdClass:'num',numericValue:row=>Number(row.totalAttempts)>0?Number(row.totalAccuracy):null,render:row=>Number(row.totalAttempts)>0?formatPercent(row.totalAccuracy):'—',csvValue:row=>Number(row.totalAttempts)>0?formatPercent(row.totalAccuracy):'—'}
+    );
+    for (const [key,label,countKey] of [['averageElapsedMs','平均解答時間','elapsedCount'],['correctAverageElapsedMs','正解時の平均解答時間','correctElapsedCount'],['recent10AverageElapsedMs','直近10問の平均解答時間','recent10ElapsedCount']]) {
+      COLUMN_DEFINITIONS.push({key,label,sortKey:key,thClass:'num',tdClass:'num nowrap',description:'時間が有効な解答の平均と対象件数。全期間・全レベル。直近10問の列は最新10解答が対象。',
+        numericValue:row=>Number(row[key])>0?Number(row[key]):null,render:row=>formatTimeMetric(row,key,countKey),csvValue:row=>formatTimeMetric(row,key,countKey)});
+    }
+    for (const level of LEVEL_KEYS) {
+      COLUMN_DEFINITIONS.push({key:level,label:formatLevel(level)+' 正答率',sortKey:level,thClass:'num',tdClass:'num nowrap',description:'現行カリキュラムの正答率（正解数／解答数）。',
+        numericValue:row=>Number(row[level+'Attempts'])>0?Number(row[level+'Accuracy']):null,
+        render:row=>formatLevelMetric(row,level),csvValue:row=>formatLevelMetric(row,level)});
+    }
+
     const COLUMN_DEFINITION_MAP = COLUMN_DEFINITIONS.reduce((map, column) => {
       map[column.key] = column;
       return map;
     }, {});
 
-    const CSV_COLUMNS = [
-      { header: 'Classroom', value: (row) => row.courseName || '' },
-      { header: '出席番号', value: (row) => row.number || '' },
-      { header: '氏名', value: (row) => row.name || '' },
-      { header: '状態', value: (row) => row.statusLabel || '' },
-      { header: '配付', value: (row) => row.distributionStatus || '' },
-      { header: 'アクセス', value: (row) => row.accessStatus || '' },
-      { header: '解答数', value: (row) => Number(row.totalAttempts || 0) },
-      { header: '直近10問正答率', value: (row) => formatPercent(row.recent10Accuracy) },
-      { header:'オートの進行',value:row=>formatAutoProgress(row.autoProgress) },
-      ...LEVEL_KEYS.map(level=>({header:formatLevel(level),value:row=>formatLevelCsv(row,level)})),
-      { header: '最終解答', value: (row) => row.lastAnsweredAt || '' },
-      { header: '要フォロー理由', value: (row) => followReason(row) }
-    ];
+    const CSV_VALUES = {courseName:row=>row.courseName || '',number:row=>row.number || '',name:row=>row.name || '',
+      status:row=>row.statusLabel || '',distribution:row=>row.distributionStatus || '',access:row=>row.accessStatus || '',
+      attempts:row=>Number(row.totalAttempts || 0),recentAccuracy:row=>formatPercent(row.recent10Accuracy),
+      autoProgress:row=>formatAutoProgress(row.autoProgress),levelSummary:row=>levelSummary(row),
+      lastAnsweredAt:row=>formatDateTime(row.lastAnsweredAt),followReason:row=>followReason(row)};
+    COLUMN_DEFINITIONS.forEach(column=>{if(CSV_VALUES[column.key])column.csvValue=CSV_VALUES[column.key];});
+
+    function formatTimeMetric(row,key,countKey) {
+      const value=Number(row[key]);if(!Number.isFinite(value) || value<=0)return '—';
+      const count=row[countKey];
+      return (value/1000).toFixed(1)+'秒'+(count!=null && Number.isFinite(Number(count))?'（'+Number(count)+'件）':'');
+    }
+    function formatLevelMetric(row,level) {
+      const attempts=Number(row[level+'Attempts'] || 0);
+      return attempts>0?formatPercent(row[level+'Accuracy'])+'（'+Number(row[level+'Correct'] || 0)+'/'+attempts+'問）':'—';
+    }
 
     function escapeHtml(value) {
       return String(value == null ? '' : value)
@@ -1035,6 +1075,7 @@
       elements.lastUpdatedAt.textContent = `${formatDateTime(state.data.answersThrough || state.data.snapshotGeneratedAt)} に確認した解答を反映`;
       renderFilterOptions();
       restoreViewPreferences();
+      document.getElementById('editColumnsButton').disabled=false;
       renderRows();
     }
 
@@ -1063,10 +1104,11 @@
     }
     function restoreViewPreferences() {
       if(state.preferencesRestored)return;state.preferencesRestored=true;
+      const restoredColumnMode=restoreColumnPreferences();
       try {
         const key=viewPreferencesKey();const value=key?JSON.parse(sessionStorage.getItem(key) || 'null'):null;
         if(!value || typeof value!=='object')return;
-        if(Object.hasOwn(VIEW_MODE_COLUMNS,value.viewMode)) {state.viewMode=value.viewMode;elements.viewModeSelect.value=state.viewMode;}
+        if(!restoredColumnMode && isValidViewMode(value.viewMode)) {state.viewMode=value.viewMode;elements.viewModeSelect.value=state.viewMode;}
         if(getVisibleColumns().some(column=>column.sortKey===value.sortKey) && ['asc','desc'].includes(value.sortDirection)) {state.sortKey=value.sortKey;state.sortDirection=value.sortDirection;}
         for(const [element,selected] of [[elements.courseFilter,value.course],[elements.statusFilter,value.status]]) {
           element.value=Array.from(element.options).some(option=>option.value===selected)?selected:'';
@@ -1077,6 +1119,64 @@
     function clearFilters() {
       elements.searchInput.value='';elements.courseFilter.value='';elements.statusFilter.value='';
       elements.followOnlyToggle.checked=false;elements.notStartedOnlyToggle.checked=false;renderRows();
+    }
+
+    function isValidViewMode(mode) { return mode==='custom' || Object.hasOwn(VIEW_MODE_COLUMNS,mode); }
+    function columnPreferencesKey() { return viewPreferencesKey().replace('molMonitorView:v1:','molMonitorColumns:v1:'); }
+    function normalizeColumnKeys(keys) {
+      return ['number','name',...new Set((Array.isArray(keys)?keys:[]).filter(key=>typeof key==='string' && Object.hasOwn(COLUMN_DEFINITION_MAP,key) && !['number','name'].includes(key)))];
+    }
+    function restoreColumnPreferences() {
+      try {
+        const key=columnPreferencesKey();const saved=key?JSON.parse(localStorage.getItem(key) || 'null'):null;
+        if(!saved || saved.version!==1 || !Array.isArray(saved.columns))return false;
+        state.customColumns=normalizeColumnKeys(saved.columns);
+        if(isValidViewMode(saved.mode)){state.viewMode=saved.mode;elements.viewModeSelect.value=saved.mode;return true;}
+      } catch (_) {}
+      return false;
+    }
+    function saveColumnPreferences() {
+      try {
+        const key=columnPreferencesKey();if(!key)return false;
+        localStorage.setItem(key,JSON.stringify({version:1,mode:state.viewMode,columns:state.customColumns || VIEW_MODE_COLUMNS.standard}));
+        return true;
+      } catch (_) {return false;}
+    }
+    function openColumnEditor() {
+      state.columnDraft=normalizeColumnKeys(getVisibleColumns().map(column=>column.key));
+      document.getElementById('columnEditorStatus').textContent='';
+      renderColumnEditor();document.getElementById('columnDialog').showModal();
+    }
+    function renderColumnEditor(focusKey,action) {
+      const keys=state.columnDraft.filter(key=>!['number','name'].includes(key));
+      const all=keys.concat(COLUMN_DEFINITIONS.map(column=>column.key).filter(key=>!['number','name'].includes(key) && !keys.includes(key)));
+      document.getElementById('columnEditorList').innerHTML=all.map(key=>{
+        const column=COLUMN_DEFINITION_MAP[key],index=keys.indexOf(key),selected=index>=0;
+        return `<li class="column-editor-row" data-column-key="${key}" draggable="${selected}"><label><input type="checkbox" data-column-toggle="${key}" ${selected?'checked':''}>${escapeHtml(column.label)}</label><button type="button" data-column-move="up" aria-label="${escapeHtml(column.label)}を上へ" ${!selected || index===0?'disabled':''}>↑</button><button type="button" data-column-move="down" aria-label="${escapeHtml(column.label)}を下へ" ${!selected || index===keys.length-1?'disabled':''}>↓</button></li>`;
+      }).join('');
+      if(focusKey) {
+        const row=document.querySelector('#columnEditorList [data-column-key="'+focusKey+'"]');
+        const target=action?row.querySelector('[data-column-move="'+action+'"]'):row.querySelector('input');
+        (target.disabled?row.querySelector('input'):target).focus();
+      }
+    }
+    function moveColumn(key,destination) {
+      const from=state.columnDraft.indexOf(key);
+      if(from<2 || destination<2 || destination>=state.columnDraft.length)return;
+      state.columnDraft.splice(from,1);state.columnDraft.splice(destination,0,key);
+      document.getElementById('columnEditorStatus').textContent=COLUMN_DEFINITION_MAP[key].label+'を'+(destination-1)+'番目の選択項目に移動しました。';
+    }
+    function closeColumnEditor() {
+      document.getElementById('columnDialog').close();state.columnDraft=null;state.draggedColumn=null;
+      document.getElementById('editColumnsButton').focus();
+    }
+    function applyColumnEditor() {
+      state.customColumns=normalizeColumnKeys(state.columnDraft);state.viewMode='custom';elements.viewModeSelect.value='custom';
+      clearHiddenSort();renderRows();const saved=saveColumnPreferences();closeColumnEditor();
+      setStatus(saved?'表示項目と順番をこのブラウザーに保存しました。':'表示は変更しました。このブラウザーでは保存できません。',!saved);
+    }
+    function clearHiddenSort() {
+      if(state.sortKey && !getVisibleColumns().some(column=>column.sortKey===state.sortKey)){state.sortKey='';state.sortDirection='';}
     }
     function renderFilterSummary(rows) {
       const conditions=[];
@@ -1181,9 +1281,10 @@
     }
 
     function buildVisibleRowsCsvText(rows) {
-      const headerLine = CSV_COLUMNS.map((column) => escapeCsvValue(column.header)).join(',');
-      const bodyLines = (rows || []).map((row) => CSV_COLUMNS
-        .map((column) => escapeCsvValue(column.value(row)))
+      const columns=getVisibleColumns().filter(column=>typeof column.csvValue==='function');
+      const headerLine = columns.map((column) => escapeCsvValue(column.label)).join(',');
+      const bodyLines = (rows || []).map((row) => columns
+        .map((column) => escapeCsvValue(column.csvValue(row)))
         .join(','));
       return [headerLine, ...bodyLines].join('\r\n');
     }
@@ -1255,6 +1356,13 @@
     }
 
     function compareBySortKey(a, b, sortKey, direction) {
+      const column=COLUMN_DEFINITION_MAP[sortKey];
+      if(column && column.numericValue) {
+        const valueA=column.numericValue(a),valueB=column.numericValue(b);
+        const emptyA=valueA==null || !Number.isFinite(valueA),emptyB=valueB==null || !Number.isFinite(valueB);
+        if(emptyA || emptyB)return emptyA===emptyB?0:emptyA?1:-1;
+        return (valueA-valueB)*(direction==='desc'?-1:1);
+      }
       if (sortKey === 'lastAnsweredAt') {
         return compareDateTimeWithEmptyLast(a.lastAnsweredAt, b.lastAnsweredAt, direction);
       }
@@ -1362,7 +1470,8 @@
 
     function getVisibleColumns() {
       const mode = VIEW_MODE_COLUMNS[state.viewMode] ? state.viewMode : DEFAULT_VIEW_MODE;
-      return VIEW_MODE_COLUMNS[mode].map((key) => COLUMN_DEFINITION_MAP[key]).filter(Boolean);
+      const keys=state.viewMode==='custom'?normalizeColumnKeys(state.customColumns || VIEW_MODE_COLUMNS.standard):VIEW_MODE_COLUMNS[mode];
+      return keys.map((key) => COLUMN_DEFINITION_MAP[key]).filter(Boolean);
     }
 
     function getVisibleColumnCount() {
@@ -1375,14 +1484,14 @@
     }
 
     function renderHeaderCell(column) {
-      const classAttribute = column.thClass ? ` class="${escapeHtml(column.thClass)}"` : '';
+      const classAttribute = (column.thClass ? ` class="${escapeHtml(column.thClass)}"` : '')+(column.description?` title="${escapeHtml(column.description)}"`:'');
       if (!column.sortKey) {
         return `<th${classAttribute}>${escapeHtml(column.label)}</th>`;
       }
       const active = state.sortKey === column.sortKey;
       const indicator = active ? (state.sortDirection === 'asc' ? '▲' : '▼') : '';
       const ariaSort = active ? (state.sortDirection === 'asc' ? 'ascending' : 'descending') : 'none';
-      return `<th${classAttribute} aria-sort="${ariaSort}"><button class="sort-header" type="button" data-sort-key="${escapeHtml(column.sortKey)}"><span>${escapeHtml(column.label)}</span><span class="sort-indicator">${indicator}</span></button></th>`;
+      return `<th${classAttribute} aria-sort="${ariaSort}"><button class="sort-header" type="button" data-sort-key="${escapeHtml(column.sortKey)}"><span>${escapeHtml(column.label)}</span><span class="sort-indicator" aria-hidden="true">${indicator}</span></button></th>`;
     }
 
     function renderCell(column, row) {
@@ -1414,7 +1523,7 @@
 
     function handleViewModeChange() {
       const selectedMode = elements.viewModeSelect.value || DEFAULT_VIEW_MODE;
-      state.viewMode = VIEW_MODE_COLUMNS[selectedMode] ? selectedMode : DEFAULT_VIEW_MODE;
+      state.viewMode = isValidViewMode(selectedMode) ? selectedMode : DEFAULT_VIEW_MODE;
       elements.viewModeSelect.value = state.viewMode;
       const visibleSortKeys = getVisibleColumns().map((column) => column.sortKey).filter(Boolean);
       if (state.sortKey && !visibleSortKeys.includes(state.sortKey)) {
@@ -1422,6 +1531,7 @@
         state.sortDirection = '';
       }
       renderRows();
+      saveColumnPreferences();
     }
 
     function handleSortHeaderClick(sortKey) {
@@ -1665,6 +1775,36 @@
     document.getElementById('operationsDialog').addEventListener('cancel', event => {event.preventDefault();closeOperations();});
     document.getElementById('operationsRetry').addEventListener('click', loadOperationLinks);
     elements.downloadCsvButton.addEventListener('click', downloadVisibleRowsCsv);
+    document.getElementById('editColumnsButton').addEventListener('click',openColumnEditor);
+    document.getElementById('cancelColumnsButton').addEventListener('click',closeColumnEditor);
+    document.getElementById('columnDialog').addEventListener('cancel',event=>{event.preventDefault();closeColumnEditor();});
+    document.getElementById('applyColumnsButton').addEventListener('click',applyColumnEditor);
+    document.getElementById('resetColumnsButton').addEventListener('click',()=>{state.columnDraft=normalizeColumnKeys(VIEW_MODE_COLUMNS.standard);renderColumnEditor();document.getElementById('columnEditorStatus').textContent='標準の項目と順番に戻しました。「適用」で反映します。';});
+    document.getElementById('columnEditorList').addEventListener('change',event=>{
+      const key=event.target.dataset.columnToggle;if(!key || !Object.hasOwn(COLUMN_DEFINITION_MAP,key))return;
+      state.columnDraft=event.target.checked?normalizeColumnKeys(state.columnDraft.concat(key)):state.columnDraft.filter(value=>value!==key);
+      renderColumnEditor(key);
+    });
+    document.getElementById('columnEditorList').addEventListener('click',event=>{
+      const button=event.target.closest('[data-column-move]');if(!button || button.disabled)return;
+      const key=button.closest('[data-column-key]').dataset.columnKey,action=button.dataset.columnMove;
+      moveColumn(key,state.columnDraft.indexOf(key)+(action==='up'?-1:1));renderColumnEditor(key,action);
+    });
+    document.getElementById('columnEditorList').addEventListener('dragstart',event=>{
+      const key=event.target.closest('[data-column-key]')?.dataset.columnKey;
+      if(!state.columnDraft?.includes(key)){event.preventDefault();return;}
+      state.draggedColumn=key;event.dataTransfer.effectAllowed='move';event.dataTransfer.setData('text/plain',key);
+    });
+    document.getElementById('columnEditorList').addEventListener('dragover',event=>{
+      const key=event.target.closest('[data-column-key]')?.dataset.columnKey;
+      if(state.draggedColumn && state.columnDraft?.includes(key)){event.preventDefault();event.dataTransfer.dropEffect='move';}
+    });
+    document.getElementById('columnEditorList').addEventListener('drop',event=>{
+      event.preventDefault();const key=event.target.closest('[data-column-key]')?.dataset.columnKey,dragged=state.draggedColumn;
+      if(dragged && state.columnDraft?.includes(key)){moveColumn(dragged,state.columnDraft.indexOf(key));renderColumnEditor(dragged);}
+      state.draggedColumn=null;
+    });
+    document.getElementById('columnEditorList').addEventListener('dragend',()=>{state.draggedColumn=null;});
     elements.autoRefreshToggle.addEventListener('change', () => {
       if (elements.autoRefreshToggle.checked) {
         startAutoRefresh();

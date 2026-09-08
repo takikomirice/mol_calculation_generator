@@ -2,7 +2,7 @@
 
 const MOL_DRILL_APP_NAME = 'もるくえ！';
 const MOL_DRILL_FORMAL_DESCRIPTION = 'Classroom連携型モル計算練習アプリ';
-const MOL_DRILL_APP_VERSION = '4.0.1';
+const MOL_DRILL_APP_VERSION = '4.0.2';
 const MOL_DRILL_CURRICULUM_VERSION = 4;
 const MOL_DRILL_LEVELS = Array.from({length:9}, (_,i) => 'lv'+i);
 const MOL_DRILL_DEFAULT_CLASSROOM_SEND_BATCH_SIZE = 40;
@@ -6313,6 +6313,9 @@ class AggregationService {
           lastLevel: String(summary.lastLevel || ''),
           lastProblemType: String(summary.lastProblemType || ''),
           averageElapsedMs: Number(summary.averageElapsedMs || 0),
+          elapsedCount: summary.elapsedCount == null ? null : Number(summary.elapsedCount),
+          correctElapsedCount: summary.correctElapsedCount == null ? null : Number(summary.correctElapsedCount),
+          recent10ElapsedCount: summary.recent10ElapsedCount == null ? null : Number(summary.recent10ElapsedCount),
           medianElapsedMs: Number(summary.medianElapsedMs || 0),
           recent10AverageElapsedMs: Number(summary.recent10AverageElapsedMs || 0),
           recent10MedianElapsedMs: Number(summary.recent10MedianElapsedMs || 0),
@@ -7473,6 +7476,8 @@ class MonitorRefreshService {
         recent10Correct: recentCorrect, recent10Accuracy: AnswerService.roundRate_(recentCorrect, item.recent.length), ...levels,
         lastAnsweredAt: latest.timestamp || '', lastLevel: latest.level || '', lastProblemType: latest.problemType || '',
         averageElapsedMs: item.elapsedCount ? Math.round(item.elapsedSum / item.elapsedCount) : 0,
+        elapsedCount: item.elapsedCount, correctElapsedCount: item.correctElapsedCount,
+        recent10ElapsedCount: AnswerService.validElapsedMsValues_(item.recent).length,
         correctAverageElapsedMs: item.correctElapsedCount ? Math.round(item.correctElapsedSum / item.correctElapsedCount) : 0,
         recent10AverageElapsedMs: recentAverage, recent10MedianElapsedMs: AnswerService.medianElapsedMs_(item.recent),
         correctRecent10AverageElapsedMs: AnswerService.averageElapsedMs_(item.recent.filter(row => row.isCorrect)),

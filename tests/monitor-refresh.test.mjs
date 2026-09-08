@@ -79,13 +79,25 @@ function answer(i,student=i%100) {
 }
 function logObject(entry) { return {...entry,number:'',name:'',courseName:''}; }
 
+test('monitor time columns report valid sample counts and preserve unknown counts from old aggregates',()=>{
+  const env=environment();populate(env,1);
+  [500,1800000,499,1800001,0].forEach((elapsedMs,i)=>append(env,'解答ログ',{...answer(i,0),elapsedMs,isCorrect:i!==1}));
+  const row=env.refreshMonitorDashboard('teacher-secret').data.progressRows[0];
+  assert.equal(row.averageElapsedMs,900250);assert.equal(row.elapsedCount,2);
+  assert.equal(row.correctAverageElapsedMs,500);assert.equal(row.correctElapsedCount,1);
+  assert.equal(row.recent10ElapsedCount,2);
+  const restored=env.AggregationService.buildAdminProgressRows([{rosterKey:'c::old',studentId:'old',courseId:'c'}],[{rosterKey:'c::old',totalAttempts:2,averageElapsedMs:2000}],[],[])[0];
+  assert.equal(restored.elapsedCount,null,'missing sample count is not an actual zero');
+  assert.equal(restored.averageElapsedMs,2000);
+});
+
 test('large dashboard snapshots fit cells, survive cache loss, and preserve unrelated rows',()=>{
   let env=environment({cache:new Map()});
   const target=env.sheets['モニターキャッシュ'];const originalRange=target.getRange;
   target.getRange=function(...args){const range=originalRange.apply(this,args),write=range.setValues;range.setValues=function(rows){assert.ok(rows.every(row=>row.every(v=>String(v).length<=50000)),'Google Sheets cell limit');return write.call(this,rows);};return range;};
   append(env,'モニターキャッシュ',{key:'refresh-state:0',json:'preserve-state'});
   append(env,'モニターキャッシュ',{key:'custom',json:'preserve-custom'});
-  const base={appVersion:'4.0.1',generatedAt:'2026-09-08T03:00:00Z',dashboardMetrics:{},courseOverview:{},studentOverview:{},tokenOverview:{}};
+  const base={appVersion:'4.0.2',generatedAt:'2026-09-08T03:00:00Z',dashboardMetrics:{},courseOverview:{},studentOverview:{},tokenOverview:{}};
   const snapshot={...base,progressRows:Array.from({length:100},(_,i)=>({rosterKey:'course::'+i,name:'生徒'.repeat(900),lv8Attempts:i}))};
   env.MonitorSnapshotService.buildDashboardSnapshot=()=>snapshot;
   env.MonitorSnapshotService.writeDashboardSnapshot();
@@ -555,6 +567,9 @@ test('monitor displays saved automatic stage and manual activity and exports eve
   try {
     await page.setContent(bridge+(await readFile('Monitor.html','utf8')).replace(/<\?!=[\s\S]*?\?>/g,'"teacher-secret"'));
     await page.getByText(/Lv.1・mol ⇔ 質量.*直近は手動/).waitFor();
+    await page.getByRole('button',{name:'表示項目を編集',exact:true}).click();
+    for(let i=0;i<9;i++)await page.getByRole('checkbox',{name:'Lv.'+i+' 正答率',exact:true}).check();
+    await page.getByRole('button',{name:'適用',exact:true}).click();
     const csv=await page.evaluate(()=>buildVisibleRowsCsvText(state.rows));
     for(let i=0;i<9;i++)assert.ok(csv.includes('Lv.'+i));
     assert.match(csv,/オートの進行/);assert.match(csv,/保存済み解答時点/);

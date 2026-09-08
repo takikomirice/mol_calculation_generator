@@ -72,7 +72,7 @@ test('monitor screen defines compact view modes', async () => {
   assert.match(html, /standard:\s*\[\s*'number',\s*'name',\s*'status',\s*'attempts',\s*'recentAccuracy',\s*'autoProgress',\s*'lastAnsweredAt',\s*'history'\s*\]/);
   assert.match(html, /follow:\s*\[\s*'number',\s*'name',\s*'status',\s*'followReason',\s*'attempts',\s*'recentAccuracy',\s*'autoProgress',\s*'lastAnsweredAt',\s*'history'\s*\]/);
   assert.match(html, /detail:\s*\[\s*'number',\s*'name',\s*'status',\s*'distribution',\s*'access',\s*'attempts',\s*'recentAccuracy',\s*'levelSummary',\s*'autoProgress',\s*'lastAnsweredAt',\s*'history'\s*\]/);
-  assert.match(html, /distribution:\s*\[\s*'courseName',\s*'number',\s*'name',\s*'distribution',\s*'access',\s*'history'\s*\]/);
+  assert.match(html, /distribution:\s*\[\s*'number',\s*'name',\s*'courseName',\s*'distribution',\s*'access',\s*'history'\s*\]/);
   assert.match(html, /elements\.viewModeSelect\.addEventListener\('change',/);
 });
 
@@ -232,14 +232,14 @@ test('monitor screen builds visible rows CSV on the client only', async () => {
   assert.match(html, /function downloadVisibleRowsCsv\(/);
   assert.match(html, /const rows = getFilteredRows\(\)/);
   assert.match(html, /Classroom/);
-  assert.match(html, /出席番号/);
+  assert.match(html, /label: '番号'/);
   assert.match(html, /氏名/);
   assert.match(html, /状態/);
   assert.match(html, /配付/);
   assert.match(html, /アクセス/);
   assert.match(html, /解答数/);
-  assert.match(html, /直近10問正答率/);
-  assert.match(html, /LEVEL_KEYS.map\(level=>\(\{header:formatLevel\(level\)/);
+  assert.match(html, /label: '直近正答率'/);
+  assert.match(html, /getVisibleColumns\(\)\.filter\(column=>typeof column.csvValue==='function'\)/);
   assert.match(html, /最終解答/);
   assert.match(html, /要フォロー理由/);
   assert.match(html, /'\\ufeff' \+ csvText/);
