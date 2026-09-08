@@ -1,6 +1,24 @@
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import test from 'node:test';
+import vm from 'node:vm';
+
+test('server calls time out and ignore late callbacks while preserving retry arguments', async () => {
+  const html=await loadStudentHtml();
+  const source=html.slice(html.indexOf('    function runServer('),html.indexOf('    function formatRate('));
+  let expire,success,failure,request,cleared=0;
+  const ctx={console:{info(){}},Date,Promise,Error,setTimeout:(callback,ms)=>{assert.equal(ms,30000);expire=callback;return 1;},clearTimeout:()=>cleared++,
+    google:{script:{run:{withSuccessHandler(fn){success=fn;return this;},withFailureHandler(fn){failure=fn;return this;},submitAnswer(arg){request=arg;}}}}};
+  vm.runInNewContext(source+';globalThis.call=runServer;',ctx);
+  const payload={attemptId:'same-attempt',submittedAnswer:'0.500'};
+  const first=ctx.call('submitAnswer',[payload]);assert.equal(request,payload);
+  assert.equal(typeof expire,'function');expire();
+  await assert.rejects(first,/応答を確認できません/);success({result:'late'});
+  const retry=ctx.call('submitAnswer',[payload]);assert.equal(request,payload);
+  success({result:'saved'});assert.equal((await retry).result,'saved');
+  const failed=ctx.call('submitAnswer',[payload]);failure(Error('offline'));await assert.rejects(failed,/offline/);
+  assert.equal(cleared,3);
+});
 
 async function loadStudentHtml() {
   return readFile('Student.html', 'utf8');

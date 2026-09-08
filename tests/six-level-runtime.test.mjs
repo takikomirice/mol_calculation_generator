@@ -26,6 +26,55 @@ function independentExpected(p) {
   return p.unit==='mol'?amount:p.unit==='g'?amount*p.substance.molarMass:p.unit==='L'?amount*22.4:amount*p.avogadroConstant;
 }
 
+test('saved automatic grading survives failure to prepare the next problem',async()=>{
+  const r=await runtime();
+  const p=r.AnswerService.initializeStudentSession('student-token',{practiceMode:'auto'}).problem;
+  const answer=r.MolProblemService.getStoredProblemForToken('student-token',p.attemptId).expectedAnswer;
+  r.AnswerService.issueProblemForStudent_=()=>{throw Error('next problem unavailable');};
+  const request={token:'student-token',problem:p,submittedAnswer:String(answer),elapsedMs:1200};
+  const response=r.AnswerService.submitAnswer(request);
+  assert.equal(response.result.isCorrect,true);assert.equal(response.nextProblem,null);
+  assert.equal(r.logs.length,1);assert.equal(r.AnswerService.submitAnswer(request).duplicate,true);
+  assert.equal(r.logs.length,1);
+});
+
+test('student failures are retryable without grading an old level and mobile references stay compact',async()=>{
+  const r=await runtime();const browser=await chromium.launch({headless:true});
+  const page=await browser.newPage({viewport:{width:390,height:844}});page.setDefaultTimeout(5000);
+  let failInit=true,failFetch=false;
+  try {
+    await page.exposeFunction('gasCall',(method,args)=>{
+      if(method==='initializeStudentSession'&&failInit)throw Error('接続が切れました');
+      if(method==='getPracticeProblem'&&failFetch)throw Error('接続が切れました');
+      return JSON.parse(JSON.stringify(r.AnswerService[method](...args)));
+    });
+    const bridge=`<script>window.google={script:{run:new Proxy({}, {get(_t,key){if(key==='withSuccessHandler')return function(success){return {withFailureHandler(failure){return new Proxy({}, {get(_t,method){return (...args)=>window.gasCall(method,args).then(success,failure)}})}}}}})}};</script>`;
+    const html=(await readFile('Student.html','utf8')).replace(/<\?!= [\s\S]*?\?>/g,s=>s.includes('initialTeacherPreview')?'false':s.includes('initialAdminToken')?'""':'"student-token"');
+    await page.setContent(bridge+html);await page.locator('#errorPanel:visible').waitFor();
+    assert.equal(await page.locator('#errorTitle').innerText(),'通信失敗');
+    failInit=false;await page.locator('#retryButton').click();await page.waitForFunction(()=>!document.querySelector('#submitButton').disabled);
+    assert.equal(await page.locator('#categoryPanel').isVisible(),false,'one choice needs no selector');
+    await page.waitForFunction(()=>document.activeElement.id==='questionText');
+    assert.ok(await page.locator('#questionText').evaluate(el=>el.getBoundingClientRect().top>=0),'read the question before opening the keyboard');
+    failFetch=true;await page.locator('[data-level="lv1"]').click();await page.locator('#errorPanel:visible').waitFor();
+    assert.equal(await page.locator('#submitButton').isDisabled(),true);
+    assert.equal(await page.locator('#answerInput').isDisabled(),true);
+    failFetch=false;await page.locator('#retryButton').click();await page.waitForFunction(()=>!document.querySelector('#submitButton').disabled);
+    assert.equal(await page.evaluate(()=>state.problem.level),'lv1');
+    failFetch=true;await page.locator('#categorySelect').selectOption('mol_volume');await page.locator('#errorPanel:visible').waitFor();
+    assert.equal(await page.locator('#submitButton').isDisabled(),true);
+    failFetch=false;await page.locator('#retryButton').click();await page.waitForFunction(()=>!document.querySelector('#submitButton').disabled);
+    assert.equal(await page.evaluate(()=>state.problem.category),'mol_volume');
+    await page.locator('[data-level="lv8"]').click();await page.waitForFunction(()=>!document.querySelector('#submitButton').disabled);
+    assert.equal(await page.locator('#givenValuesList li').count(),11,'all references remain available');
+    assert.ok((await page.locator('#givenValuesPanel').boundingBox()).height<225);
+    assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));
+    const errorCount=r.logs.length;
+    await page.locator('#answerInput').fill('');await page.locator('#submitButton').click();
+    assert.equal(await page.locator('#errorTitle').innerText(),'入力不正');assert.equal(r.logs.length,errorCount);
+  }finally{await browser.close();}
+});
+
 test('basic four levels cover the requested pairs, respect focus, and grade the displayed quantities',async()=>{
   const {MolProblemService:m}=await runtime();
   for(let level=1;level<=4;level++) {
@@ -103,7 +152,7 @@ test('monitor snapshot reads stay authorized without scanning unrelated sheets',
   const r=await runtime();
   r.SheetRepository.assertManagementSheetsReady=()=>{throw Error('unrelated sheet scan');};
   let reads=0;
-  const snapshot={appVersion:'4.0.0',progressRows:[],dashboardMetrics:{},courseOverview:{},studentOverview:{},tokenOverview:{}};
+  const snapshot={appVersion:'4.0.1',progressRows:[],dashboardMetrics:{},courseOverview:{},studentOverview:{},tokenOverview:{}};
   r.SheetRepository.readMonitorCacheRow=()=>{reads++;return {json:JSON.stringify(snapshot)};};
   assert.equal(r.getMonitorDashboardData('teacher-secret').snapshotMode,'snapshot');
   assert.equal(reads,1);
@@ -502,7 +551,7 @@ test('new curriculum UI solves formula and density stages and presents neutral r
     assert.match(await page.locator('#questionText').innerText(),/分子量|式量/);
     for(const [level,category] of [['lv0','formula_mass'],['lv5','density_basics'],['lv5','density_mol'],['lv5','density_particles'],['lv6',''],['lv7',''],['lv8','precision_basic'],['lv8','precision_mixed']]) {
       if(await page.evaluate(()=>state.selectedLevel)!==level){await page.locator('[data-level="'+level+'"]').click();await page.waitForFunction(()=>!document.querySelector('#submitButton').disabled);}
-      if(category){await page.locator('#categorySelect').selectOption(category);await page.waitForFunction(()=>!document.querySelector('#submitButton').disabled);}
+      if(category && level!=='lv0'){await page.locator('#categorySelect').selectOption(category);await page.waitForFunction(()=>!document.querySelector('#submitButton').disabled);}
       if(['lv6','lv7','lv8'].includes(level))assert.equal(await page.locator('#givenValuesTitle').innerText(),'資料（必要な値を選ぼう）');
       const id=await page.evaluate(()=>state.problem.attemptId), p=r.MolProblemService.getStoredProblemForToken('student-token',id);
       await page.locator('#answerInput').fill(level==='lv8'?Number(p.expectedAnswer).toExponential(2):String(p.expectedAnswer));

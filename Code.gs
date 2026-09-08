@@ -2,7 +2,7 @@
 
 const MOL_DRILL_APP_NAME = 'もるくえ！';
 const MOL_DRILL_FORMAL_DESCRIPTION = 'Classroom連携型モル計算練習アプリ';
-const MOL_DRILL_APP_VERSION = '4.0.0';
+const MOL_DRILL_APP_VERSION = '4.0.1';
 const MOL_DRILL_CURRICULUM_VERSION = 4;
 const MOL_DRILL_LEVELS = Array.from({length:9}, (_,i) => 'lv'+i);
 const MOL_DRILL_DEFAULT_CLASSROOM_SEND_BATCH_SIZE = 40;
@@ -1761,7 +1761,22 @@ class SheetRepository {
     if (!rowIndex) {
       return null;
     }
-    return this.monitorCacheObjectToRow_(this.readObjectAtRowFromSheet_(sheet, rowIndex) || {});
+    const row = this.monitorCacheObjectToRow_(this.readObjectAtRowFromSheet_(sheet, rowIndex) || {});
+    let manifest;
+    try { manifest = JSON.parse(row.json); } catch (_) { return row; }
+    if (!manifest || manifest.chunked !== true) return row;
+    if (!Number.isInteger(manifest.parts) || manifest.parts < 1 || manifest.parts > sheet.getLastRow()) return null;
+    const headers = this.getHeaderColumnMap_(sheet);
+    const parts = sheet.getDataRange().getValues().slice(1).filter(values => String(values[headers.key - 1] || '').startsWith(normalizedKey + ':part:'));
+    const pieces = new Map(parts.map(values => [String(values[headers.key - 1]), values]));
+    if (pieces.size !== manifest.parts || parts.length !== manifest.parts) return null;
+    let json = '';
+    for (let index = 0; index < manifest.parts; index++) {
+      const piece = pieces.get(normalizedKey + ':part:' + index);
+      if (!piece || String(piece[headers.updatedAt - 1] || '') !== row.updatedAt) return null;
+      json += String(piece[headers.json - 1] || '');
+    }
+    return json.length === manifest.length ? {...row, json} : null;
   }
 
   static upsertMonitorCacheRow(row) {
@@ -1770,12 +1785,31 @@ class SheetRepository {
       throw new Error('モニターキャッシュ更新対象のkeyが空です。');
     }
     const valuesByHeader = this.monitorCacheRowToHeaderValues_(row);
-    const rowIndex = this.findRowIndexByHeaderValue_('モニターキャッシュ', 'key', normalizedKey, { matchCase: true });
-    if (rowIndex) {
-      this.updateObjectRowByHeaders_('モニターキャッシュ', rowIndex, valuesByHeader);
-      return;
+    const sheet = this.getManagedSheetWithoutSchemaCheck_('モニターキャッシュ');
+    const headers = this.getHeaderColumnMap_(sheet);
+    if (!headers.key || !headers.json || !headers.updatedAt || !headers.note) throw new Error('管理シートを作成・補修してください。');
+    const values = sheet.getDataRange().getValues(), width = values[0].length;
+    const kept = values.slice(1).filter(values => values.some(value => value !== '') && values[headers.key - 1] !== normalizedKey && !String(values[headers.key - 1] || '').startsWith(normalizedKey + ':part:'));
+    const main = (values.slice(1).find(values => values[headers.key - 1] === normalizedKey) || new Array(width).fill('')).slice();
+    Object.keys(valuesByHeader).forEach(key => main[headers[key] - 1] = valuesByHeader[key]);
+    const json = valuesByHeader.json;
+    if (json.length > 30000) {
+      const count = Math.ceil(json.length / 30000);
+      main[headers.json - 1] = JSON.stringify({chunked:true,parts:count,length:json.length});
+      for (let index = 0; index < count; index++) {
+        const part = new Array(width).fill('');
+        part[headers.key - 1] = normalizedKey + ':part:' + index;
+        part[headers.json - 1] = json.slice(index * 30000, (index + 1) * 30000);
+        part[headers.updatedAt - 1] = valuesByHeader.updatedAt;
+        part[headers.note - 1] = valuesByHeader.note;
+        kept.push(part);
+      }
     }
-    this.appendObjectRow_('モニターキャッシュ', valuesByHeader);
+    kept.push(main);
+    while (kept.length < values.length - 1) kept.push(new Array(width).fill(''));
+    if (sheet.getMaxRows() < kept.length + 1) sheet.insertRowsAfter(sheet.getMaxRows(), kept.length + 1 - sheet.getMaxRows());
+    // Commit manifest and all pieces together; preserve refresh checkpoints and custom rows.
+    sheet.getRange(2, 1, kept.length, width).setValues(kept);
   }
 
   static monitorCacheObjectToRow_(row) {
@@ -3453,7 +3487,7 @@ class MolProblemService {
         : unit === 'L' ? amount * 22.4 : amount * profile.avogadroConstant;
     }
     if (this.isPracticeLevel_(profile.level)) questionText = questionText.replace('標準状態', '標準状態（0 ℃・1 atm）');
-    if(profile.level==='lv8') questionText += ' 答えは有効数字3桁に丸めてください。提示した原子量・定数はこの問題の計算基準値とします。';
+    if(profile.level==='lv8') questionText += ' 答えは有効数字3桁で求めてください。提示した原子量・定数はこの問題の計算基準値とします。';
     const rawExpected = this.normalizeExactExpectedAnswer_(expectedAnswer);
     const roundedExpected = this.roundToSignificantDigits(rawExpected, profile.significantDigits);
     const storedExpected = this.getExpectedAnswerForLevel_(rawExpected, roundedExpected, profile.level);
@@ -3926,7 +3960,7 @@ class MolProblemService {
       if(p.problemType.includes('gas_volume'))used.push('標準状態のモル体積');
       text+=' 使用する情報：'+used.join('、')+'。それ以外の資料の値は使いません。';
     }
-    if(p.level==='lv8')text+=' 途中では丸めず、最後に有効数字3桁へ丸めます。末尾の0も桁数に含めます。';
+    if(p.level==='lv8')text+=' 計算途中の桁数を保ち、最後に有効数字3桁で求めます。末尾の0も桁数に含めます。';
     return text;
   }
   static buildExplanation(problem) {
@@ -5394,8 +5428,12 @@ class AnswerService {
       // Summary was updated under the same lock as the authoritative log append.
       deferredSummaryUpdate = true;
       const nextStarted=Date.now();
-      const nextProblem = problem.autoPractice
-        ? this.issueProblemForStudent_(tokenRow,{practiceMode:'auto'}).publicProblem : null;
+      let nextProblem = null;
+      // The answer is already durable. Next-question preparation must not hide its result.
+      if (problem.autoPractice) {
+        try { nextProblem = this.issueProblemForStudent_(tokenRow,{practiceMode:'auto'}).publicProblem; }
+        catch (error) { LoggerService.logDeveloperInfo('Next automatic question deferred; learner can request it again.'); }
+      }
       timings.nextProblemElapsedMs=Date.now()-nextStarted;
       nextProblemIncluded = !!nextProblem;
       return {
@@ -7287,6 +7325,7 @@ class MonitorSnapshotService {
       cache.put(this.getDashboardSnapshotCacheKey_(), String(json || ''), this.getDashboardSnapshotCacheTtlSeconds_());
     } catch (error) {
       LoggerService.logDeveloperInfo(`monitor dashboard snapshot CacheService write skipped. reason=${error && error.message ? error.message : String(error)}`);
+      try { cache.remove(this.getDashboardSnapshotCacheKey_()); } catch (_) {}
     }
   }
 }
@@ -8388,6 +8427,8 @@ function summarizeAggregateMonitorCacheResult_(result) {
 function rebuildAggregateAndMonitorCacheCore_() {
   const result = AggregationService.rebuildAggregateCache();
   const snapshot = MonitorSnapshotService.writeDashboardSnapshot();
+  MonitorRefreshService.stateValues_ = null;
+  MonitorRefreshService.writeState_(SheetRepository.getManagedSheetWithoutSchemaCheck_('モニターキャッシュ'), MonitorRefreshService.emptyState_());
   const monitorSnapshotUpdatedAt = snapshot && snapshot.generatedAt ? snapshot.generatedAt : '';
   return {
     ...result,
@@ -8404,7 +8445,6 @@ function rebuildAggregateCacheFromMenu() {
     'MENU_REBUILD_AGGREGATE_CACHE',
     () => AdminService.withAdminActionLock('rebuildAggregateCacheFromMenu', () => {
       const result = rebuildAggregateAndMonitorCacheCore_();
-      MonitorRefreshService.writeState_(SheetRepository.getManagedSheetWithoutSchemaCheck_('モニターキャッシュ'), MonitorRefreshService.emptyState_());
       return result;
     }),
     (result) => `集計キャッシュを更新しました: ${result.updated || 0}人 / 問題タイプ別 ${result.problemTypeUpdated || 0}行 / モニターキャッシュ ${result.monitorSnapshotUpdatedAt || '未更新'}`,

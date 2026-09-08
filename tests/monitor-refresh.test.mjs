@@ -53,6 +53,8 @@ function environment(shared={}) {
   }
   vm.runInNewContext(source+'\nglobalThis.api={MonitorRefreshService,AdminService,SheetRepository,AggregationService,AnswerService,refreshMonitorDashboard,getMonitorStudentAnswerReview,getCurrentMonitorStudentProblemTypeStats,ReviewBenchmarkService,prepareMonitorReviewBenchmark,getReviewBenchmarkDashboard,getReviewBenchmarkPage,getReviewBenchmarkStats,TokenService,prepareStudentLoadBenchmark:typeof prepareStudentLoadBenchmark==="undefined"?undefined:prepareStudentLoadBenchmark,submitStudentLoadBenchmark:typeof submitStudentLoadBenchmark==="undefined"?undefined:submitStudentLoadBenchmark,finishStudentLoadBenchmark:typeof finishStudentLoadBenchmark==="undefined"?undefined:finishStudentLoadBenchmark,getMonitorOperationLinks:typeof getMonitorOperationLinks==="undefined"?undefined:getMonitorOperationLinks,definitions:MOL_DRILL_SHEETS};',context);
   const api=context.globalThis.api;
+  api.MonitorSnapshotService=vm.runInNewContext('MonitorSnapshotService',context);
+  api.rebuildAggregateAndMonitorCacheCore=vm.runInNewContext('rebuildAggregateAndMonitorCacheCore_',context);
   api.AdminService.getAdminToken=()=> 'teacher-secret';
   for(const definition of api.definitions) if(!sheets[definition.name]) sheets[definition.name]=sheet(definition.name,[Array.from(definition.headers)]);
   api.SheetRepository.assertManagementSheetsReady=()=> {throw Error('full schema scan is forbidden on refresh');};
@@ -76,6 +78,52 @@ function answer(i,student=i%100) {
     elapsedMs:i%7===0?0:1000+(i%19)*100};
 }
 function logObject(entry) { return {...entry,number:'',name:'',courseName:''}; }
+
+test('large dashboard snapshots fit cells, survive cache loss, and preserve unrelated rows',()=>{
+  let env=environment({cache:new Map()});
+  const target=env.sheets['モニターキャッシュ'];const originalRange=target.getRange;
+  target.getRange=function(...args){const range=originalRange.apply(this,args),write=range.setValues;range.setValues=function(rows){assert.ok(rows.every(row=>row.every(v=>String(v).length<=50000)),'Google Sheets cell limit');return write.call(this,rows);};return range;};
+  append(env,'モニターキャッシュ',{key:'refresh-state:0',json:'preserve-state'});
+  append(env,'モニターキャッシュ',{key:'custom',json:'preserve-custom'});
+  const base={appVersion:'4.0.1',generatedAt:'2026-09-08T03:00:00Z',dashboardMetrics:{},courseOverview:{},studentOverview:{},tokenOverview:{}};
+  const snapshot={...base,progressRows:Array.from({length:100},(_,i)=>({rosterKey:'course::'+i,name:'生徒'.repeat(900),lv8Attempts:i}))};
+  env.MonitorSnapshotService.buildDashboardSnapshot=()=>snapshot;
+  env.MonitorSnapshotService.writeDashboardSnapshot();
+  assert.ok(target.values.every(row=>String(row[1]).length<=30000));
+  assert.ok(target.values.some(row=>row[0]==='custom'&&row[1]==='preserve-custom'));
+  assert.ok(target.values.some(row=>row[0]==='refresh-state:0'&&row[1]==='preserve-state'));
+  env.cache.clear();env=environment(env);
+  assert.equal(JSON.stringify(env.MonitorSnapshotService.readDashboardSnapshot().progressRows),JSON.stringify(snapshot.progressRows));
+  env.cache.clear();const part=target.values.find(row=>String(row[0]).includes(':part:'));assert.ok(part);
+  const saved=part[1];part[1]='';assert.equal(env.MonitorSnapshotService.readDashboardSnapshot(),null);part[1]=saved;
+  env.MonitorSnapshotService.buildDashboardSnapshot=()=>({...base,progressRows:[]});target.failWrite=true;
+  assert.throws(()=>env.MonitorSnapshotService.writeDashboardSnapshot(),/write interrupted/);target.failWrite=false;
+  assert.equal(env.MonitorSnapshotService.readDashboardSnapshot().progressRows.length,100);
+  env.MonitorSnapshotService.writeDashboardSnapshot();env.cache.clear();
+  assert.equal(env.MonitorSnapshotService.readDashboardSnapshot().progressRows.length,0);
+  assert.equal(target.values.some(row=>String(row[0]).includes(':part:')),false);
+});
+
+test('failed cache replacement cannot serve an older dashboard snapshot',()=>{
+  const env=environment({cache:new Map()});const service=env.MonitorSnapshotService;
+  const cache=service.getScriptCache_();cache.put(service.getDashboardSnapshotCacheKey_(),'old');
+  service.getScriptCache_=()=>({...cache,put(){throw Error('cache full');}});
+  service.writeDashboardSnapshotCache_('new');
+  assert.equal(env.cache.has(service.getDashboardSnapshotCacheKey_()),false);
+});
+
+test('full rebuild entry point resets both durable and warm incremental progress',()=>{
+  let env=environment({cache:new Map()});populate(env,1);
+  for(let i=0;i<3;i++)append(env,'解答ログ',{...answer(i,0),isCorrect:true});
+  assert.equal(env.refreshMonitorDashboard('teacher-secret').data.progressRows[0].totalCorrect,3);
+  const log=env.sheets['解答ログ'];log.values[2][log.values[0].indexOf('isCorrect')]=false;
+  env.AggregationService.rebuildAggregateCache=()=>({updated:1});
+  env.MonitorSnapshotService.writeDashboardSnapshot=()=>({generatedAt:'2026-09-08T03:00:00Z'});
+  env.rebuildAggregateAndMonitorCacheCore();env=environment(env);
+  assert.equal(env.refreshMonitorDashboard('teacher-secret').data.progressRows[0].totalCorrect,2);
+  env.cache.clear();env=environment(env);
+  assert.equal(env.refreshMonitorDashboard('teacher-secret').data.progressRows[0].totalCorrect,2);
+});
 
 test('durable refresh batches 5,003 answers for 100 students and matches independent full aggregation',()=>{
   let env=environment();populate(env);

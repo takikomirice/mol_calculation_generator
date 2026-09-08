@@ -36,6 +36,10 @@ test('Lv0-8 questions are solvable from atomic data and displayed quantities wit
       assert.equal(m.gradeProblemAnswer(p,level===8?want.toExponential(2):String(want)).isCorrect,true);
       assert.equal(m.gradeProblemAnswer(p,String(want*1.1)).isCorrect,false);
       const pub=m.toPublicProblem(p);
+      if(level===8) {
+        assert.match(pub.questionText,/有効数字3桁で求めてください/);
+        assert.doesNotMatch(pub.questionText+p.explanation,/丸め/);
+      }
       assert.equal(pub.expectedAnswer,undefined);assert.equal(pub.explanation,undefined);
       assert.ok(pub.givenValues.every(v=>!('isRequired' in v)));
       assert.ok(pub.givenValues.every(v=>!v.value.includes('g/mol')));

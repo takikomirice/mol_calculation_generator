@@ -171,6 +171,7 @@
 
     .given-values-list {
       display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
       gap: 4px;
       margin: 0;
       padding: 0;
@@ -179,6 +180,7 @@
 
     .given-values-list li {
       display: grid;
+      grid-column: 1 / -1;
       grid-template-columns: minmax(0, 1fr) auto;
       gap: 8px;
       align-items: baseline;
@@ -196,6 +198,10 @@
       font-weight: 800;
       white-space: nowrap;
     }
+
+    .given-values-list li.atomic-value { grid-column: auto; padding-right: 8px; }
+    #questionText { scroll-margin-top: 12px; }
+    #questionText:focus { outline: none; }
 
     .status-value {
       display: block;
@@ -602,7 +608,7 @@
       </div>
       <div class="status-card">
         <span class="status-label">現在のレベル</span>
-        <strong class="status-value" id="currentLevelLabel">Lv.1</strong>
+        <strong class="status-value" id="currentLevelLabel">Lv.0</strong>
       </div>
     </section>
 
@@ -651,7 +657,7 @@
         <span class="section-label">問題</span>
         <span class="unit-pill">単位: <span id="unitLabel">-</span></span>
       </div>
-      <p class="question-text" id="questionText">問題を読み込んでいます。</p>
+      <p class="question-text" id="questionText" tabindex="-1">問題を読み込んでいます。</p>
       <p class="helper" id="inputHintText">数値のみを入力してください。</p>
       <div class="given-values hidden" id="givenValuesPanel" aria-label="この問題で使う値">
         <div class="given-values-title" id="givenValuesTitle">この問題で使う値</div>
@@ -696,7 +702,7 @@
     </section>
 
     <section class="card error-panel hidden" id="errorPanel" aria-live="assertive" data-error-types="token不正 通信失敗 入力不正">
-      <p class="error-title" id="errorTitle">通信失敗</p>
+      <p class="error-title" id="errorTitle" tabindex="-1">通信失敗</p>
       <p class="error-message" id="errorMessage">再試行できます。</p>
       <button class="danger-button" id="retryButton" type="button" data-retry-action="">再試行</button>
       <span class="sr-only">token不正 通信失敗 入力不正</span>
@@ -843,14 +849,29 @@
     function runServer(method, args) {
       const startedAt = Date.now();
       return new Promise(function (resolve, reject) {
+        let settled = false;
+        const finish = function (callback, value) {
+          if (settled) return;
+          settled = true;
+          clearTimeout(timeout);
+          callback(value);
+        };
+        // A timeout does not cancel a GAS write. Retry keeps the same attemptId;
+        // the server returns the first saved result and late callbacks are ignored.
+        const timeout = setTimeout(function () {
+          finish(reject, new Error('応答を確認できませんでした。接続を確認して再試行してください。解答は同じ内容で再送できます。'));
+        }, 30000);
+        try {
         const runner = google.script.run
           .withSuccessHandler(function (result) {
+            if (settled) return;
             console.info('[GAS timing] ' + method + ': ' + (Date.now() - startedAt) + ' ms');
             if (result && result.performance) console.info('[GAS stages] ' + method + ': ' + JSON.stringify(result.performance));
-            resolve(result);
+            finish(resolve, result);
           })
-          .withFailureHandler(reject);
+          .withFailureHandler(function (error) { finish(reject, error); });
         runner[method].apply(runner, args || []);
+        } catch (error) { finish(reject, error); }
       });
     }
 
@@ -998,7 +1019,7 @@
         lv5:{density_basics:'密度と質量・体積',density_mol:'密度からmol',density_particles:'密度から個数'},
         lv8:{precision_basic:'有効数字・基本換算',precision_mixed:'有効数字・総合'}
       })[state.selectedLevel] || {mol_mass:'mol ⇔ 質量',mol_particles:'mol ⇔ 個数',mol_volume:'mol ⇔ 体積'};
-      const focused = ['lv0','lv1','lv3','lv5','lv8'].includes(state.selectedLevel);
+      const focused = ['lv1','lv3','lv5','lv8'].includes(state.selectedLevel);
       if (!groups[state.selectedCategory]) state.selectedCategory = Object.keys(groups)[0];
       elements.categoryPanel.hidden = !focused || state.practiceMode === 'auto';
       elements.categorySelect.replaceChildren();
@@ -1128,6 +1149,7 @@
 
       values.forEach(function (item) {
         const row = document.createElement('li');
+        row.classList.toggle('atomic-value', / の原子量$/.test(String(item.label || '')));
         const label = document.createElement('span');
         const value = document.createElement('strong');
         renderServerHtmlOrText(label, item.labelHtml, item.label, '');
@@ -1188,6 +1210,8 @@
       elements.retryButton.textContent = needsNewProblem ? '新しい問題' : kind === 'input' ? '入力へ戻る' : '再試行';
       elements.retryButton.dataset.retryAction = needsNewProblem ? 'fetchProblem' : retryAction || (kind === 'input' ? 'focusInput' : state.lastAction || 'initialize');
       elements.errorPanel.classList.remove('hidden');
+      elements.errorTitle.focus({preventScroll:true});
+      elements.errorPanel.scrollIntoView({block:'nearest'});
     }
 
     function applyProblem(problem, shouldClearAnswer) {
@@ -1222,7 +1246,8 @@
       }
       updateButtonStates();
       setTimeout(function () {
-        elements.answerInput.focus();
+        elements.questionText.focus({preventScroll:true});
+        elements.questionText.scrollIntoView({block:'start',behavior:'auto'});
       }, 0);
       startPrefetchForCurrentLevel();
     }
@@ -1253,7 +1278,7 @@
         renderSummary(result.summary);
         applyProblem(result.problem, true);
       } catch (error) {
-        showError('token', error, 'initialize');
+        showError('network', error, 'initialize');
       } finally {
         state.isInitializing = false;
         setLoading(false, '');
@@ -1266,13 +1291,15 @@
       setLoading(true, '作成中...');
       try {
         hideError();
-        clearPrefetchedProblem();
+        applyProblem(null, true);
+        elements.questionText.textContent = '新しい問題を読み込んでいます。';
         const request = getProblemRequest(state.selectedLevel);
         const method = request.method;
         const args = request.args;
         const problem = await runServer(method, args);
         applyProblem(problem, true);
       } catch (error) {
+        elements.questionText.textContent = '問題を取得できませんでした。';
         showError('network', error, 'fetchProblem');
       } finally {
         state.isInitializing = false;
