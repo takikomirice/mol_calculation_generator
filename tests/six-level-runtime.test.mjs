@@ -26,9 +26,9 @@ function independentExpected(p) {
   return p.unit==='mol'?amount:p.unit==='g'?amount*p.substance.molarMass:p.unit==='L'?amount*22.4:amount*p.avogadroConstant;
 }
 
-test('six levels cover the requested pairs, respect focus, and grade the displayed quantities',async()=>{
+test('basic four levels cover the requested pairs, respect focus, and grade the displayed quantities',async()=>{
   const {MolProblemService:m}=await runtime();
-  for(let level=1;level<=6;level++) {
+  for(let level=1;level<=4;level++) {
     const lv=`lv${level}`;const groups=level===1?['mol_mass','mol_particles','mol_volume']:level===3?['mass_particles','mass_volume','volume_particles']:[''];const seen=new Set();
     for(const category of groups) for(let i=0;i<100;i++) {
       const p=m.generateProblem({level:lv,category});seen.add(p.problemTypeId);
@@ -51,9 +51,9 @@ test('six levels cover the requested pairs, respect focus, and grade the display
 
 test('strict grading separates numeric errors from significant digits and rejects permissive numeric syntax',async()=>{
   const {MolProblemService:m}=await runtime();
-  for(const input of ['1.20','１．２０','1.20e0','1.20×10^0']) assert.equal(m.strictPracticeGrade_(input,1.2,'lv5').isCorrect,true,input);
-  for(const input of ['1.2','1.200']) {const r=m.strictPracticeGrade_(input,1.2,'lv5');assert.equal(r.isCorrect,false);assert.equal(r.acceptedAnswerType,'precision');}
-  for(const input of ['0x10','Infinity','1,2','-1.20','1.30']) assert.equal(m.strictPracticeGrade_(input,1.2,'lv5').isCorrect,false,input);
+  for(const input of ['1.20','１．２０','1.20e0','1.20×10^0']) assert.equal(m.strictPracticeGrade_(input,1.2,'lv8').isCorrect,true,input);
+  for(const input of ['1.2','1.200']) {const r=m.strictPracticeGrade_(input,1.2,'lv8');assert.equal(r.isCorrect,false);assert.equal(r.acceptedAnswerType,'precision');}
+  for(const input of ['0x10','Infinity','1,2','-1.20','1.30']) assert.equal(m.strictPracticeGrade_(input,1.2,'lv8').isCorrect,false,input);
   assert.equal(m.strictPracticeGrade_('11',11.2,'lv1').isCorrect,false);
   assert.equal(m.strictPracticeGrade_('11.20',11.2,'lv1').isCorrect,true);
 });
@@ -103,7 +103,7 @@ test('monitor snapshot reads stay authorized without scanning unrelated sheets',
   const r=await runtime();
   r.SheetRepository.assertManagementSheetsReady=()=>{throw Error('unrelated sheet scan');};
   let reads=0;
-  const snapshot={progressRows:[],dashboardMetrics:{},courseOverview:{},studentOverview:{},tokenOverview:{}};
+  const snapshot={appVersion:'4.0.0',progressRows:[],dashboardMetrics:{},courseOverview:{},studentOverview:{},tokenOverview:{}};
   r.SheetRepository.readMonitorCacheRow=()=>{reads++;return {json:JSON.stringify(snapshot)};};
   assert.equal(r.getMonitorDashboardData('teacher-secret').snapshotMode,'snapshot');
   assert.equal(reads,1);
@@ -113,7 +113,7 @@ test('monitor snapshot reads stay authorized without scanning unrelated sheets',
 });
 
 test('six-level metrics appear in teacher aggregation and header serialization',async()=>{
-  const r=await runtime();const logs=Array.from({length:6},(_,i)=>({rosterKey:'class::learner',level:`lv${i+1}`,isCorrect:i%2===0,timestamp:`2026-09-06T10:00:0${i}Z`}));
+  const r=await runtime();const logs=Array.from({length:6},(_,i)=>({clientInfo:JSON.stringify({curriculumVersion:4}),rosterKey:'class::learner',level:`lv${i+1}`,isCorrect:i%2===0,timestamp:`2026-09-06T10:00:0${i}Z`}));
   const row=r.AggregationService.buildAggregateRows(logs,new Date().toISOString())[0];
   const serialized=r.SheetRepository.aggregateCacheSummaryToHeaderValues_(row);
   const restored=r.SheetRepository.aggregateCacheObjectToRow_(serialized);
@@ -136,7 +136,9 @@ test('live JavaScript UI switches focus and levels, prevents double submit, and 
     await page.setContent(bridge+html);
     await page.getByRole('button',{name:'解答する',exact:true}).waitFor();
     await page.waitForFunction(()=>document.querySelector('#submitButton').disabled===false).catch(async e=>{throw Error(JSON.stringify({errors,detail:await page.locator('#errorMessage').innerText()}))});
-    assert.equal(await page.locator('[data-level]').count(),6);
+    assert.equal(await page.locator('[data-level]').count(),9);
+    await page.locator('[data-level="lv1"]').click();
+    await page.waitForFunction(()=>!document.querySelector('#submitButton').disabled);
     await page.getByRole('combobox',{name:'練習する変換'}).selectOption('mol_volume');
     await page.waitForFunction(()=>document.querySelector('#submitButton').disabled===false);
     assert.match(await page.locator('#questionText').innerText(),/標準状態/);
@@ -158,9 +160,9 @@ test('live JavaScript UI switches focus and levels, prevents double submit, and 
     await page.getByRole('button',{name:'Lv.3 molを経由する1種類の変換',exact:true}).click();
     await page.waitForFunction(()=>!document.querySelector('#submitButton').disabled);
     assert.equal(await page.locator('#categorySelect').inputValue(),'mass_particles');
-    await page.getByRole('button',{name:'Lv.5 Lv.2＋有効数字3桁',exact:true}).click();
+    await page.getByRole('button',{name:'Lv.8 有効数字3桁',exact:true}).click();
     await page.waitForFunction(()=>!document.querySelector('#submitButton').disabled);
-    assert.equal(await page.locator('#categoryPanel').isVisible(),false);
+    assert.equal(await page.locator('#categoryPanel').isVisible(),true);
     assert.match(await page.locator('#inputHintText').innerText(),/有効数字3桁/);
     assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),true);
     // Simulate GAS losing the issued problem while the learner leaves the page open.
@@ -180,14 +182,14 @@ test('live JavaScript UI switches focus and levels, prevents double submit, and 
 });
 
 
-test('automatic practice covers all six levels, survives cache loss and rejects fabricated progress',async()=>{
-  let r=await runtime();let problem=r.AnswerService.initializeStudentSession('student-token',{practiceMode:'auto',level:'lv6'}).problem;
-  assert.equal(problem.level,'lv1');let request;const counts={};
-  for(let i=0;i<70;i++) {
+test('automatic practice covers all nine levels, survives cache loss and rejects fabricated progress',async()=>{
+  let r=await runtime();let problem=r.AnswerService.initializeStudentSession('student-token',{practiceMode:'auto',level:'lv8'}).problem;
+  assert.equal(problem.level,'lv0');let request;const counts={};
+  for(let i=0;i<180;i++) {
     r=await runtime(r);
     counts[problem.level]=(counts[problem.level]||0)+1;
     const canonical=r.MolProblemService.getStoredProblemForToken('student-token',problem.attemptId);
-    request={token:'student-token',problem:{...problem,level:'lv6'},submittedAnswer:Number(canonical.expectedAnswer).toExponential(2),skipNextProblem:true};
+    request={token:'student-token',problem:{...problem,level:'lv8'},submittedAnswer:Number(canonical.expectedAnswer).toExponential(2),skipNextProblem:true};
     const response=r.AnswerService.submitAnswer(request);
     assert.equal(response.result.isCorrect,true);
     assert.ok(response.nextProblem,'auto mode must produce a post-grading next question even when browser asks to skip it');
@@ -195,16 +197,16 @@ test('automatic practice covers all six levels, survives cache loss and rejects 
     problem=response.nextProblem;
     if(i===19)for(const key of [...r.store.keys()])if(key.startsWith('studentSummary:'))r.store.delete(key);
   }
-  assert.deepEqual(counts,{lv1:15,lv2:10,lv3:15,lv4:10,lv5:10,lv6:10});
-  assert.equal(problem.level,'lv6');assert.match(problem.learningPlan.message,/Lv.6/);
+  assert.equal(Object.keys(counts).length,9);
+  assert.equal(problem.level,'lv8');assert.match(problem.learningPlan.message,/Lv.8/);
   const before=JSON.stringify(r.AutoPracticeService.rebuild_(r.logs));
-  const retry=r.AnswerService.submitAnswer(request);assert.equal(retry.duplicate,true);assert.equal(r.logs.length,70);
+  const retry=r.AnswerService.submitAnswer(request);assert.equal(retry.duplicate,true);assert.equal(r.logs.length,180);
   assert.equal(JSON.stringify(r.AutoPracticeService.rebuild_(r.logs)),before);
   for(const key of [...r.store.keys()])if(key.startsWith('studentSummary:'))r.store.delete(key);
   r=await runtime(r);const resumed=r.AnswerService.initializeStudentSession('student-token',{practiceMode:'auto'}).problem;
-  assert.equal(resumed.level,'lv6');assert.equal(resumed.learningPlan.stageId,problem.learningPlan.stageId);
+  assert.equal(resumed.level,'lv8');assert.equal(resumed.learningPlan.stageId,problem.learningPlan.stageId);
   const manual=r.AnswerService.getPracticeProblem('student-token',{level:'lv1',category:'mol_volume'});
-  const response=r.AnswerService.submitAnswer({token:'student-token',problem:manual,submittedAnswer:'999999',clientInfo:{autoPractice:{version:1,stageId:8,level:'lv6',category:''},acceptedAnswerType:'precision'}});
+  const response=r.AnswerService.submitAnswer({token:'student-token',problem:manual,submittedAnswer:'999999',clientInfo:{autoPractice:{version:1,stageId:8,level:'lv8',category:''},acceptedAnswerType:'precision'}});
   assert.equal(response.nextProblem,null);
   const metadata=JSON.parse(r.logs.at(-1).clientInfo);
   assert.equal(metadata.autoPractice,undefined);assert.equal(metadata.acceptedAnswerType,undefined);
@@ -215,21 +217,21 @@ test('automatic practice covers all six levels, survives cache loss and rejects 
 test('automatic policy requires directional coverage and keeps precision mistakes separate from numerical support',async()=>{
   const r=await runtime(), a=r.AutoPracticeService;
   let state=a.initial_();a.move_(state,'lv2','','practice');
-  const add=(type,correct,precision=false)=>a.apply_(state,{level:state.level,problemType:r.MolProblemService.getProblemTypeById_(type).key,isCorrect:correct,clientInfo:JSON.stringify({autoPractice:a.metadata_(state),acceptedAnswerType:precision?'precision':correct?'exact':''})});
+  const add=(type,correct,precision=false)=>a.apply_(state,{level:state.level,problemType:r.MolProblemService.getProblemTypeById_(type).key,isCorrect:correct,clientInfo:JSON.stringify({curriculumVersion:4,autoPractice:a.metadata_(state),acceptedAnswerType:precision?'precision':correct?'exact':''})});
   for(let i=0;i<15;i++)add(1,true);
   assert.equal(state.level,'lv2','one mastered direction must not advance a random level');
-  a.move_(state,'lv5','','practice');
+  a.move_(state,'lv8','precision_basic','practice');
   for(let i=0;i<6;i++)add(i+1,false,true);
-  assert.equal(state.level,'lv5');assert.equal(state.resume,null);assert.match(a.plan_(state).message,/有効数字/);
+  assert.equal(state.level,'lv8');assert.equal(state.resume,null);assert.match(a.plan_(state).message,/有効数字/);
   for(let i=0;i<3;i++)add(i+1,false);
-  assert.equal(state.level,'lv2');assert.equal(state.resume.level,'lv5');
+  assert.equal(state.level,'lv1');assert.equal(state.resume.level,'lv8');
   const supportStage=state.stageId;
-  for(let i=0;i<4;i++)add(i+1,true);
+  for(let i=0;i<4;i++)add(i%2+3,true);
   assert.equal(state.stageId,supportStage,'no immediate bounce after one correct answer');
-  for(let i=4;i<10;i++)add(i%6+1,true);
-  assert.equal(state.level,'lv5');assert.equal(state.resume,null);assert.equal(state.reason,'return');
+  add(3,true);
+  assert.equal(state.level,'lv8');assert.equal(state.resume,null);assert.equal(state.reason,'return');
   const unchanged=JSON.stringify(state);
-  a.apply_(state,{level:'lv5',problemType:'mol_to_mass',isCorrect:true,clientInfo:JSON.stringify({autoPractice:{version:1,stageId:supportStage-1,level:'lv5',category:''}})});
+  a.apply_(state,{level:'lv8',problemType:'mol_to_mass',isCorrect:true,clientInfo:JSON.stringify({autoPractice:{version:1,stageId:supportStage-1,level:'lv8',category:''}})});
   assert.equal(JSON.stringify(state),unchanged,'an older outstanding question cannot advance the new stage');
 });
 
@@ -244,7 +246,7 @@ test('automatic UI changes mode, ignores stale manual prefetch, returns to manua
     return result;
   });
   const bridge=`<script>window.google={script:{run:{withSuccessHandler(success){return {withFailureHandler(failure){return new Proxy({},{get:(_,method)=>(...args)=>window.gasCall(method,args).then(success,failure)});}};}}}};<\/script>`;
-  const html=(await readFile('Student.html','utf8')).replace(/<\?!= [\s\S]*?\?>/g,snippet=>snippet.includes('initialTeacherPreview')?'false':snippet.includes('initialAdminToken')?'""':'"student-token"');
+  const html=(await readFile('Student.html','utf8')).replace("selectedLevel: 'lv0'","selectedLevel: 'lv1'").replace("level:'lv0', category:'formula_mass'","level:'lv1', category:'mol_mass'").replace(/<\?!= [\s\S]*?\?>/g,snippet=>snippet.includes('initialTeacherPreview')?'false':snippet.includes('initialAdminToken')?'""':'"student-token"');
   await page.route('https://mol.test/**',route=>route.fulfill({contentType:'text/html',body:bridge+html}));
   try {
     await page.goto('https://mol.test/');await page.waitForFunction(()=>!document.querySelector('#submitButton').disabled,null,{timeout:5000}).catch(async()=>{throw Error(JSON.stringify({errors,calls,message:await page.locator('#errorMessage').innerText()}));});
@@ -256,10 +258,10 @@ test('automatic UI changes mode, ignores stale manual prefetch, returns to manua
     assert.equal(await page.locator('#manualLevelPanel').isVisible(),false);
     assert.equal(await page.getByRole('button',{name:'マニュアル',exact:true}).isVisible(),true);
     assert.equal(await page.getByRole('button',{name:'オートレベリング',exact:true}).isVisible(),true);
-    assert.equal(await page.locator('#autoPracticeLevel').innerText(),'Lv.1');
-    assert.equal(await page.locator('#autoPracticeFocus').innerText(),'mol ⇔ 質量');
+    assert.equal(await page.locator('#autoPracticeLevel').innerText(),'Lv.0');
+    assert.equal(await page.locator('#autoPracticeFocus').innerText(),'分子量・式量');
     assert.equal(await page.locator('#categoryPanel').isVisible(),false);
-    assert.match(await page.locator('#autoPracticeMessage').innerText(),/molと質量/);
+    assert.match(await page.locator('#autoPracticeMessage').innerText(),/原子量から分子量/);
     release();
     for(let i=0;i<5;i++) {
       const problem=await page.evaluate(()=>state.problem);
@@ -270,17 +272,17 @@ test('automatic UI changes mode, ignores stale manual prefetch, returns to manua
       await page.getByRole('button',{name:'次の問題',exact:true}).click();
       await page.waitForFunction(()=>!document.querySelector('#submitButton').disabled);
     }
-    assert.equal(await page.evaluate(()=>state.problem.category),'mol_particles');
+    assert.equal(await page.evaluate(()=>state.problem.category),'mol_mass');
     assert.equal(calls.filter(call=>call.method==='getPracticeProblem' && call.mode==='auto').length,2,'no pre-grading automatic prefetch calls');
     await page.reload();await page.waitForFunction(()=>!document.querySelector('#submitButton').disabled);
     assert.equal(await page.getByRole('button',{name:'オートレベリング',exact:true}).getAttribute('aria-pressed'),'true');
-    assert.equal(await page.evaluate(()=>state.problem.category),'mol_particles');
-    assert.equal(await page.locator('#autoPracticeFocus').innerText(),'mol ⇔ 個数');
+    assert.equal(await page.evaluate(()=>state.problem.category),'mol_mass');
+    assert.equal(await page.locator('#autoPracticeFocus').innerText(),'mol ⇔ 質量');
     await page.screenshot({path:'output/playwright/automatic-practice-mobile.png'});
     await page.getByRole('button',{name:'マニュアル',exact:true}).click();
     await page.waitForFunction(()=>!document.querySelector('#submitButton').disabled);
     assert.equal(await page.locator('#manualLevelPanel').isVisible(),true);
-    await page.getByRole('button',{name:'Lv.6 Lv.4＋有効数字3桁',exact:true}).click();
+    await page.getByRole('button',{name:'Lv.6 資料を選ぶ・基本換算',exact:true}).click();
     await page.waitForFunction(()=>!document.querySelector('#submitButton').disabled);
     assert.equal(await page.locator('#currentLevelLabel').innerText(),'Lv.6');
     await page.getByRole('button',{name:'オートレベリング',exact:true}).click();
@@ -301,7 +303,7 @@ test('automatic UI changes mode, ignores stale manual prefetch, returns to manua
 
 function learningLog(overrides={}) {
   return {rosterKey:'course::student',timestamp:'2026-09-06T01:00:00.000Z',attemptId:'history',level:'lv1',problemType:'mol_to_mass',isCorrect:false,
-    questionText:'水素2 molの質量は？',submittedAnswer:'8',expectedAnswer:4,unit:'g',significantDigits:3,explanation:'2 × 2 = 4 g',clientInfo:'{}',...overrides};
+    questionText:'水素2 molの質量は？',submittedAnswer:'8',expectedAnswer:4,unit:'g',significantDigits:3,explanation:'2 × 2 = 4 g',...overrides,clientInfo:JSON.stringify({curriculumVersion:4,...JSON.parse(overrides.clientInfo || '{}')})};
 }
 
 test('learning check isolates students, requires an active token, and rebuilds the same evidence after cache eviction',async()=>{
@@ -333,9 +335,9 @@ test('learning advice separates precision from calculation, needs directional co
   r=await runtime({logs});check=r.AnswerService.getStudentLearningCheck('student-token',{level:'lv1'});
   assert.equal(check.advice.kind,'practice');assert.equal(check.advice.target.category,'mol_mass');
   assert.equal(check.coverage.confirmed,5,'older correct answers must not hide current mistakes');
-  r=await runtime({logs:Array.from({length:3},(_,i)=>learningLog({attemptId:String(i),level:'lv5',clientInfo:JSON.stringify({acceptedAnswerType:'precision'})}))});
-  check=r.AnswerService.getStudentLearningCheck('student-token',{level:'lv5'});
-  assert.equal(check.advice.kind,'precision');assert.equal(check.advice.target.level,'lv5','precision-only mistakes should keep the calculation level');
+  r=await runtime({logs:Array.from({length:3},(_,i)=>learningLog({attemptId:String(i),level:'lv8',clientInfo:JSON.stringify({acceptedAnswerType:'precision'})}))});
+  check=r.AnswerService.getStudentLearningCheck('student-token',{level:'lv8'});
+  assert.equal(check.advice.kind,'precision');assert.equal(check.advice.target.level,'lv8','precision-only mistakes should keep the calculation level');
   assert.equal(check.mistakes[0].acceptedAnswerType,'precision');
 });
 
@@ -415,7 +417,7 @@ test('student self-study UI keeps earned progress, reviews mistakes safely, retr
 
 
 test('numeric difficulty recommendations issue a focused pair and precision recommendations retain harder calculation',async()=>{
-  for(const [level,expectedLevel,type,category] of [['lv5','lv1','mol_to_mass','mol_mass'],['lv6','lv3','gas_volume_to_particles','volume_particles']]) {
+  for(const [level,expectedLevel,type,category] of [['lv6','lv1','mol_to_mass','mol_mass'],['lv7','lv3','gas_volume_to_particles','volume_particles']]) {
     const r=await runtime({logs:Array.from({length:3},(_,i)=>learningLog({level,problemType:type,attemptId:String(i)}))});
     const target=r.AnswerService.getStudentLearningCheck('student-token',{level}).advice.target;
     assert.equal(target.level,expectedLevel);assert.equal(target.category,category);
@@ -487,4 +489,27 @@ test('unconfirmed permit deletion and an uncertain flush cannot create duplicate
   const retry=r.AnswerService.submitAnswer({...request,submittedAnswer:'1'});
   assert.equal(retry.duplicate,true);assert.equal(retry.result.totalAttempts,1);assert.equal(r.logs.length,1);
   assert.match(retry.result.submittedAnswerText,/99999/);
+});
+
+test('new curriculum UI solves formula and density stages and presents neutral reference materials on mobile',async()=>{
+  const r=await runtime(),browser=await chromium.launch({headless:true}),page=await browser.newPage({viewport:{width:390,height:844}});
+  const errors=[];page.on('pageerror',e=>errors.push(e.message));
+  await page.exposeFunction('gasCall',(method,args)=>JSON.parse(JSON.stringify(r.AnswerService[method](...args))));
+  const bridge=`<script>window.google={script:{run:{withSuccessHandler(success){return {withFailureHandler(failure){return new Proxy({},{get:(_,method)=>(...args)=>window.gasCall(method,args).then(success,failure)});}};}}}};</script>`;
+  const html=(await readFile('Student.html','utf8')).replace(/<\?!= [\s\S]*?\?>/g,s=>s.includes('initialTeacherPreview')?'false':s.includes('initialAdminToken')?'""':'"student-token"');
+  try {
+    await page.setContent(bridge+html);await page.waitForFunction(()=>!document.querySelector('#submitButton').disabled);
+    assert.match(await page.locator('#questionText').innerText(),/分子量|式量/);
+    for(const [level,category] of [['lv0','formula_mass'],['lv5','density_basics'],['lv5','density_mol'],['lv5','density_particles'],['lv6',''],['lv7',''],['lv8','precision_basic'],['lv8','precision_mixed']]) {
+      if(await page.evaluate(()=>state.selectedLevel)!==level){await page.locator('[data-level="'+level+'"]').click();await page.waitForFunction(()=>!document.querySelector('#submitButton').disabled);}
+      if(category){await page.locator('#categorySelect').selectOption(category);await page.waitForFunction(()=>!document.querySelector('#submitButton').disabled);}
+      if(['lv6','lv7','lv8'].includes(level))assert.equal(await page.locator('#givenValuesTitle').innerText(),'資料（必要な値を選ぼう）');
+      const id=await page.evaluate(()=>state.problem.attemptId), p=r.MolProblemService.getStoredProblemForToken('student-token',id);
+      await page.locator('#answerInput').fill(level==='lv8'?Number(p.expectedAnswer).toExponential(2):String(p.expectedAnswer));
+      await page.locator('#submitButton').click();await page.waitForFunction(()=>!document.querySelector('#nextProblemButton').disabled);
+      assert.equal(r.logs.at(-1).isCorrect,true,level+':'+category);
+      assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));
+    }
+    assert.deepEqual(errors,[]);
+  }finally{await browser.close();}
 });

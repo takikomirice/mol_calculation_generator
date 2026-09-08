@@ -34,6 +34,7 @@ globalThis.__api = {
   MOL_DRILL_ADMIN_APP_NAME: typeof MOL_DRILL_ADMIN_APP_NAME === 'undefined' ? undefined : MOL_DRILL_ADMIN_APP_NAME,
   MOL_DRILL_FORMAL_DESCRIPTION,
   SheetRepository,
+  inspectManagementSheets: typeof inspectManagementSheets === 'undefined' ? undefined : inspectManagementSheets,
   AdminService,
   MonitorService: typeof MonitorService === 'undefined' ? undefined : MonitorService,
   MonitorSnapshotService: typeof MonitorSnapshotService === 'undefined' ? undefined : MonitorSnapshotService,
@@ -175,6 +176,10 @@ function createSpreadsheetMock(initialSheets) {
       return values;
     }
 
+    getFormulas() {
+      return this.getValues().map(row => row.map(value => typeof value === 'string' && value.startsWith('=') ? value : ''));
+    }
+
     setValues(values) {
       setValuesCalls.push({
         sheetName: this.sheet.name,
@@ -226,10 +231,12 @@ function createSpreadsheetMock(initialSheets) {
         numRows: this.numRows,
         numColumns: this.numColumns
       });
-      return this;
+      return this.setValues(Array.from({ length: this.numRows }, () => Array(this.numColumns).fill(false)));
     }
 
-    setDataValidation(_rule) {
+    setDataValidation(rule) {
+      // Live Sheets may materialize unchecked values in blank checkbox cells.
+      if (rule.checkbox) this.setValues(this.getValues().map(row => row.map(value => value === '' ? false : value)));
       return this;
     }
 
@@ -355,6 +362,9 @@ function createSpreadsheetMock(initialSheets) {
       this.rows.splice(rowIndex, 0, ...additions);
     }
 
+    deleteRows(rowIndex, count) { this.rows.splice(rowIndex - 1, count); }
+    deleteColumns(columnIndex, count) { this.rows.forEach(row => row.splice(columnIndex - 1, count)); }
+
     getRange(row, column, numRows = 1, numColumns = 1) {
       rangeCalls.push({ sheetName: this.name, row, column, numRows, numColumns });
       return new MockRange(this, row, column, numRows, numColumns);
@@ -393,6 +403,7 @@ function createSpreadsheetMock(initialSheets) {
     SpreadsheetApp: {
       getActiveSpreadsheet: () => spreadsheet,
       newDataValidation: () => ({
+        requireCheckbox: () => ({ build: () => ({ checkbox: true }) }),
         requireValueInList: () => ({
           setAllowInvalid: () => ({
             build: () => ({})
@@ -715,15 +726,6 @@ test('management sheet definitions list required sheets and exclude PDF sheets',
   assert.ok(!(byName['トークン管理'].checkboxHeaders || []).includes('revoked'));
   assert.ok(!(byName['トークン管理'].checkboxHeaders || []).includes('投稿削除'));
   for (const header of [
-    'beginnerCorrect',
-    'beginnerAccuracy',
-    'intermediateCorrect',
-    'intermediateAccuracy',
-    'advancedCorrect',
-    'advancedAccuracy',
-    'recent10BeginnerAttempts',
-    'recent10IntermediateAttempts',
-    'recent10AdvancedAttempts',
     'lastLevel',
     'lastProblemType',
     'averageElapsedMs',
@@ -762,6 +764,137 @@ test('management sheet repair adds monitor cache headers without deleting existi
   assert.equal(monitorRows[1][1], '{"old":true}');
 });
 
+test('sheet repair preserves recorded booleans and does not populate empty log rows', async () => {
+  const mock = await createManagedSpreadsheetMock({ 解答ログ: await buildManagedRows('解答ログ', [
+    { attemptId: 'a1', isCorrect: true, requiresRounding: true },
+    { attemptId: 'a2', isCorrect: false, requiresRounding: false }
+  ]) });
+  const { SheetRepository } = await loadApi({ SpreadsheetApp: mock.SpreadsheetApp });
+  const before = structuredClone(mock.sheets.get('解答ログ').rows);
+  SheetRepository.ensureSheets();
+  SheetRepository.ensureSheets();
+  assert.deepEqual(structuredClone(mock.sheets.get('解答ログ').rows), before);
+});
+
+test('reordered sheet columns retain field identity on sync and log append', async () => {
+  const mock = await createManagedSpreadsheetMock();
+  for (const name of ['Classroom一覧', '配付ログ', '実行ログ']) mock.sheets.get(name).rows[0].reverse();
+  const { SheetRepository } = await loadApi({ SpreadsheetApp: mock.SpreadsheetApp });
+  SheetRepository.writeCourseListToSheet([{courseId:'c1',name:'Chemistry',courseState:'ACTIVE'}]);
+  assert.equal(SheetRepository.readCourseRows()[0].courseId, 'c1');
+  SheetRepository.appendDistributionLogs([{timestamp:'now',runId:'r1',rosterKey:'c1::s1',token:'t1',status:'SUCCESS'}]);
+  assert.equal(SheetRepository.readDistributionLogs()[0].runId, 'r1');
+  SheetRepository.appendRunLog({runId:'r2',operation:'TEST'});
+  assert.equal(SheetRepository.readRunLogs()[0].runId, 'r2');
+});
+
+test('settings repair and updates preserve reordered columns and custom cells', async () => {
+  const mock = createSpreadsheetMock({設定:[['説明','値','キー','更新日時'],['old','https://existing.test','WEB_APP_URL','date']]});
+  const { SheetRepository } = await loadApi({ SpreadsheetApp: mock.SpreadsheetApp });
+  SheetRepository.ensureSheets();
+  SheetRepository.setSettingValue('CUSTOM', 'custom-value', 'custom-description');
+  assert.equal(SheetRepository.getSettingValue_('WEB_APP_URL'), 'https://existing.test');
+  assert.equal(SheetRepository.getSettingValue_('CUSTOM'), 'custom-value');
+  assert.equal(SheetRepository.getSettingValue_('DRY_RUN'), 'false');
+});
+
+test('schema diagnostic rejects duplicate headers and repair stops before writes', async () => {
+  const mock = await createManagedSpreadsheetMock();
+  mock.sheets.get('解答ログ').rows[0].push('isCorrect');
+  const { SheetRepository } = await loadApi({ SpreadsheetApp: mock.SpreadsheetApp });
+  assert.equal(SheetRepository.getManagementSheetStatus().ok, false);
+  assert.throws(() => SheetRepository.ensureSheets(), /重複/);
+  assert.equal(mock.setValuesCalls.length, 0);
+});
+
+test('management inspection reports missing settings and duplicates without values or writes', async () => {
+  const mock = await createManagedSpreadsheetMock({設定: await buildManagedRows('設定',[
+    {キー:'WEB_APP_URL',値:'secret-url'}, {キー:'WEB_APP_URL',値:'another-secret'}, {キー:'OLD_KEY',値:'secret'}
+  ])});
+  const uiMock = createUiMock();
+  mock.SpreadsheetApp.getUi = () => uiMock.ui;
+  const { SheetRepository, inspectManagementSheets } = await loadApi({SpreadsheetApp:mock.SpreadsheetApp});
+  const result = inspectManagementSheets();
+  assert.equal(result.ok, false);
+  assert.ok(result.settings.missingKeys.includes('DRY_RUN'));
+  assert.deepEqual(Array.from(result.settings.duplicateKeys), ['WEB_APP_URL']);
+  assert.doesNotMatch(JSON.stringify(result), /secret/);
+  assert.throws(() => SheetRepository.ensureSheets(), /設定キー.*重複/);
+  assert.equal(mock.setValuesCalls.length, 0);
+});
+
+test('repair grows narrow sheet capacity before appending required headers', async () => {
+  const mock = await createManagedSpreadsheetMock();
+  const sheet = mock.sheets.get('集計キャッシュ');
+  sheet.rows[0] = ['updatedAt'];
+  let capacity = 26;
+  sheet.getMaxColumns = () => capacity;
+  sheet.insertColumnsAfter = (after, count) => { assert.equal(after,capacity); capacity += count; };
+  const getRange = sheet.getRange.bind(sheet);
+  sheet.getRange = (r,c,n=1,w=1) => { assert.ok(c+w-1<=capacity,'range exceeds grid'); return getRange(r,c,n,w); };
+  const {SheetRepository} = await loadApi({SpreadsheetApp:mock.SpreadsheetApp});
+  SheetRepository.ensureSheets();
+  assert.equal(capacity,53);
+});
+
+test('repair clears only false checkbox placeholders and retains row positions and formulas', async () => {
+  const mock = await createManagedSpreadsheetMock({解答ログ:await buildManagedRows('解答ログ',[
+    {isCorrect:false,requiresRounding:false}, {attemptId:'saved',isCorrect:false},
+    {isCorrect:true}, {questionText:'=IF(TRUE,"","")',isCorrect:false}
+  ])});
+  const {SheetRepository} = await loadApi({SpreadsheetApp:mock.SpreadsheetApp});
+  SheetRepository.ensureSheets();
+  const rows=mock.sheets.get('解答ログ').rows;
+  assert.ok(rows[1].every(value => value === ''));
+  assert.equal(rows[2][1],'saved');
+  assert.equal(rows[2][16],false);
+  assert.equal(rows[3][16],true);
+  assert.equal(rows[4][11],'=IF(TRUE,"","")');
+});
+
+test('replacement write failure does not clear previously saved rows', async () => {
+  const mock=await createManagedSpreadsheetMock({Classroom一覧:await buildManagedRows('Classroom一覧',[{courseId:'saved',name:'existing'}])});
+  const sheet=mock.sheets.get('Classroom一覧');
+  const original=JSON.stringify(sheet.rows);
+  const getRange=sheet.getRange.bind(sheet);
+  sheet.getRange=(...args)=> {const range=getRange(...args); range.setValues=()=> {throw Error('write failed');}; return range;};
+  const {SheetRepository}=await loadApi({SpreadsheetApp:mock.SpreadsheetApp});
+  assert.throws(()=>SheetRepository.writeCourseListToSheet([{courseId:'new',name:'new'}]),/write failed/);
+  assert.equal(JSON.stringify(sheet.rows),original);
+});
+
+test('current schema removes unused settings and three-level cache columns without touching source logs', async () => {
+  const mock = await createManagedSpreadsheetMock({設定:await buildManagedRows('設定',[
+    {キー:'WEB_APP_URL',値:'current-url'}, {キー:'BEGINNER_TOLERANCE',値:'0.5'},
+    {キー:'ENABLE_ADAPTIVE_PROBLEM_SELECTION',値:'true'}, {キー:'CUSTOM',値:'keep'}
+  ]),解答ログ:await buildManagedRows('解答ログ',[{attemptId:'source',isCorrect:true}])});
+  const sheet=mock.sheets.get('集計キャッシュ');
+  const stored=Object.fromEntries(sheet.rows[0].map(header=>[header,'']));
+  Object.assign(stored,{rosterKey:'c::s',lv1Attempts:2,lv6Attempts:3,lastElapsedMs:15000});
+  sheet.rows.push(sheet.rows[0].map(header=>stored[header]));
+  for (const header of ['beginnerAttempts','recent10AdvancedAttempts']) if (!sheet.rows[0].includes(header)) sheet.rows[0].push(header);
+  const original=JSON.stringify(mock.sheets.get('解答ログ').rows);
+  const {SheetRepository,AdminService}=await loadApi({SpreadsheetApp:mock.SpreadsheetApp});
+  SheetRepository.ensureSheets();
+  const definitions=SheetRepository.getSheetDefinitions();
+  assert.equal(definitions.find(x=>x.name==='集計キャッシュ').headers.length,53);
+  assert.equal(SheetRepository.getDefaultSettingsForTest().length,10);
+  assert.equal(SheetRepository.getSettingValue_('BEGINNER_TOLERANCE'),'');
+  assert.equal(SheetRepository.getSettingValue_('ENABLE_ADAPTIVE_PROBLEM_SELECTION'),'');
+  assert.equal(SheetRepository.getSettingValue_('WEB_APP_URL'),'current-url');
+  assert.equal(SheetRepository.getSettingValue_('CUSTOM'),'keep');
+  assert.ok(!sheet.rows[0].includes('beginnerAttempts'));
+  const cached=SheetRepository.readAggregateCache()[0];
+  assert.equal(cached.lv1Attempts,2);
+  assert.equal(cached.lv6Attempts,3);
+  assert.equal(cached.lastElapsedMs,15000);
+  SheetRepository.writeAggregateCache([{...cached,lv6Attempts:4,lastElapsedMs:20000}]);
+  assert.equal(SheetRepository.readAggregateCache()[0].lv6Attempts,4);
+  assert.equal(SheetRepository.readAggregateCache()[0].lastElapsedMs,20000);
+  assert.equal(JSON.stringify(mock.sheets.get('解答ログ').rows),original);
+  assert.ok(!AdminService.buildAdminSettingRows_({}).some(x=>/BEGINNER|INTERMEDIATE|ADVANCED|ADAPTIVE/.test(x.key)));
+});
+
 test('app display names use molque branding without legacy admin surface name', async () => {
   const { MOL_DRILL_APP_NAME, MOL_DRILL_ADMIN_APP_NAME, MOL_DRILL_FORMAL_DESCRIPTION } = await loadApi();
 
@@ -787,7 +920,6 @@ test('default settings include teacher URL outputs classroom URL delivery contro
     'CLASSROOM_SEND_BATCH_SIZE',
     'DRY_RUN',
     'ENABLE_DISTRIBUTION_LOG',
-    'ENABLE_ADAPTIVE_PROBLEM_SELECTION',
     'AUTO_REBUILD_CACHE_ENABLED',
     'AUTO_REBUILD_CACHE_INTERVAL_MINUTES'
   ]) {
@@ -801,7 +933,7 @@ test('default settings include teacher URL outputs classroom URL delivery contro
     'INTERMEDIATE_TOLERANCE',
     'ADVANCED_TOLERANCE'
   ]) {
-    assert.ok(keys.includes(key), `${key} should be defined`);
+    assert.ok(!keys.includes(key), `${key} should be absent`);
   }
   assert.ok(!keys.includes('schemaVersion'));
   assert.ok(!keys.includes('SCHEMA_VERSION'));
@@ -813,20 +945,11 @@ test('default settings include teacher URL outputs classroom URL delivery contro
   assert.equal(settings.find((setting) => setting.key === 'DRY_RUN').value, 'false');
   assert.equal(settings.find((setting) => setting.key === 'AUTO_REBUILD_CACHE_ENABLED').value, 'false');
   assert.equal(settings.find((setting) => setting.key === 'AUTO_REBUILD_CACHE_INTERVAL_MINUTES').value, '5');
-  assert.equal(settings.find((setting) => setting.key === 'BEGINNER_AVOGADRO_CONSTANT').value, '6.0e23');
-  assert.equal(settings.find((setting) => setting.key === 'INTERMEDIATE_AVOGADRO_CONSTANT').value, '6.0e23');
-  assert.equal(settings.find((setting) => setting.key === 'ADVANCED_AVOGADRO_CONSTANT').value, '6.02e23');
-  assert.equal(settings.find((setting) => setting.key === 'BEGINNER_TOLERANCE').value, '0.01');
-  assert.equal(settings.find((setting) => setting.key === 'INTERMEDIATE_TOLERANCE').value, '0.02');
-  assert.equal(settings.find((setting) => setting.key === 'ADVANCED_TOLERANCE').value, '0.005');
   assert.doesNotMatch(
     settings.map((setting) => setting.description || '').join('\n'),
     /基礎レベル|標準レベル|発展レベル|スキーマ|schema/i
   );
-  assert.match(
-    settings.map((setting) => setting.description || '').join('\n'),
-    /初級レベル[\s\S]*中級レベル[\s\S]*上級レベル/
-  );
+  assert.equal(settings.length, 10);
   assert.match(settings.find((setting) => setting.key === 'POST_TEXT_TEMPLATE').value, /もるくえ！\(モル計算ドリル\)の入場URLです。/);
   assert.match(
     byKey.AUTO_REBUILD_CACHE_ENABLED.description,
@@ -863,11 +986,7 @@ test('default settings include teacher URL outputs classroom URL delivery contro
   for (const internalToken of ['{{token}}', '{{studentId}}', '{{rosterKey}}', '{{courseId}}']) {
     assert.ok(!byKey.POST_TEXT_TEMPLATE.description.includes(internalToken), `${internalToken} should not be described`);
   }
-  assert.doesNotMatch(byKey.BEGINNER_AVOGADRO_CONSTANT.description, /6\.0e23|6\.02e23/i);
-  assert.doesNotMatch(byKey.INTERMEDIATE_AVOGADRO_CONSTANT.description, /6\.0e23|6\.02e23/i);
-  assert.doesNotMatch(byKey.ADVANCED_AVOGADRO_CONSTANT.description, /6\.0e23|6\.02e23/i);
-  assert.match(byKey.BEGINNER_AVOGADRO_CONSTANT.description, /6\.0×10\^23|6\.0x10\^23/);
-  assert.match(byKey.ADVANCED_AVOGADRO_CONSTANT.description, /6\.02×10\^23|6\.02x10\^23/);
+  assert.equal(byKey.ENABLE_ADAPTIVE_PROBLEM_SELECTION, undefined);
 });
 
 test('problem profiles read level-specific constants from settings when available', async () => {
@@ -1073,7 +1192,8 @@ test('spreadsheet menu is numbered by teacher workflow without legacy admin scre
     root.items[2].menu.items.map((item) => `item:${item.label}:${item.functionName}`),
     [
       'item:⓪-1 管理シートを作成・補修:setupSheetsFromMenu',
-      'item:⓪-2 管理データを全削除して初期状態に戻す:reinitializeSheetsFromMenu'
+      'item:⓪-2 管理データを全削除して初期状態に戻す:reinitializeSheetsFromMenu',
+      'item:⓪-3 管理シートの構成を診断:inspectManagementSheetsFromMenu'
     ]
   );
   assert.deepEqual(
@@ -1582,50 +1702,9 @@ test('distribution settings can be configured from the spreadsheet menu', async 
   assert.match(uiMock.alerts.at(-1)[0], /配付設定を変更しました/);
 });
 
-test('problem generation and grading settings can be configured from the spreadsheet menu', async () => {
-  const spreadsheetMock = await createManagedSpreadsheetMock({
-    設定: await buildManagedRows('設定', [
-      { キー: 'WEB_APP_URL', 値: 'https://example.com/exec' },
-      { キー: 'POST_TEXT_TEMPLATE', 値: 'template {{studentUrl}}' },
-      { キー: 'ENABLE_ADAPTIVE_PROBLEM_SELECTION', 値: 'true' },
-      { キー: 'BEGINNER_AVOGADRO_CONSTANT', 値: '6.0e23' },
-      { キー: 'INTERMEDIATE_AVOGADRO_CONSTANT', 値: '6.0e23' },
-      { キー: 'ADVANCED_AVOGADRO_CONSTANT', 値: '6.02e23' },
-      { キー: 'BEGINNER_TOLERANCE', 値: '0.01' },
-      { キー: 'INTERMEDIATE_TOLERANCE', 値: '0.02' },
-      { キー: 'ADVANCED_TOLERANCE', 値: '0.005' }
-    ])
-  });
-  const uiMock = createUiMock();
-  uiMock.queuePromptResponse('false');
-  uiMock.queuePromptResponse('6.1x10^23');
-  uiMock.queuePromptResponse('0.03');
-  uiMock.queuePromptResponse('6.2e23');
-  uiMock.queuePromptResponse('0.04');
-  uiMock.queuePromptResponse('6.03e23');
-  uiMock.queuePromptResponse('0.006');
-  const { configureProblemSettingsFromMenu, SheetRepository } = await loadApi({
-    SpreadsheetApp: {
-      ...spreadsheetMock.SpreadsheetApp,
-      getUi: () => uiMock.ui
-    }
-  });
-
-  const result = configureProblemSettingsFromMenu();
-
-  assert.equal(result.settings.adaptiveProblemSelection, false);
-  assert.equal(Number(SheetRepository.getSettingValue('BEGINNER_AVOGADRO_CONSTANT')), 6.1e23);
-  assert.equal(SheetRepository.getSettingValue('BEGINNER_TOLERANCE'), '0.03');
-  assert.equal(Number(SheetRepository.getSettingValue('INTERMEDIATE_AVOGADRO_CONSTANT')), 6.2e23);
-  assert.equal(SheetRepository.getSettingValue('INTERMEDIATE_TOLERANCE'), '0.04');
-  assert.equal(Number(SheetRepository.getSettingValue('ADVANCED_AVOGADRO_CONSTANT')), 6.03e23);
-  assert.equal(SheetRepository.getSettingValue('ADVANCED_TOLERANCE'), '0.006');
-  assert.equal(SheetRepository.getSettingValue('ENABLE_ADAPTIVE_PROBLEM_SELECTION'), 'false');
-  assert.match(uiMock.alerts.at(-1)[0], /出題・採点設定を変更しました/);
-  const promptText = JSON.stringify(uiMock.prompts);
-  assert.doesNotMatch(promptText, /6\.02e23|6\.0e23|E\+23/i);
-  assert.match(promptText, /6\.02×10\^23/);
-  assert.match(promptText, /6\.02x10\^23/);
+test('obsolete three-level settings menu is not exported', async () => {
+  const {configureProblemSettingsFromMenu}=await loadApi();
+  assert.equal(configureProblemSettingsFromMenu,undefined);
 });
 
 test('requested classroom URL post deletion menu confirms and cancels without calling Classroom', async () => {
@@ -1698,7 +1777,7 @@ test('reinitialize menu uses OK_CANCEL alert and cancels without text prompt', a
   assert.match(uiMock.alerts[0][1], /この操作は元に戻せません/);
 });
 
-test('setup repairs missing management columns while ignoring legacy version setting keys', async () => {
+test('setup repairs missing management columns and removes unused version settings', async () => {
   const spreadsheetMock = createSpreadsheetMock({
     設定: [
       ['キー', '値', '説明', '更新日時'],
@@ -1718,11 +1797,9 @@ test('setup repairs missing management columns while ignoring legacy version set
   assert.equal(result.ok, true);
   assert.equal(Object.hasOwn(result, 'schemaVersion'), false);
   assert.equal(result.message, 'もるくえ！の管理シートを作成・補修しました。');
-  assert.equal(spreadsheetMock.sheets.get('設定').rows[1][0], 'schemaVersion');
-  assert.equal(spreadsheetMock.sheets.get('設定').rows[1][1], '15');
-  assert.equal(spreadsheetMock.sheets.get('設定').rows[2][0], 'SCHEMA_VERSION');
-  assert.equal(spreadsheetMock.sheets.get('設定').rows[2][1], 'older');
-  assert.equal(spreadsheetMock.sheets.get('設定').rows[3][1], 'https://old.example.com/exec');
+  assert.equal(SheetRepository.getSettingValue_('schemaVersion'), '');
+  assert.equal(SheetRepository.getSettingValue_('SCHEMA_VERSION'), '');
+  assert.equal(SheetRepository.getSettingValue_('WEB_APP_URL'), 'https://old.example.com/exec');
   assert.equal(
     spreadsheetMock.sheets.get('設定').rows.some((row) => row[0] === legacyMonitorEmailSettingKeyForTest()),
     false,
@@ -1963,7 +2040,7 @@ test('monitor snapshot service writes dashboard JSON without teacher test studen
 
   const snapshot = MonitorSnapshotService.writeDashboardSnapshot();
 
-  assert.equal(snapshot.snapshotVersion, 2);
+  assert.equal(snapshot.snapshotVersion, 3);
   assert.equal(snapshot.source, 'monitor-snapshot');
   assert.equal(snapshot.studentRuntime, 'fast');
   assert.equal(snapshot.snapshotMode, 'snapshot');
@@ -2004,7 +2081,7 @@ test('getMonitorDashboardData returns usable snapshot without live dashboard rea
     generatedAt: '2026-05-21T12:00:00.000Z',
     studentRuntime: 'fast',
     appName: 'もるくえ！',
-    appVersion: 'test-version',
+    appVersion: '4.0.0',
     courseOverview: { totalCount: 1, checkedCount: 1 },
     studentOverview: { totalCount: 1, activeCount: 1, retiredCount: 0 },
     tokenOverview: { totalCount: 1, activeCount: 1, revokedCount: 0 },
@@ -2162,7 +2239,7 @@ test('monitor snapshot read uses CacheService before reading the sheet', async (
     source: 'monitor-snapshot',
     generatedAt: '2026-05-21T12:00:00.000Z',
     appName: 'もるくえ！',
-    appVersion: 'test-version',
+    appVersion: '4.0.0',
     courseOverview: { totalCount: 1, checkedCount: 1 },
     studentOverview: { totalCount: 1, activeCount: 1, retiredCount: 0 },
     tokenOverview: { totalCount: 1, activeCount: 1, revokedCount: 0 },
@@ -2212,7 +2289,7 @@ test('monitor snapshot cache failures fall back to sheet reads without crashing'
     source: 'monitor-snapshot',
     generatedAt: '2026-05-21T12:00:00.000Z',
     appName: 'もるくえ！',
-    appVersion: 'test-version',
+    appVersion: '4.0.0',
     courseOverview: { totalCount: 1, checkedCount: 1 },
     studentOverview: { totalCount: 1, activeCount: 1, retiredCount: 0 },
     tokenOverview: { totalCount: 1, activeCount: 1, revokedCount: 0 },
@@ -2807,13 +2884,13 @@ test('admin service recognizes admin routes and normalizes editable settings', a
   assert.equal(settings.dryRun, true);
   assert.equal(settings.batchSize, 100);
   assert.equal(settings.enableDistributionLog, false);
-  assert.equal(settings.adaptiveProblemSelection, false);
-  assert.equal(settings.beginnerAvogadroConstant, 6.10e23);
-  assert.equal(settings.intermediateAvogadroConstant, 6.11e23);
-  assert.equal(settings.advancedAvogadroConstant, 6.12e23);
-  assert.equal(settings.beginnerTolerance, 0.03);
-  assert.equal(settings.intermediateTolerance, 0.04);
-  assert.equal(settings.advancedTolerance, 0.006);
+  assert.equal(settings.adaptiveProblemSelection, undefined);
+  assert.equal(settings.beginnerAvogadroConstant, undefined);
+  assert.equal(settings.intermediateAvogadroConstant, undefined);
+  assert.equal(settings.advancedAvogadroConstant, undefined);
+  assert.equal(settings.beginnerTolerance, undefined);
+  assert.equal(settings.intermediateTolerance, undefined);
+  assert.equal(settings.advancedTolerance, undefined);
 });
 
 test('legacy admin dialog and Admin.html-only public APIs are not exported', async () => {
@@ -4341,7 +4418,7 @@ test('student-facing scientific notation hints and result text avoid e notation'
   }
 });
 
-test('admin settings accept times-ten notation for Avogadro constants', async () => {
+test('admin settings ignore removed three-level controls', async () => {
   const { AdminService } = await loadApi();
   const settings = AdminService.normalizeSettingsPayload({
     beginnerAvogadroConstant: '6.10×10^23',
@@ -4349,9 +4426,9 @@ test('admin settings accept times-ten notation for Avogadro constants', async ()
     advancedAvogadroConstant: '6.12*10^23'
   });
 
-  assert.equal(settings.beginnerAvogadroConstant, 6.10e23);
-  assert.equal(settings.intermediateAvogadroConstant, 6.11e23);
-  assert.equal(settings.advancedAvogadroConstant, 6.12e23);
+  assert.equal(settings.beginnerAvogadroConstant, undefined);
+  assert.equal(settings.intermediateAvogadroConstant, undefined);
+  assert.equal(settings.advancedAvogadroConstant, undefined);
 });
 
 test('answer judgment uses enumerated rounded candidates for beginner and intermediate', async () => {

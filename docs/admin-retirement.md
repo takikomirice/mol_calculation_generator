@@ -71,13 +71,8 @@ Webモニターからトークン再発行、URL無効化、Classroom投稿削�
 - `CLASSROOM_SEND_BATCH_SIZE`
 - `DRY_RUN`
 - `ENABLE_DISTRIBUTION_LOG`
-- `ENABLE_ADAPTIVE_PROBLEM_SELECTION`
-- `BEGINNER_AVOGADRO_CONSTANT`
-- `INTERMEDIATE_AVOGADRO_CONSTANT`
-- `ADVANCED_AVOGADRO_CONSTANT`
-- `BEGINNER_TOLERANCE`
-- `INTERMEDIATE_TOLERANCE`
-- `ADVANCED_TOLERANCE`
+
+旧出題設定7項目は現行版では除去済み。現在の10設定と53列の集計構造は[スプレッドシート構成](spreadsheet-schema.md)を参照する。
 
 次のURLは `★ 先生用URLを設定シートに出力` で自動出力し、設定シートから開く。先生が直接編集する主設定としては扱わない。
 

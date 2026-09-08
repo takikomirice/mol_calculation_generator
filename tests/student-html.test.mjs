@@ -69,7 +69,7 @@ test('student screen uses encouraging result titles with advanced-only significa
   assert.match(html, /currentCorrectStreak/);
   assert.match(html, /requiresRounding/);
   assert.match(html, /significantDigits/);
-  assert.match(html, /'lv5', 'lv6', 'advanced'/);
+  assert.match(html, /data.level === 'lv8'/);
   assert.doesNotMatch(html, /有効数字に合わせて丸めて判定します/);
   assert.match(html, /elements\.resultTitle\.textContent = buildResultTitle\(data, correct\)/);
 });
@@ -198,7 +198,7 @@ test('student screen renders given values between question text and answer input
   assert.ok(givenIndex > questionIndex, 'given values should be after the question');
   assert.ok(answerIndex > givenIndex, 'given values should be before the answer input');
   assert.match(html, /この問題で使う値/);
-  assert.match(html, /与えられた値/);
+  assert.match(html, /givenValuesTitle.textContent = title/);
   assert.match(html, /renderGivenValues/);
   assert.match(html, /givenValuesTitle/);
 });

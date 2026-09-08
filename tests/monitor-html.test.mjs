@@ -69,9 +69,9 @@ test('monitor screen defines compact view modes', async () => {
   assert.match(html, /<option value="distribution">配付確認<\/option>/);
   assert.match(html, /const DEFAULT_VIEW_MODE = 'standard'/);
   assert.match(html, /const VIEW_MODE_COLUMNS = {/);
-  assert.match(html, /standard:\s*\[\s*'number',\s*'name',\s*'status',\s*'attempts',\s*'recentAccuracy',\s*'lastAnsweredAt',\s*'history'\s*\]/);
-  assert.match(html, /follow:\s*\[\s*'number',\s*'name',\s*'status',\s*'followReason',\s*'attempts',\s*'recentAccuracy',\s*'lastAnsweredAt',\s*'history'\s*\]/);
-  assert.match(html, /detail:\s*\[\s*'number',\s*'name',\s*'status',\s*'distribution',\s*'access',\s*'attempts',\s*'recentAccuracy',\s*'levelSummary',\s*'lastAnsweredAt',\s*'history'\s*\]/);
+  assert.match(html, /standard:\s*\[\s*'number',\s*'name',\s*'status',\s*'attempts',\s*'recentAccuracy',\s*'autoProgress',\s*'lastAnsweredAt',\s*'history'\s*\]/);
+  assert.match(html, /follow:\s*\[\s*'number',\s*'name',\s*'status',\s*'followReason',\s*'attempts',\s*'recentAccuracy',\s*'autoProgress',\s*'lastAnsweredAt',\s*'history'\s*\]/);
+  assert.match(html, /detail:\s*\[\s*'number',\s*'name',\s*'status',\s*'distribution',\s*'access',\s*'attempts',\s*'recentAccuracy',\s*'levelSummary',\s*'autoProgress',\s*'lastAnsweredAt',\s*'history'\s*\]/);
   assert.match(html, /distribution:\s*\[\s*'courseName',\s*'number',\s*'name',\s*'distribution',\s*'access',\s*'history'\s*\]/);
   assert.match(html, /elements\.viewModeSelect\.addEventListener\('change',/);
 });
@@ -189,9 +189,9 @@ test('monitor screen formats levels and problem types for teachers', async () =>
   const html = await loadMonitorHtml();
 
   assert.match(html, /function formatLevel\(level\)/);
-  assert.match(html, /beginner:\s*'旧初級'/);
-  assert.match(html, /intermediate:\s*'中級'/);
-  assert.match(html, /advanced:\s*'上級'/);
+  assert.doesNotMatch(html, /beginner:\s*'旧初級'/);
+  assert.doesNotMatch(html, /intermediate:\s*'中級'/);
+  assert.doesNotMatch(html, /advanced:\s*'上級'/);
   assert.match(html, /function formatProblemType\(problemType\)/);
   assert.match(html, /mol_to_mass:\s*'mol→質量'/);
   assert.match(html, /mass_to_mol:\s*'質量→mol'/);
@@ -239,9 +239,7 @@ test('monitor screen builds visible rows CSV on the client only', async () => {
   assert.match(html, /アクセス/);
   assert.match(html, /解答数/);
   assert.match(html, /直近10問正答率/);
-  assert.match(html, /初級/);
-  assert.match(html, /中級/);
-  assert.match(html, /上級/);
+  assert.match(html, /LEVEL_KEYS.map\(level=>\(\{header:formatLevel\(level\)/);
   assert.match(html, /最終解答/);
   assert.match(html, /要フォロー理由/);
   assert.match(html, /'\\ufeff' \+ csvText/);

@@ -640,20 +640,20 @@
         </div>
         <div class="review-filters">
           <label>正誤 <select id="reviewResultFilter"><option value="all">すべて</option><option value="incorrect">不正解</option><option value="correct">正解</option></select></label>
-          <label>レベル <select id="reviewLevelFilter"><option value="all">すべて</option><option value="lv1">Lv.1</option><option value="lv2">Lv.2</option><option value="lv3">Lv.3</option><option value="lv4">Lv.4</option><option value="lv5">Lv.5</option><option value="lv6">Lv.6</option></select></label>
+          <label>レベル <select id="reviewLevelFilter"><option value="all">すべて</option><option value="lv0">Lv.0</option><option value="lv1">Lv.1</option><option value="lv2">Lv.2</option><option value="lv3">Lv.3</option><option value="lv4">Lv.4</option><option value="lv5">Lv.5</option><option value="lv6">Lv.6</option><option value="lv7">Lv.7</option><option value="lv8">Lv.8</option></select></label>
           <button id="reviewReloadButton" type="button">履歴を更新</button>
         </div>
         <div id="historyStatus" class="modal-status" role="status" aria-live="polite">読み込み中...</div>
         <div id="answerHistoryBody" class="review-list" aria-busy="false"></div>
         <button id="reviewMoreButton" type="button" hidden>続きを読み込む</button>
         <details id="reviewStats" class="review-stats">
-          <summary>問題タイプ別の集計を見る（全期間・全レベル）</summary>
+          <summary>問題タイプ別の集計を見る（現行カリキュラム）</summary>
           <section id="reviewLearningMetrics" hidden aria-label="取り組みと変換の確認">
             <h3>取り組み</h3><p id="reviewEffort"></p>
             <h3>変換の確認スコア（参考）</h3><strong id="reviewCoverageScore"></strong>
-            <progress id="reviewCoverageGauge" max="36" value="0" aria-label="確認できた変換" style="display:block;width:100%;margin:8px 0"></progress>
+            <progress id="reviewCoverageGauge" max="61" value="0" aria-label="確認できた変換" style="display:block;width:100%;margin:8px 0"></progress>
             <p id="reviewCoverageLevels" class="muted"></p>
-            <p class="muted">各レベル6方向 × 6レベルの36項目。各方向の直近最大10問で、5問以上取り組み、80%以上正解した項目を数えます。未実施の項目も分母に含む、学習範囲を確認する指標です。難易度の重み付けはなく、成績とは別の目安です。</p>
+            <p class="muted">現行Lv.0〜8の61項目。各方向の直近最大10問で、5問以上取り組み、80%以上正解した項目を数えます。未実施の項目も分母に含む、学習範囲を確認する指標です。難易度の重み付けはなく、成績とは別の目安です。</p>
           </section>
           <div class="review-stats-scroll">
             <table class="history-table">
@@ -679,13 +679,16 @@
     </div>
   </dialog>
   <script>
+    const LEVEL_KEYS=Array.from({length:9},(_,i)=>'lv'+i);
+    const LEVEL_TYPE_IDS=[[15],[1,2,3,4,5,6],[1,2,3,4,5,6],[7,8,9,10,11,12],[7,8,9,10,11,12],[16,17,18,19],[1,2,3,4,5,6],[7,8,9,10,11,12,16,17,18,19],[1,2,3,4,5,6,7,8,9,10,11,12,16,17,18,19]];
+    const TYPE_KEYS=['mol_to_mass','mass_to_mol','mol_to_particles','particles_to_mol','mol_to_gas_volume','gas_volume_to_mol','mass_to_particles','particles_to_mass','mass_to_gas_volume','gas_volume_to_mass','gas_volume_to_particles','particles_to_gas_volume','','','formula_to_relative_mass','density_to_mass','density_mass_to_volume','density_to_mol','density_to_particles'];
     const AUTO_REFRESH_INTERVAL_MS = 60000;
     const AUTO_REFRESH_STORAGE_KEY = 'molMonitorAutoRefresh';
     const DEFAULT_VIEW_MODE = 'standard';
     const VIEW_MODE_COLUMNS = {
-      standard: ['number', 'name', 'status', 'attempts', 'recentAccuracy', 'lastAnsweredAt', 'history'],
-      follow: ['number', 'name', 'status', 'followReason', 'attempts', 'recentAccuracy', 'lastAnsweredAt', 'history'],
-      detail: ['number', 'name', 'status', 'distribution', 'access', 'attempts', 'recentAccuracy', 'levelSummary', 'lastAnsweredAt', 'history'],
+      standard: ['number', 'name', 'status', 'attempts', 'recentAccuracy', 'autoProgress', 'lastAnsweredAt', 'history'],
+      follow: ['number', 'name', 'status', 'followReason', 'attempts', 'recentAccuracy', 'autoProgress', 'lastAnsweredAt', 'history'],
+      detail: ['number', 'name', 'status', 'distribution', 'access', 'attempts', 'recentAccuracy', 'levelSummary', 'autoProgress', 'lastAnsweredAt', 'history'],
       distribution: ['courseName', 'number', 'name', 'distribution', 'access', 'history']
     };
 
@@ -791,6 +794,9 @@
         render: (row) => escapeHtml(formatPercent(row.recent10Accuracy))
       },
       {
+        key:'autoProgress',label:'オートの進行',sortKey:null,thClass:'',tdClass:'',render:row=>escapeHtml(formatAutoProgress(row.autoProgress))
+      },
+      {
         key: 'levelSummary',
         label: 'レベル別',
         sortKey: null,
@@ -838,15 +844,8 @@
       { header: 'アクセス', value: (row) => row.accessStatus || '' },
       { header: '解答数', value: (row) => Number(row.totalAttempts || 0) },
       { header: '直近10問正答率', value: (row) => formatPercent(row.recent10Accuracy) },
-      { header: 'Lv.1', value: (row) => formatLevelCsv(row, 'lv1') },
-      { header: 'Lv.2', value: (row) => formatLevelCsv(row, 'lv2') },
-      { header: 'Lv.3', value: (row) => formatLevelCsv(row, 'lv3') },
-      { header: 'Lv.4', value: (row) => formatLevelCsv(row, 'lv4') },
-      { header: 'Lv.5', value: (row) => formatLevelCsv(row, 'lv5') },
-      { header: 'Lv.6', value: (row) => formatLevelCsv(row, 'lv6') },
-      { header: '旧初級', value: (row) => formatLevelCsv(row, 'beginner') },
-      { header: '中級', value: (row) => formatLevelCsv(row, 'intermediate') },
-      { header: '上級', value: (row) => formatLevelCsv(row, 'advanced') },
+      { header:'オートの進行',value:row=>formatAutoProgress(row.autoProgress) },
+      ...LEVEL_KEYS.map(level=>({header:formatLevel(level),value:row=>formatLevelCsv(row,level)})),
       { header: '最終解答', value: (row) => row.lastAnsweredAt || '' },
       { header: '要フォロー理由', value: (row) => followReason(row) }
     ];
@@ -897,15 +896,16 @@
       const text = String(level || '').trim();
       if (text === '' || text.toLowerCase() === 'undefined' || text.toLowerCase() === 'null') return '-';
       const labels = {
+        lv0:'Lv.0',lv7:'Lv.7',lv8:'Lv.8',
         lv1: 'Lv.1',
         lv2: 'Lv.2',
         lv3: 'Lv.3',
         lv4: 'Lv.4',
         lv5: 'Lv.5',
         lv6: 'Lv.6',
-        beginner: '旧初級',
-        intermediate: '中級',
-        advanced: '上級'
+
+
+
       };
       return labels[text] || text || '-';
     }
@@ -928,6 +928,7 @@
         '12': '粒子数→気体体積',
         '13': '原子量→原子1個の質量',
         '14': '質量→モル質量推定',
+        formula_to_relative_mass:'分子量・式量',density_to_mass:'密度 → 質量',density_mass_to_volume:'密度と質量 → 体積',density_to_mol:'密度 → mol',density_to_particles:'密度 → 個数',
         mol_to_mass: 'mol→質量',
         mass_to_mol: '質量→mol',
         mol_to_particles: 'mol→粒子数',
@@ -1339,14 +1340,13 @@
       return `<span class="${getStatusBadgeClass(text)}">${escapeHtml(text)}</span>`;
     }
 
+    function formatAutoProgress(p) {
+      if(!p || !p.level)return p && p.lastMode==='manual'?'手動のみ（オート未開始）':'未開始';
+      return formatLevel(p.level)+'・'+(p.focusLabel || '混合')+(p.support?'（復習中 → '+formatLevel(p.resumeLevel)+'へ復帰予定）':'')+(p.lastMode==='manual'?'／直近は手動':'')+'［保存済み解答時点］';
+    }
     function levelSummary(row) {
-      const current = ['lv1', 'lv2', 'lv3', 'lv4', 'lv5', 'lv6'].map(level => `${formatLevel(level)} ${Number(row[level + 'Correct'] || 0)}/${Number(row[level + 'Attempts'] || 0)}`);
-      const legacy = [
-        `${formatLevel('beginner')} ${Number(row.beginnerCorrect || 0)}/${Number(row.beginnerAttempts || 0)}`,
-        `${formatLevel('intermediate')} ${Number(row.intermediateCorrect || 0)}/${Number(row.intermediateAttempts || 0)}`,
-        `${formatLevel('advanced')} ${Number(row.advancedCorrect || 0)}/${Number(row.advancedAttempts || 0)}`
-      ];
-      return current.concat(Number(row.beginnerAttempts || 0) + Number(row.intermediateAttempts || 0) + Number(row.advancedAttempts || 0) > 0 ? legacy : []).join(' / ');
+      const current = LEVEL_KEYS.map(level => `${formatLevel(level)} ${Number(row[level + 'Correct'] || 0)}/${Number(row[level + 'Attempts'] || 0)}`);
+      return current.join(' / ');
     }
 
     function followReason(row) {
@@ -1356,7 +1356,7 @@
       if (row.accessStatus !== 'アクセス済み') return '未アクセス';
       if (Number(row.totalAttempts || 0) === 0) return '未実施';
       if (Number(row.recent10Attempts || 0) >= 10 && Number(row.recent10Accuracy || 0) < 0.7) return '直近正答率が低下';
-      if (Number(row.lv5Attempts || 0) + Number(row.lv6Attempts || 0) + Number(row.advancedAttempts || 0) === 0 && Number(row.totalAttempts || 0) >= 10) return '有効数字の練習は未実施';
+      if (Number(row.lv8Attempts || 0) === 0 && Number(row.totalAttempts || 0) >= 10) return '有効数字の練習は未実施';
       return row.statusLabel || '要確認';
     }
 
@@ -1586,20 +1586,19 @@
     }
 
     function renderLearningMetrics(rows) {
-      const basic=['mol_to_mass','mass_to_mol','mol_to_particles','particles_to_mol','mol_to_gas_volume','gas_volume_to_mol'];
-      const combined=['mass_to_particles','particles_to_mass','mass_to_gas_volume','gas_volume_to_mass','gas_volume_to_particles','particles_to_gas_volume'];
-      const byLevel={lv1:new Set(),lv2:new Set(),lv3:new Set(),lv4:new Set(),lv5:new Set(),lv6:new Set()};
+      const byLevel=Object.fromEntries(LEVEL_KEYS.map(level=>[level,new Set()]));
+      const total=LEVEL_TYPE_IDS.reduce((n,ids)=>n+ids.length,0);
       let attempts=0,correct=0;
       rows.forEach(function(row) {
         attempts+=Number(row.attempts || 0);correct+=Number(row.correct || 0);
-        const allowed=['lv1','lv2','lv5'].includes(row.level)?basic:combined;
+        const allowed=(LEVEL_TYPE_IDS[Number(String(row.level).slice(2))] || []).map(id=>TYPE_KEYS[id-1]);
         if(byLevel[row.level] && allowed.includes(row.problemType) && Number(row.recentAttempts)>=5 && Number(row.recentCorrect)/Number(row.recentAttempts)>=0.8) byLevel[row.level].add(row.problemType);
       });
       const count=Object.values(byLevel).reduce((sum,set)=>sum+set.size,0);
       document.getElementById('reviewEffort').textContent='解答 '+attempts+'問 ／ 正解 '+correct+'問（全期間）';
-      document.getElementById('reviewCoverageScore').textContent=Math.round(count/36*100)+' / 100（'+count+' / 36項目）';
+      document.getElementById('reviewCoverageScore').textContent=Math.round(count/total*100)+' / 100（'+count+' / '+total+'項目）';
       document.getElementById('reviewCoverageGauge').setAttribute('value',String(count));
-      document.getElementById('reviewCoverageLevels').textContent=Object.keys(byLevel).map(level=>formatLevel(level)+': '+byLevel[level].size+' / 6').join('　');
+      document.getElementById('reviewCoverageLevels').textContent=Object.keys(byLevel).map(level=>formatLevel(level)+': '+byLevel[level].size+' / '+LEVEL_TYPE_IDS[Number(level.slice(2))].length).join('　');
       document.getElementById('reviewLearningMetrics').hidden=false;
     }
 

@@ -70,9 +70,9 @@ function populate(env,count=100) {
   }
 }
 function answer(i,student=i%100) {
-  return {attemptId:'attempt-'+i,rosterKey:'course::s'+student,courseId:'course',studentId:'s'+student,
+  return {clientInfo:JSON.stringify({curriculumVersion:4}),attemptId:'attempt-'+i,rosterKey:'course::s'+student,courseId:'course',studentId:'s'+student,
     timestamp:new Date(Date.UTC(2026,8,6,10,0,0)+Math.floor(i/3)*1000).toISOString(),
-    level:'lv'+(i%6+1),problemType:i%2?'mol_to_mass':'mass_to_mol',isCorrect:i%3===0,
+    level:i%6===4?'lv8':'lv'+(i%6+1),problemType:i%2?'mol_to_mass':'mass_to_mol',isCorrect:i%3===0,
     elapsedMs:i%7===0?0:1000+(i%19)*100};
 }
 function logObject(entry) { return {...entry,number:'',name:'',courseName:''}; }
@@ -199,7 +199,7 @@ test('checkpoint cache loss restores the durable cursor without rereading old an
   const logReads=env.sheets['解答ログ'].reads.filter(row=>row.width>1&&row.row>1).length;
   env=environment(env);assert.equal(env.refreshMonitorDashboard('teacher-secret').data.dashboardMetrics.totalAnswers,1200);
   assert.equal(env.sheets['モニターキャッシュ'].reads.length,stateReads);
-  const keys=JSON.parse(env.cache.get('monitorRefresh:manifest:v1'));assert.ok(keys.length>1);env.cache.delete(keys[0]);
+  const keys=JSON.parse(env.cache.get('monitorRefresh:manifest:v2'));assert.ok(keys.length>1);env.cache.delete(keys[0]);
   env=environment(env);assert.equal(env.refreshMonitorDashboard('teacher-secret').data.dashboardMetrics.totalAnswers,1200);
   assert.equal(env.sheets['解答ログ'].reads.filter(row=>row.width>1&&row.row>1).length,logReads);
   env.cache.clear();append(env,'解答ログ',answer(1200));env=environment(env);
@@ -212,7 +212,7 @@ test('review pages isolate students, retain grading details and scan at most 500
   for(let i=0;i<1205;i++) append(env,'解答ログ',{
     ...answer(i,i%2),questionText:'水 36.0 g の物質量は？',expectedAnswer:'2',submittedAnswer:i===1204?'2.0':'2.00',
     significantDigits:3,unit:'mol',explanation:'36.0 ÷ 18.0 = 2.00 mol',
-    token:'never-expose',clientInfo:JSON.stringify({acceptedAnswerType:i===1204?'precision':'exact',device:'private'})
+    token:'never-expose',clientInfo:JSON.stringify({curriculumVersion:4,acceptedAnswerType:i===1204?'precision':'exact',device:'private'})
   });
   const before=env.sheets['解答ログ'].reads.length;
   assert.throws(()=>env.getMonitorStudentAnswerReview('test-token-0','course::s0',{}),/内部認証/);
@@ -221,11 +221,11 @@ test('review pages isolate students, retain grading details and scan at most 500
   assert.throws(()=>env.getMonitorStudentAnswerReview('teacher-secret','course::s0',{result:'anything'}),/絞り込み/);
   let cursor=null;const actual=[];
   do {
-    const page=env.getMonitorStudentAnswerReview('teacher-secret','course::s0',{result:'incorrect',level:'lv5',beforeRow:cursor});
+    const page=env.getMonitorStudentAnswerReview('teacher-secret','course::s0',{result:'incorrect',level:'lv8',beforeRow:cursor});
     assert.ok(page.rows.length<=20);
     actual.push(...page.rows);cursor=page.nextBeforeRow;
   } while(cursor);
-  const expected=Array.from({length:1205},(_,i)=>answer(i,i%2)).filter(row=>row.rosterKey==='course::s0' && !row.isCorrect && row.level==='lv5').reverse();
+  const expected=Array.from({length:1205},(_,i)=>answer(i,i%2)).filter(row=>row.rosterKey==='course::s0' && !row.isCorrect && row.level==='lv8').reverse();
   assert.deepEqual(actual.map(row=>row.attemptId),expected.map(row=>row.attemptId));
   assert.equal(actual[0].submittedAnswer,'2.0');assert.equal(actual[0].expectedAnswerText,'2.00 mol');
   assert.equal(actual[0].acceptedAnswerType,'precision');assert.equal(actual[0].explanation,'36.0 ÷ 18.0 = 2.00 mol');
@@ -243,10 +243,10 @@ test('review pages isolate students, retain grading details and scan at most 500
 
 test('review panel shows full problems on demand, filters, appends, retries and guards stale replies at desktop and mobile widths',async()=>{
   const env=environment();populate(env,2);
-  for(let i=0;i<45;i++)append(env,'解答ログ',{...answer(i,0),level:i%2?'lv1':'lv5',isCorrect:i%2===1,
+  for(let i=0;i<45;i++)append(env,'解答ログ',{...answer(i,0),level:i%2?'lv1':'lv8',isCorrect:i%2===1,
     questionText:'水のモル質量を18.0 g/molとして、水36.0 gの物質量を有効数字3桁で答えなさい。省略されない問題文の末尾。',
     expectedAnswer:'2',submittedAnswer:'2.0',significantDigits:3,unit:'mol',
-    explanation:'36.0 ÷ 18.0 = 2.00 mol\n<script>window.injected=true</script>',clientInfo:'{"acceptedAnswerType":"precision"}'});
+    explanation:'36.0 ÷ 18.0 = 2.00 mol\n<script>window.injected=true</script>',clientInfo:'{"curriculumVersion":4,"acceptedAnswerType":"precision"}'});
   const browser=await chromium.launch({headless:true});const page=await browser.newPage();
   const errors=[];page.on('pageerror',error=>errors.push(error.message));
   let fail=false,hold=false,release;const calls=[];
@@ -287,7 +287,7 @@ test('review panel shows full problems on demand, filters, appends, retries and 
     await page.locator('#reviewResultFilter').selectOption('correct');
     await page.waitForFunction(()=>document.querySelectorAll('.review-card').length===20 && document.querySelector('#answerHistoryBody').getAttribute('aria-busy')==='false');
     assert.equal(await page.locator('.review-card .status-follow').count(),0);
-    await page.locator('#reviewLevelFilter').selectOption('lv5');await page.getByText('条件に合う解答履歴はありません。',{exact:true}).waitFor();
+    await page.locator('#reviewLevelFilter').selectOption('lv8');await page.getByText('条件に合う解答履歴はありません。',{exact:true}).waitFor();
     await page.locator('#reviewStats > summary').click();await page.getByText('問題タイプ統計はありません。',{exact:true}).waitFor();
     assert.equal(calls.filter(x=>x==='getCurrentMonitorStudentProblemTypeStats').length,1);
     await page.keyboard.press('Escape');assert.equal(await page.locator('#historyModal').isVisible(),false);
@@ -371,7 +371,7 @@ test('benchmark runner measures rendered responses, reports every operation and 
 test('teacher learning metrics distinguish effort from coverage and do not certify sparse or old successes',async()=>{
   const env=environment();populate(env,1);
   for(let i=0;i<5;i++)append(env,'解答ログ',{...answer(i,0),level:'lv1',problemType:'mol_to_mass',isCorrect:i!==0});
-  for(let i=5;i<7;i++)append(env,'解答ログ',{...answer(i,0),level:'lv5',problemType:'mol_to_mass',isCorrect:true});
+  for(let i=5;i<7;i++)append(env,'解答ログ',{...answer(i,0),level:'lv8',problemType:'mol_to_mass',isCorrect:true});
   const browser=await chromium.launch({headless:true});const page=await browser.newPage();
   await page.exposeFunction('gasCall',(method,args)=>JSON.parse(JSON.stringify(env[method](...args))));
   const bridge=`<script>window.google={script:{run:{withSuccessHandler(success){return {withFailureHandler(failure){return new Proxy({},{get:(_,method)=>(...args)=>window.gasCall(method,args).then(success,failure)});}};}}}};<\/script>`;
@@ -383,7 +383,7 @@ test('teacher learning metrics distinguish effort from coverage and do not certi
     await page.locator('#reviewStats > summary').click();await page.locator('#reviewLearningMetrics').waitFor();
     assert.match(await page.locator('#reviewEffort').innerText(),/7問.*6問/);
     assert.equal(await page.locator('#reviewCoverageGauge').getAttribute('value'),'1');
-    assert.match(await page.locator('#reviewCoverageScore').innerText(),/3 \/ 100/);
+    assert.match(await page.locator('#reviewCoverageScore').innerText(),/2 \/ 100/);
     for(let i=7;i<17;i++)append(env,'解答ログ',{...answer(i,0),level:'lv1',problemType:'mol_to_mass',isCorrect:false});
     await page.locator('#reviewReloadButton').click();await page.locator('#reviewLearningMetrics').waitFor();
     await page.waitForFunction(()=>document.querySelector('#reviewEffort').textContent.includes('17問'));
@@ -493,4 +493,22 @@ test('operation links authenticate before reads, target exact student rows, and 
   assert.equal(missing.studentRows.tokens,'');assert.equal(missing.studentRows.roster,'');
   delete env.sheets['設定'];
   assert.equal(env.getMonitorOperationLinks('teacher-secret').sheets.settings,'','missing sheets do not prevent other navigation');
+});
+
+test('monitor displays saved automatic stage and manual activity and exports every current level',async()=>{
+  const env=environment();populate(env,1);
+  for(let i=0;i<5;i++)append(env,'解答ログ',{...answer(i,0),level:'lv0',problemType:'formula_to_relative_mass',isCorrect:true,
+    clientInfo:JSON.stringify({curriculumVersion:4,autoPractice:{version:4,stageId:0,level:'lv0',category:'formula_mass'}})});
+  append(env,'解答ログ',{...answer(8,0),level:'lv7',problemType:'density_to_mol'});
+  const result=env.refreshMonitorDashboard('teacher-secret');assert.equal(result.data.progressRows[0].autoProgress.level,'lv1');
+  const browser=await chromium.launch({headless:true}),page=await browser.newPage();
+  await page.exposeFunction('gasCall',(method,args)=>JSON.parse(JSON.stringify(method==='getMonitorDashboardData'?result.data:env[method](...args))));
+  const bridge=`<script>window.google={script:{run:{withSuccessHandler(success){return {withFailureHandler(failure){return new Proxy({},{get:(_,method)=>(...args)=>window.gasCall(method,args).then(success,failure)});}};}}}};</script>`;
+  try {
+    await page.setContent(bridge+(await readFile('Monitor.html','utf8')).replace(/<\?!=[\s\S]*?\?>/g,'"teacher-secret"'));
+    await page.getByText(/Lv.1・mol ⇔ 質量.*直近は手動/).waitFor();
+    const csv=await page.evaluate(()=>buildVisibleRowsCsvText(state.rows));
+    for(let i=0;i<9;i++)assert.ok(csv.includes('Lv.'+i));
+    assert.match(csv,/オートの進行/);assert.match(csv,/保存済み解答時点/);
+  }finally{await browser.close();}
 });

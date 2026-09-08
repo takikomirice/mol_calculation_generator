@@ -15,7 +15,8 @@ try {
         throw 'Unexpected clasp upload allowlist. Review .claspignore before deploying.'
     }
     if ($molClasp.rootDir -ne '.') { throw 'Expected clasp rootDir to be the repository root.' }
-    & npm.cmd test
+    # package.json's test command is node --test; npm is not required to run it.
+    & node --test
     if ($LASTEXITCODE -ne 0) { throw 'Tests failed. GAS was not changed.' }
     & clasp.cmd push --force
     if ($LASTEXITCODE -ne 0) { throw 'GAS source push failed. Web app was not updated.' }

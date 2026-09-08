@@ -406,14 +406,14 @@ test('operation guide keeps the full classroom regression scenario and in-class 
     /DRY_RUN/,
     /URL配付/,
     /生徒URL初回アクセス/,
-    /Lv\.1〜Lv\.6/,
+    /Lv\.0〜Lv\.8/,
     /解答送信/,
     /次の問題/,
     /集計キャッシュ更新/,
     /Webモニター確認|MONITOR_URL.*確認/,
     /授業中に見るべきダッシュボード項目/,
     /要フォロー生徒/,
-    /レベル別解答状況/,
+    /レベル別成績/,
     /重い処理.*授業中.*連打しない/
   ], 'operation guide');
 });

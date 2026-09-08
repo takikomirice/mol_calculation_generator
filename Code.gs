@@ -2,7 +2,9 @@
 
 const MOL_DRILL_APP_NAME = 'もるくえ！';
 const MOL_DRILL_FORMAL_DESCRIPTION = 'Classroom連携型モル計算練習アプリ';
-const MOL_DRILL_APP_VERSION = '3.0.0';
+const MOL_DRILL_APP_VERSION = '4.0.0';
+const MOL_DRILL_CURRICULUM_VERSION = 4;
+const MOL_DRILL_LEVELS = Array.from({length:9}, (_,i) => 'lv'+i);
 const MOL_DRILL_DEFAULT_CLASSROOM_SEND_BATCH_SIZE = 40;
 const MOL_DRILL_ADMIN_TOKEN_SETTING_KEY = 'ADMIN_TOKEN';
 const MOL_DRILL_ADMIN_TOKEN_PROPERTY_KEY = 'MOL_DRILL_ADMIN_TOKEN';
@@ -12,7 +14,7 @@ const MOL_DRILL_AUTO_REBUILD_TRIGGER_HANDLER = 'rebuildAggregateAndMonitorCacheF
 const MOL_DRILL_AUTO_REBUILD_ALLOWED_INTERVAL_MINUTES = [1, 5, 10, 15, 30, 60];
 const MOL_DRILL_TOKEN_ROW_CACHE_TTL_SECONDS = 120;
 const MOL_DRILL_MONITOR_DASHBOARD_CACHE_KEY = 'dashboard';
-const MOL_DRILL_MONITOR_SNAPSHOT_VERSION = 2;
+const MOL_DRILL_MONITOR_SNAPSHOT_VERSION = 3;
 const MOL_DRILL_DEFAULT_POST_TEXT_TEMPLATE = 'もるくえ！(モル計算ドリル)の入場URLです。\n\n{{氏名}} さん専用URL:\n{{studentUrl}}\n\nこのURLは本人専用です。他の人に共有しないでください。\n※大きい数は「6.0×10^23」または「6.0x10^23」の形で入力できます。';
 const MOL_DRILL_ADMIN_ACTION_LOCK_WAIT_MS = 1000;
 const MOL_DRILL_ADMIN_ACTION_LOCK_ERROR_MESSAGE = '別の処理が実行中です。少し待ってから再実行してください。';
@@ -56,16 +58,17 @@ const MOL_DRILL_SETTING_DESCRIPTIONS = {
   CLASSROOM_SEND_BATCH_SIZE: 'Classroom URL配付の1回あたり最大件数。通常は 40。大人数で失敗する場合は小さくします。',
   DRY_RUN: 'true の場合、Classroom投稿を作成せず配付ログだけ記録します。本送信前の確認では true、本送信時は false にします。',
   ENABLE_DISTRIBUTION_LOG: 'true の場合、Classroom配付結果を配付ログへ記録します。通常は true 推奨です。',
-  ENABLE_ADAPTIVE_PROBLEM_SELECTION: 'true の場合、生徒ごとの問題タイプ別キャッシュを使い、未実施・苦手な問題タイプを少し優先します。通常は true 推奨です。',
   AUTO_REBUILD_CACHE_ENABLED: '自動更新で集計キャッシュ・問題タイプ別キャッシュ・モニターキャッシュを定期更新するかどうか。授業中モニター反映を定期的に更新したい場合だけ true にします。通常はメニューから有効化・停止します。',
   AUTO_REBUILD_CACHE_INTERVAL_MINUTES: '自動更新の間隔。1, 5, 10, 15, 30, 60 など。短すぎると Apps Script の実行回数が増えるため、授業中は5分程度を推奨します。',
-  BEGINNER_AVOGADRO_CONSTANT: '初級レベルの問題生成と採点に使うアボガドロ定数。例: 6.0×10^23 または 6.0x10^23',
-  INTERMEDIATE_AVOGADRO_CONSTANT: '中級レベルの問題生成と採点に使うアボガドロ定数。例: 6.0×10^23 または 6.0x10^23',
-  ADVANCED_AVOGADRO_CONSTANT: '上級レベルの問題生成と採点に使うアボガドロ定数。例: 6.02×10^23 または 6.02x10^23',
-  BEGINNER_TOLERANCE: '初級レベルの数値解答に使う相対許容誤差。例: 0.01',
-  INTERMEDIATE_TOLERANCE: '中級レベルの数値解答に使う相対許容誤差。例: 0.02',
-  ADVANCED_TOLERANCE: '上級レベルの数値解答に使う相対許容誤差。例: 0.005'
 };
+
+// Removal list for upgrading the unreleased spreadsheet to the current UI.
+const MOL_DRILL_OBSOLETE_SETTING_KEYS = ['ENABLE_ADAPTIVE_PROBLEM_SELECTION',
+  'AVOGADRO_CONSTANT', 'DEFAULT_TOLERANCE', 'schemaVersion', 'SCHEMA_VERSION']
+  .concat(['BEGINNER', 'INTERMEDIATE', 'ADVANCED'].flatMap(level => [level + '_AVOGADRO_CONSTANT', level + '_TOLERANCE']));
+const MOL_DRILL_OBSOLETE_AGGREGATE_HEADERS = ['beginner', 'intermediate', 'advanced']
+  .flatMap(level => [level + 'Attempts', level + 'Correct', level + 'Accuracy'])
+  .concat(['recent10BeginnerAttempts', 'recent10IntermediateAttempts', 'recent10AdvancedAttempts']);
 
 const MOL_DRILL_SHEETS = [
   {
@@ -219,18 +222,7 @@ const MOL_DRILL_SHEETS = [
       'recent10Attempts',
       'recent10Correct',
       'recent10Accuracy',
-      'beginnerAttempts',
-      'beginnerCorrect',
-      'beginnerAccuracy',
-      'intermediateAttempts',
-      'intermediateCorrect',
-      'intermediateAccuracy',
-      'advancedAttempts',
-      'advancedCorrect',
-      'advancedAccuracy',
-      'recent10BeginnerAttempts',
-      'recent10IntermediateAttempts',
-      'recent10AdvancedAttempts',
+
       'lastAnsweredAt',
       'lastLevel',
       'lastProblemType',
@@ -243,7 +235,7 @@ const MOL_DRILL_SHEETS = [
       'first10AverageElapsedMs',
       'speedImprovementRate',
       'lastElapsedMs'
-    ].concat(['lv1', 'lv2', 'lv3', 'lv4', 'lv5', 'lv6'].flatMap(level => [level + 'Attempts', level + 'Correct', level + 'Accuracy'])),
+    ].concat(MOL_DRILL_LEVELS.flatMap(level => [level + 'Attempts', level + 'Correct', level + 'Accuracy'])).concat(['autoProgress']),
     description: '管理画面で使う生徒別集計を保持します。',
     columnWidths: [
       { header: 'updatedAt', width: 180 },
@@ -259,18 +251,7 @@ const MOL_DRILL_SHEETS = [
       { header: 'recent10Attempts', width: 140 },
       { header: 'recent10Correct', width: 130 },
       { header: 'recent10Accuracy', width: 140 },
-      { header: 'beginnerAttempts', width: 140 },
-      { header: 'beginnerCorrect', width: 140 },
-      { header: 'beginnerAccuracy', width: 140 },
-      { header: 'intermediateAttempts', width: 160 },
-      { header: 'intermediateCorrect', width: 160 },
-      { header: 'intermediateAccuracy', width: 160 },
-      { header: 'advancedAttempts', width: 140 },
-      { header: 'advancedCorrect', width: 140 },
-      { header: 'advancedAccuracy', width: 140 },
-      { header: 'recent10BeginnerAttempts', width: 200 },
-      { header: 'recent10IntermediateAttempts', width: 220 },
-      { header: 'recent10AdvancedAttempts', width: 200 },
+
       { header: 'lastAnsweredAt', width: 180 },
       { header: 'lastLevel', width: 120 },
       { header: 'lastProblemType', width: 160 },
@@ -374,15 +355,10 @@ const MOL_DRILL_DEFAULT_SETTINGS = [
   { key: 'CLASSROOM_SEND_BATCH_SIZE', value: String(MOL_DRILL_DEFAULT_CLASSROOM_SEND_BATCH_SIZE), description: MOL_DRILL_SETTING_DESCRIPTIONS.CLASSROOM_SEND_BATCH_SIZE },
   { key: 'DRY_RUN', value: 'false', description: MOL_DRILL_SETTING_DESCRIPTIONS.DRY_RUN },
   { key: 'ENABLE_DISTRIBUTION_LOG', value: 'true', description: MOL_DRILL_SETTING_DESCRIPTIONS.ENABLE_DISTRIBUTION_LOG },
-  { key: 'ENABLE_ADAPTIVE_PROBLEM_SELECTION', value: 'true', description: MOL_DRILL_SETTING_DESCRIPTIONS.ENABLE_ADAPTIVE_PROBLEM_SELECTION },
+
   { key: MOL_DRILL_AUTO_REBUILD_CACHE_ENABLED_SETTING_KEY, value: 'false', description: MOL_DRILL_SETTING_DESCRIPTIONS.AUTO_REBUILD_CACHE_ENABLED },
   { key: MOL_DRILL_AUTO_REBUILD_CACHE_INTERVAL_MINUTES_SETTING_KEY, value: '5', description: MOL_DRILL_SETTING_DESCRIPTIONS.AUTO_REBUILD_CACHE_INTERVAL_MINUTES },
-  { key: 'BEGINNER_AVOGADRO_CONSTANT', value: '6.0e23', description: MOL_DRILL_SETTING_DESCRIPTIONS.BEGINNER_AVOGADRO_CONSTANT },
-  { key: 'INTERMEDIATE_AVOGADRO_CONSTANT', value: '6.0e23', description: MOL_DRILL_SETTING_DESCRIPTIONS.INTERMEDIATE_AVOGADRO_CONSTANT },
-  { key: 'ADVANCED_AVOGADRO_CONSTANT', value: '6.02e23', description: MOL_DRILL_SETTING_DESCRIPTIONS.ADVANCED_AVOGADRO_CONSTANT },
-  { key: 'BEGINNER_TOLERANCE', value: '0.01', description: MOL_DRILL_SETTING_DESCRIPTIONS.BEGINNER_TOLERANCE },
-  { key: 'INTERMEDIATE_TOLERANCE', value: '0.02', description: MOL_DRILL_SETTING_DESCRIPTIONS.INTERMEDIATE_TOLERANCE },
-  { key: 'ADVANCED_TOLERANCE', value: '0.005', description: MOL_DRILL_SETTING_DESCRIPTIONS.ADVANCED_TOLERANCE }
+
 ];
 
 class LoggerService {
@@ -580,13 +556,13 @@ class AdminService {
       dryRun: source.dryRun === true || String(source.dryRun || '').toLowerCase() === 'true',
       batchSize: this.normalizeBatchSize_(source.batchSize, MOL_DRILL_DEFAULT_CLASSROOM_SEND_BATCH_SIZE),
       enableDistributionLog: source.enableDistributionLog !== false && String(source.enableDistributionLog || 'true').toLowerCase() !== 'false',
-      adaptiveProblemSelection: source.adaptiveProblemSelection !== false && String(source.adaptiveProblemSelection || 'true').toLowerCase() !== 'false',
-      beginnerAvogadroConstant: this.normalizePositiveNumber_(source.beginnerAvogadroConstant, MOL_DRILL_LEVEL_SETTING_DEFAULTS.beginner.avogadroConstant),
-      intermediateAvogadroConstant: this.normalizePositiveNumber_(source.intermediateAvogadroConstant, MOL_DRILL_LEVEL_SETTING_DEFAULTS.intermediate.avogadroConstant),
-      advancedAvogadroConstant: this.normalizePositiveNumber_(source.advancedAvogadroConstant, MOL_DRILL_LEVEL_SETTING_DEFAULTS.advanced.avogadroConstant),
-      beginnerTolerance: this.normalizePositiveNumber_(source.beginnerTolerance, MOL_DRILL_LEVEL_SETTING_DEFAULTS.beginner.tolerance),
-      intermediateTolerance: this.normalizePositiveNumber_(source.intermediateTolerance, MOL_DRILL_LEVEL_SETTING_DEFAULTS.intermediate.tolerance),
-      advancedTolerance: this.normalizePositiveNumber_(source.advancedTolerance, MOL_DRILL_LEVEL_SETTING_DEFAULTS.advanced.tolerance)
+
+
+
+
+
+
+
     };
   }
 
@@ -779,13 +755,7 @@ class AdminService {
       { key: 'CLASSROOM_SEND_BATCH_SIZE', value: String(settings.batchSize), description: MOL_DRILL_SETTING_DESCRIPTIONS.CLASSROOM_SEND_BATCH_SIZE },
       { key: 'DRY_RUN', value: String(settings.dryRun), description: MOL_DRILL_SETTING_DESCRIPTIONS.DRY_RUN },
       { key: 'ENABLE_DISTRIBUTION_LOG', value: String(settings.enableDistributionLog), description: MOL_DRILL_SETTING_DESCRIPTIONS.ENABLE_DISTRIBUTION_LOG },
-      { key: 'ENABLE_ADAPTIVE_PROBLEM_SELECTION', value: String(settings.adaptiveProblemSelection), description: MOL_DRILL_SETTING_DESCRIPTIONS.ENABLE_ADAPTIVE_PROBLEM_SELECTION },
-      { key: 'BEGINNER_AVOGADRO_CONSTANT', value: String(settings.beginnerAvogadroConstant), description: MOL_DRILL_SETTING_DESCRIPTIONS.BEGINNER_AVOGADRO_CONSTANT },
-      { key: 'INTERMEDIATE_AVOGADRO_CONSTANT', value: String(settings.intermediateAvogadroConstant), description: MOL_DRILL_SETTING_DESCRIPTIONS.INTERMEDIATE_AVOGADRO_CONSTANT },
-      { key: 'ADVANCED_AVOGADRO_CONSTANT', value: String(settings.advancedAvogadroConstant), description: MOL_DRILL_SETTING_DESCRIPTIONS.ADVANCED_AVOGADRO_CONSTANT },
-      { key: 'BEGINNER_TOLERANCE', value: String(settings.beginnerTolerance), description: MOL_DRILL_SETTING_DESCRIPTIONS.BEGINNER_TOLERANCE },
-      { key: 'INTERMEDIATE_TOLERANCE', value: String(settings.intermediateTolerance), description: MOL_DRILL_SETTING_DESCRIPTIONS.INTERMEDIATE_TOLERANCE },
-      { key: 'ADVANCED_TOLERANCE', value: String(settings.advancedTolerance), description: MOL_DRILL_SETTING_DESCRIPTIONS.ADVANCED_TOLERANCE }
+
     ];
   }
 
@@ -798,13 +768,13 @@ class AdminService {
       dryRun: this.toBoolean_(SheetRepository.getSettingValue('DRY_RUN'), false),
       batchSize,
       enableDistributionLog: this.toBoolean_(SheetRepository.getSettingValue('ENABLE_DISTRIBUTION_LOG'), true),
-      adaptiveProblemSelection: this.toBoolean_(SheetRepository.getSettingValue('ENABLE_ADAPTIVE_PROBLEM_SELECTION'), true),
-      beginnerAvogadroConstant: this.readPositiveSetting_('BEGINNER_AVOGADRO_CONSTANT', MOL_DRILL_LEVEL_SETTING_DEFAULTS.beginner.avogadroConstant),
-      intermediateAvogadroConstant: this.readPositiveSetting_('INTERMEDIATE_AVOGADRO_CONSTANT', MOL_DRILL_LEVEL_SETTING_DEFAULTS.intermediate.avogadroConstant),
-      advancedAvogadroConstant: this.readPositiveSetting_('ADVANCED_AVOGADRO_CONSTANT', MOL_DRILL_LEVEL_SETTING_DEFAULTS.advanced.avogadroConstant),
-      beginnerTolerance: this.readPositiveSetting_('BEGINNER_TOLERANCE', MOL_DRILL_LEVEL_SETTING_DEFAULTS.beginner.tolerance),
-      intermediateTolerance: this.readPositiveSetting_('INTERMEDIATE_TOLERANCE', MOL_DRILL_LEVEL_SETTING_DEFAULTS.intermediate.tolerance),
-      advancedTolerance: this.readPositiveSetting_('ADVANCED_TOLERANCE', MOL_DRILL_LEVEL_SETTING_DEFAULTS.advanced.tolerance)
+
+
+
+
+
+
+
     };
   }
 
@@ -915,9 +885,13 @@ class SheetRepository {
 
   static ensureSheets() {
     this.resetExecutionCaches_();
+    const status = this.getManagementSheetStatus();
+    if (status.duplicateHeadersBySheet.length) throw new Error(this.formatManagementSheetStatusMessage_(status));
+    this.assertUniqueSettingKeys_();
     const spreadsheet = SpreadsheetApp.getActiveSpreadsheet();
     for (const definition of MOL_DRILL_SHEETS) {
       const sheet = this.ensureSheet_(spreadsheet, definition);
+      if (definition.name === '集計キャッシュ') this.removeObsoleteAggregateColumns_(sheet);
       this.initializeSheet_(sheet, definition);
     }
     AdminService.getOrCreateAdminToken();
@@ -953,6 +927,7 @@ class SheetRepository {
     const missingSheets = [];
     const missingHeadersBySheet = [];
     const unexpectedHeadersBySheet = [];
+    const duplicateHeadersBySheet = [];
     for (const definition of MOL_DRILL_SHEETS) {
       const sheet = spreadsheet.getSheetByName(definition.name);
       if (!sheet) {
@@ -969,20 +944,61 @@ class SheetRepository {
         ? sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0].map((header) => this.toString_(header)).filter((header) => header !== '')
         : [];
       const unexpectedHeaders = actualHeaders.filter((header) => !expectedHeaders.has(header));
+      const duplicates = [...new Set(actualHeaders.filter((header, index) => actualHeaders.indexOf(header) !== index))];
+      if (duplicates.length) duplicateHeadersBySheet.push({ sheetName: definition.name, headers: duplicates });
       if (unexpectedHeaders.length > 0) {
         unexpectedHeadersBySheet.push({ sheetName: definition.name, headers: unexpectedHeaders });
       }
     }
     return {
-      ok: missingSheets.length === 0 && missingHeadersBySheet.length === 0,
+      ok: missingSheets.length === 0 && missingHeadersBySheet.length === 0 && duplicateHeadersBySheet.length === 0,
       missingSheets,
       missingHeadersBySheet,
-      unexpectedHeadersBySheet
+      unexpectedHeadersBySheet,
+      duplicateHeadersBySheet
     };
   }
 
   static getSchemaStatus() {
     return this.getManagementSheetStatus();
+  }
+
+  static getSettingStructureStatus_() {
+    const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('設定');
+    const headerMap = sheet ? this.getHeaderColumnMap_(sheet) : {};
+    const keys = sheet && headerMap['キー'] ? this.getBodyValues_(sheet)
+      .map(row => this.toString_(row[headerMap['キー'] - 1])).filter(Boolean) : [];
+    const expected = MOL_DRILL_DEFAULT_SETTINGS.map(setting => setting.key);
+    return {
+      missingKeys: expected.filter(key => !keys.includes(key)),
+      duplicateKeys: [...new Set(keys.filter((key, index) => keys.indexOf(key) !== index))],
+      extraKeys: [...new Set(keys.filter(key => !expected.includes(key)))],
+      obsoleteKeys: keys.filter(key => MOL_DRILL_OBSOLETE_SETTING_KEYS.includes(key))
+    };
+  }
+
+  static assertUniqueSettingKeys_() {
+    const keys = this.getSettingStructureStatus_().duplicateKeys;
+    if (keys.length) throw new Error(`設定キーが重複しています: ${keys.join(', ')}。値を確認し、重複を解消してください。`);
+  }
+
+  static inspectStructure_() {
+    this.resetExecutionCaches_();
+    const schema = this.getManagementSheetStatus();
+    const settings = this.getSettingStructureStatus_();
+    const spreadsheet = SpreadsheetApp.getActiveSpreadsheet();
+    const managedNames = MOL_DRILL_SHEETS.map(definition => definition.name);
+    const sheets = MOL_DRILL_SHEETS.map(definition => {
+      const sheet = spreadsheet.getSheetByName(definition.name);
+      return { name: definition.name, purpose: definition.description, requiredColumns: definition.headers.length,
+        lastRow: sheet ? sheet.getLastRow() : 0, columns: sheet ? sheet.getLastColumn() : 0 };
+    });
+    const obsoleteColumns = schema.unexpectedHeadersBySheet.filter(item => item.sheetName === '集計キャッシュ')
+      .flatMap(item => item.headers.filter(header => MOL_DRILL_OBSOLETE_AGGREGATE_HEADERS.includes(header)));
+    return { ok: schema.ok && !settings.missingKeys.length && !settings.duplicateKeys.length && !settings.obsoleteKeys.length && !obsoleteColumns.length,
+      appVersion: MOL_DRILL_APP_VERSION, schema, settings, sheets,
+      obsoleteColumns,
+      extraSheets: spreadsheet.getSheets ? spreadsheet.getSheets().map(sheet => sheet.getName()).filter(name => !managedNames.includes(name)) : [] };
   }
 
   static assertManagementSheetsReady() {
@@ -1431,18 +1447,7 @@ class SheetRepository {
       row.recent10Attempts,
       row.recent10Correct,
       row.recent10Accuracy,
-      row.beginnerAttempts,
-      row.beginnerCorrect || 0,
-      row.beginnerAccuracy || 0,
-      row.intermediateAttempts,
-      row.intermediateCorrect || 0,
-      row.intermediateAccuracy || 0,
-      row.advancedAttempts,
-      row.advancedCorrect || 0,
-      row.advancedAccuracy || 0,
-      row.recent10BeginnerAttempts || 0,
-      row.recent10IntermediateAttempts || 0,
-      row.recent10AdvancedAttempts || 0,
+
       row.lastAnsweredAt || '',
       row.lastLevel || '',
       row.lastProblemType || '',
@@ -1455,7 +1460,7 @@ class SheetRepository {
       row.first10AverageElapsedMs || 0,
       row.speedImprovementRate || 0,
       row.lastElapsedMs || 0
-    ].concat(Object.values(MolProblemService.practiceLevelMetrics_(row))));
+    ].concat(Object.values(MolProblemService.practiceLevelMetrics_(row)),[JSON.stringify(row.autoProgress || null)]));
     this.writeRowsByHeaders_(sheet, headerMap, headers, values);
   }
 
@@ -1478,18 +1483,8 @@ class SheetRepository {
         recent10Correct: Number(row[headerMap.recent10Correct - 1] || 0),
         recent10Accuracy: Number(row[headerMap.recent10Accuracy - 1] || 0),
         ...MolProblemService.practiceLevelMetrics_(this.rowValuesToObject_(headerMap, row)),
-        beginnerAttempts: Number(row[headerMap.beginnerAttempts - 1] || 0),
-        beginnerCorrect: headerMap.beginnerCorrect ? Number(row[headerMap.beginnerCorrect - 1] || 0) : 0,
-        beginnerAccuracy: headerMap.beginnerAccuracy ? Number(row[headerMap.beginnerAccuracy - 1] || 0) : 0,
-        intermediateAttempts: Number(row[headerMap.intermediateAttempts - 1] || 0),
-        intermediateCorrect: headerMap.intermediateCorrect ? Number(row[headerMap.intermediateCorrect - 1] || 0) : 0,
-        intermediateAccuracy: headerMap.intermediateAccuracy ? Number(row[headerMap.intermediateAccuracy - 1] || 0) : 0,
-        advancedAttempts: Number(row[headerMap.advancedAttempts - 1] || 0),
-        advancedCorrect: headerMap.advancedCorrect ? Number(row[headerMap.advancedCorrect - 1] || 0) : 0,
-        advancedAccuracy: headerMap.advancedAccuracy ? Number(row[headerMap.advancedAccuracy - 1] || 0) : 0,
-        recent10BeginnerAttempts: headerMap.recent10BeginnerAttempts ? Number(row[headerMap.recent10BeginnerAttempts - 1] || 0) : 0,
-        recent10IntermediateAttempts: headerMap.recent10IntermediateAttempts ? Number(row[headerMap.recent10IntermediateAttempts - 1] || 0) : 0,
-        recent10AdvancedAttempts: headerMap.recent10AdvancedAttempts ? Number(row[headerMap.recent10AdvancedAttempts - 1] || 0) : 0,
+        autoProgress:this.parseAutoProgress_(headerMap.autoProgress?row[headerMap.autoProgress-1]:''),
+
         lastAnsweredAt: headerMap.lastAnsweredAt ? this.toString_(row[headerMap.lastAnsweredAt - 1]) : '',
         lastLevel: headerMap.lastLevel ? this.toString_(row[headerMap.lastLevel - 1]) : '',
         lastProblemType: headerMap.lastProblemType ? this.toString_(row[headerMap.lastProblemType - 1]) : '',
@@ -1518,6 +1513,9 @@ class SheetRepository {
     return this.aggregateCacheObjectToRow_(this.readObjectAtRow_('集計キャッシュ', rowIndex) || {});
   }
 
+  static parseAutoProgress_(value) {
+    try { const p=typeof value==='string'?JSON.parse(value):value;return p && p.version===MOL_DRILL_CURRICULUM_VERSION?p:null; } catch(_) { return null; }
+  }
   static aggregateCacheObjectToRow_(row) {
     const source = row || {};
     return {
@@ -1535,18 +1533,8 @@ class SheetRepository {
       recent10Correct: Number(source.recent10Correct || 0),
       recent10Accuracy: Number(source.recent10Accuracy || 0),
       ...MolProblemService.practiceLevelMetrics_(source),
-      beginnerAttempts: Number(source.beginnerAttempts || 0),
-      beginnerCorrect: Number(source.beginnerCorrect || 0),
-      beginnerAccuracy: Number(source.beginnerAccuracy || 0),
-      intermediateAttempts: Number(source.intermediateAttempts || 0),
-      intermediateCorrect: Number(source.intermediateCorrect || 0),
-      intermediateAccuracy: Number(source.intermediateAccuracy || 0),
-      advancedAttempts: Number(source.advancedAttempts || 0),
-      advancedCorrect: Number(source.advancedCorrect || 0),
-      advancedAccuracy: Number(source.advancedAccuracy || 0),
-      recent10BeginnerAttempts: Number(source.recent10BeginnerAttempts || 0),
-      recent10IntermediateAttempts: Number(source.recent10IntermediateAttempts || 0),
-      recent10AdvancedAttempts: Number(source.recent10AdvancedAttempts || 0),
+      autoProgress:this.parseAutoProgress_(source.autoProgress),
+
       lastAnsweredAt: this.toString_(source.lastAnsweredAt),
       lastLevel: this.toString_(source.lastLevel),
       lastProblemType: this.toString_(source.lastProblemType),
@@ -1566,6 +1554,7 @@ class SheetRepository {
     const row = summary || {};
     return {
       ...MolProblemService.practiceLevelMetrics_(row),
+      autoProgress:JSON.stringify(row.autoProgress || null),
       updatedAt: row.updatedAt,
       courseId: row.courseId,
       courseName: row.courseName,
@@ -1579,18 +1568,7 @@ class SheetRepository {
       recent10Attempts: row.recent10Attempts,
       recent10Correct: row.recent10Correct,
       recent10Accuracy: row.recent10Accuracy,
-      beginnerAttempts: row.beginnerAttempts,
-      beginnerCorrect: row.beginnerCorrect || 0,
-      beginnerAccuracy: row.beginnerAccuracy || 0,
-      intermediateAttempts: row.intermediateAttempts,
-      intermediateCorrect: row.intermediateCorrect || 0,
-      intermediateAccuracy: row.intermediateAccuracy || 0,
-      advancedAttempts: row.advancedAttempts,
-      advancedCorrect: row.advancedCorrect || 0,
-      advancedAccuracy: row.advancedAccuracy || 0,
-      recent10BeginnerAttempts: row.recent10BeginnerAttempts || 0,
-      recent10IntermediateAttempts: row.recent10IntermediateAttempts || 0,
-      recent10AdvancedAttempts: row.recent10AdvancedAttempts || 0,
+
       lastAnsweredAt: row.lastAnsweredAt || '',
       lastLevel: row.lastLevel || '',
       lastProblemType: row.lastProblemType || '',
@@ -1837,7 +1815,7 @@ class SheetRepository {
       log.status,
       log.errorMessage
     ]);
-    this.appendRows_(sheet, rows);
+    this.appendRowsByHeaders_(sheet, rows);
   }
 
   static readDistributionLogs() {
@@ -1895,7 +1873,7 @@ class SheetRepository {
 
   static appendRunLog(log) {
     const sheet = this.getManagedSheet_('実行ログ');
-    this.appendRows_(sheet, [[
+    this.appendRowsByHeaders_(sheet, [[
       log.runId,
       log.operation,
       log.startedAt,
@@ -2005,13 +1983,14 @@ class SheetRepository {
   }
 
   static setSettingValues_(settings) {
+    this.assertUniqueSettingKeys_();
     const sheet = this.getManagedSheetWithoutSchemaCheck_('設定');
     const headerMap = this.getHeaderColumnMap_(sheet);
-    const rows = this.getBodyValues_(sheet);
+    const rows = this.getBodyValues_(sheet).map(row => this.rowValuesToObject_(headerMap, row));
     const now = this.nowIso_();
     const rowByKey = new Map();
     rows.forEach((row, index) => {
-      rowByKey.set(this.toString_(row[headerMap['キー'] - 1]), { row, index });
+      rowByKey.set(this.toString_(row['キー']), { row, index });
     });
     for (const setting of settings) {
       const key = this.toString_(setting.key);
@@ -2020,11 +1999,13 @@ class SheetRepository {
       }
       const existing = rowByKey.get(key);
       if (existing) {
-        existing.row[headerMap['値'] - 1] = this.toString_(setting.value);
-        existing.row[headerMap['説明'] - 1] = this.toString_(setting.description);
-        existing.row[headerMap['更新日時'] - 1] = now;
+        existing.row['値'] = this.toString_(setting.value);
+        existing.row['説明'] = this.toString_(setting.description);
+        existing.row['更新日時'] = now;
       } else {
-        rows.push([key, this.toString_(setting.value), this.toString_(setting.description), now]);
+        const row = { キー: key, 値: this.toString_(setting.value), 説明: this.toString_(setting.description), 更新日時: now };
+        rows.push(row);
+        rowByKey.set(key, { row });
       }
     }
     this.writeRowsByHeaders_(sheet, headerMap, this.getSheetDefinition_('設定').headers, rows);
@@ -2050,10 +2031,24 @@ class SheetRepository {
     this.invalidateHeaderColumnMap_(sheet);
   }
 
+  static removeObsoleteAggregateColumns_(sheet) {
+    const headerMap = this.getHeaderColumnMap_(sheet);
+    const columns = MOL_DRILL_OBSOLETE_AGGREGATE_HEADERS.map(header => headerMap[header]).filter(Boolean).sort((a,b) => a-b);
+    for (let index = columns.length - 1; index >= 0;) {
+      const last = columns[index];
+      let first = last;
+      while (index > 0 && columns[index - 1] === first - 1) first = columns[--index];
+      sheet.deleteColumns(first, last - first + 1);
+      index -= 1;
+    }
+    this.invalidateHeaderColumnMap_(sheet);
+  }
+
   static initializeSheet_(sheet, definition) {
     this.appendMissingHeaders_(sheet, definition.headers);
     this.formatSheet_(sheet, definition);
     this.applyCheckboxes_(sheet, definition);
+    this.clearEmptyCheckboxPlaceholders_(sheet, definition);
     this.applyDropdownValidations_(sheet, definition);
     if (definition.name === '設定') {
       this.seedDefaultSettings_(sheet);
@@ -2068,6 +2063,10 @@ class SheetRepository {
       if (!existingMap[header]) {
         nextHeaders.push(header);
       }
+    }
+    const requiredColumns = sheet.getLastRow() === 0 ? headers.length : existingHeaderCount + nextHeaders.length;
+    if (sheet.getMaxColumns && sheet.getMaxColumns() < requiredColumns) {
+      sheet.insertColumnsAfter(sheet.getMaxColumns(), requiredColumns - sheet.getMaxColumns());
     }
     if (sheet.getLastRow() === 0) {
       sheet.getRange(1, 1, 1, headers.length).setValues([headers]);
@@ -2097,8 +2096,44 @@ class SheetRepository {
     const headerMap = this.getHeaderColumnMap_(sheet);
     for (const header of definition.checkboxHeaders || []) {
       if (headerMap[header]) {
-        const maxRows = Math.max(sheet.getMaxRows() - 1, 1);
-        sheet.getRange(2, headerMap[header], maxRows, 1).insertCheckboxes();
+        const bodyRows = sheet.getLastRow() - 1;
+        if (bodyRows > 0) {
+          const range = sheet.getRange(2, headerMap[header], bodyRows, 1);
+          const values = range.getValues();
+          const formulas = range.getFormulas();
+          const rule = SpreadsheetApp.newDataValidation().requireCheckbox().build();
+          range.setDataValidation(rule);
+          // Sheets can fill blanks with false when applying checkbox rules.
+          // Restore original values/formulas, including intentionally blank cells.
+          range.setValues(values.map((row, index) => [formulas[index][0] || row[0]]));
+        }
+      }
+    }
+  }
+
+  static clearEmptyCheckboxPlaceholders_(sheet, definition) {
+    const headerMap = this.getHeaderColumnMap_(sheet);
+    const flagColumns = new Set((definition.checkboxHeaders || []).map(header => headerMap[header] - 1));
+    if (!flagColumns.size) return;
+    const lastRow = sheet.getLastRow();
+    const width = sheet.getLastColumn();
+    // Old insertCheckboxes calls filled unused rows with false. Keep row
+    // positions used by review cursors; never clear records or formulas.
+    for (let start = 2; start <= lastRow; start += 500) {
+      const range = sheet.getRange(start, 1, Math.min(500, lastRow - start + 1), width);
+      const rows = range.getValues();
+      const formulas = range.getFormulas();
+      let groupStart = -1;
+      for (let index = 0; index <= rows.length; index += 1) {
+        const row = rows[index];
+        const placeholder = row && row.some((value, col) => flagColumns.has(col) && value === false)
+          && row.every((value, col) => value === '' || (flagColumns.has(col) && value === false))
+          && formulas[index].every(value => value === '');
+        if (placeholder && groupStart < 0) groupStart = index;
+        if (!placeholder && groupStart >= 0) {
+          sheet.getRange(start + groupStart, 1, index - groupStart, width).clearContent();
+          groupStart = -1;
+        }
       }
     }
   }
@@ -2117,24 +2152,22 @@ class SheetRepository {
 
   static seedDefaultSettings_(sheet) {
     const headerMap = this.getHeaderColumnMap_(sheet);
-    const rows = this.getBodyValues_(sheet).filter((row) => {
-      const key = this.toString_(row[headerMap['キー'] - 1]);
-      return key !== 'AVOGADRO_CONSTANT' && key !== 'DEFAULT_TOLERANCE';
-    });
+    const rows = this.getBodyValues_(sheet).map(row => this.rowValuesToObject_(headerMap, row))
+      .filter(row => !MOL_DRILL_OBSOLETE_SETTING_KEYS.includes(this.toString_(row['キー'])));
     const defaultsByKey = new Map(MOL_DRILL_DEFAULT_SETTINGS.map((setting) => [setting.key, setting]));
     const existing = new Set();
     const now = this.nowIso_();
     rows.forEach((row) => {
-      const key = this.toString_(row[headerMap['キー'] - 1]);
+      const key = this.toString_(row['キー']);
       existing.add(key);
       const defaultSetting = defaultsByKey.get(key);
       if (defaultSetting) {
-        row[headerMap['説明'] - 1] = defaultSetting.description || '';
+        row['説明'] = defaultSetting.description || '';
       }
     });
     const additions = MOL_DRILL_DEFAULT_SETTINGS
       .filter((setting) => !existing.has(setting.key))
-      .map((setting) => [setting.key, setting.value || '', setting.description || '', now]);
+      .map((setting) => ({ キー: setting.key, 値: setting.value || '', 説明: setting.description || '', 更新日時: now }));
     if (additions.length > 0) {
       rows.push(...additions);
     }
@@ -2393,18 +2426,14 @@ class SheetRepository {
 
   static writeRowsByHeaders_(sheet, headerMap, headers, rows) {
     const width = Math.max(sheet.getLastColumn(), headers.length);
-    if (sheet.getLastRow() > 1) {
-      sheet.getRange(2, 1, sheet.getLastRow() - 1, width).clearContent();
-    }
+    const previousCount = Math.max(0, sheet.getLastRow() - 1);
     if (rows.length === 0) {
+      if (previousCount) sheet.getRange(2, 1, previousCount, width).clearContent();
       return;
     }
     const outputRows = rows.map((sourceRow) => {
-      if (Array.isArray(sourceRow) && sourceRow.length === width) {
-        return sourceRow;
-      }
       const row = new Array(width).fill('');
-      headers.forEach((header, index) => {
+      (Array.isArray(sourceRow) ? headers : Object.keys(sourceRow)).forEach((header, index) => {
         if (headerMap[header]) {
           row[headerMap[header] - 1] = Array.isArray(sourceRow) ? sourceRow[index] : sourceRow[header];
         }
@@ -2415,6 +2444,9 @@ class SheetRepository {
       sheet.insertRowsAfter(sheet.getMaxRows(), outputRows.length + 1 - sheet.getMaxRows());
     }
     sheet.getRange(2, 1, outputRows.length, width).setValues(outputRows);
+    if (previousCount > outputRows.length) {
+      sheet.getRange(outputRows.length + 2, 1, previousCount - outputRows.length, width).clearContent();
+    }
   }
 
   static appendRows_(sheet, rows) {
@@ -2436,12 +2468,25 @@ class SheetRepository {
     sheet.getRange(startRow, 1, outputRows.length, width).setValues(outputRows);
   }
 
+  static appendRowsByHeaders_(sheet, rows) {
+    const headers = this.getSheetDefinition_(sheet.getName()).headers;
+    const headerMap = this.getHeaderColumnMap_(sheet);
+    this.appendRows_(sheet, rows.map(source => {
+      const row = this.createBlankRow_(sheet);
+      headers.forEach((header, index) => { row[headerMap[header] - 1] = source[index] ?? ''; });
+      return row;
+    }));
+  }
+
   static createBlankRow_(sheet) {
     return new Array(Math.max(sheet.getLastColumn(), 1)).fill('');
   }
 
   static formatManagementSheetStatusMessage_(status) {
     const parts = [];
+    for (const item of status.duplicateHeadersBySheet || []) {
+      parts.push(`${item.sheetName}: ヘッダー重複 ${item.headers.join(', ')}。値を確認して見出しを区別してください。`);
+    }
     if (status.missingSheets.length > 0) {
       parts.push(`不足シート: ${status.missingSheets.join(', ')}`);
     }
@@ -3003,16 +3048,58 @@ class TokenService {
 }
 
 class MolProblemService {
-  static isPracticeLevel_(level) { return /^lv[1-6]$/.test(String(level)); }
-  static needsSignificantDigits_(level) { return ['advanced', 'lv5', 'lv6'].includes(level); }
+  static isPracticeLevel_(level) { return /^lv[0-8]$/.test(String(level)); }
+  static needsSignificantDigits_(level) { return ['advanced', 'lv8'].includes(level); }
   static practiceGroups_(level) {
-    return ['lv1', 'lv2', 'lv5'].includes(level)
-      ? { mol_mass: [1, 2], mol_particles: [3, 4], mol_volume: [5, 6] }
-      : { mass_particles: [7, 8], mass_volume: [9, 10], volume_particles: [11, 12] };
+    const basic={mol_mass:[1,2],mol_particles:[3,4],mol_volume:[5,6]};
+    const combined={mass_particles:[7,8],mass_volume:[9,10],volume_particles:[11,12]};
+    const density={density_basics:[16,17],density_mol:[18],density_particles:[19]};
+    if(level==='lv0') return {formula_mass:[15]};
+    if(['lv1','lv2','lv6'].includes(level)) return basic;
+    if(['lv3','lv4'].includes(level)) return combined;
+    if(level==='lv5') return density;
+    if(level==='lv7') return {...combined,...density};
+    if(level==='lv8') return {precision_basic:[1,2,3,4,5,6],precision_mixed:[7,8,9,10,11,12,16,17,18,19]};
+    return basic;
+  }
+  static focusedLevel_(level) { return ['lv0','lv1','lv3','lv5','lv8'].includes(level); }
+  static currentRow_(row) { return Number(AnswerService.parseClientInfo_(row && row.clientInfo).curriculumVersion)===MOL_DRILL_CURRICULUM_VERSION; }
+  static atomicMasses_() { return {H:1,C:12,N:14,O:16,Na:23,Cl:35.5,S:32,Ca:40}; }
+  static formulaParts_(formula) {
+    const parts=Array.from(String(formula).matchAll(/([A-Z][a-z]?)(\d*)/g));
+    if(parts.map(p=>p[0]).join('')!==formula || !parts.length || parts.some(p=>!this.atomicMasses_()[p[1]])) throw new Error('出題範囲外の化学式です。');
+    return parts.map(p=>({symbol:p[1],count:Number(p[2]||1),mass:this.atomicMasses_()[p[1]]}));
+  }
+  static atomicValues_(formula, all) {
+    const symbols=all?Object.keys(this.atomicMasses_()):Array.from(new Set(this.formulaParts_(formula).map(p=>p.symbol)));
+    return symbols.map(symbol=>({label:symbol+' の原子量',value:String(this.atomicMasses_()[symbol])}));
+  }
+  static formulaExplanation_(substance) {
+    return this.formulaParts_(substance.formula).map(p=>p.count===1?String(p.mass):p.mass+'×'+p.count).join('＋');
+  }
+  static createFoundationProblem_(type,profile) {
+    if(type.id===15) {
+      const substance=this.pickSubstance_(false);
+      const label=substance.type==='ionic'?'式量':'分子量';
+      return this.finalizeProblem_(profile,type,substance.name+' '+substance.formula+' の'+label+'を求めてください。',substance,{},substance.molarMass,'');
+    }
+    const substance=this.pickNumber_([
+      {formula:'H2O',name:'水',molarMass:18,type:'compound',density:1},
+      {formula:'C2H6O',name:'エタノール',molarMass:46,type:'compound',density:0.8}
+    ]);
+    // The stated density is a problem condition, not a universal material constant.
+    const volume=this.pickNumber_(substance.formula==='H2O'?[9,18,36,90]:[28.75,57.5,115,172.5]);
+    const value=this.roundForProblem_(type.id===17?volume*substance.density:volume,profile);
+    const given={value,unit:type.id===17?'g':'mL',density:substance.density};
+    const mass=type.id===17?value:value*given.density;
+    const answer=type.id===16?mass:type.id===17?mass/given.density:type.id===18?mass/substance.molarMass:mass/substance.molarMass*profile.avogadroConstant;
+    const unit=type.id===16?'g':type.id===17?'mL':type.id===18?'mol':'個';
+    const target={g:'質量は何 g',mL:'体積は何 mL',mol:'物質量は何 mol','個':'分子の個数は何個'}[unit];
+    return this.finalizeProblem_(profile,type,'液体の'+substance.name+' '+substance.formula+' '+value+' '+given.unit+' の'+target+'ですか。この条件での密度は資料の値を使ってください。',substance,given,answer,unit);
   }
   static practiceLevelMetrics_(row) {
     const out = {};
-    for (const level of ['lv1', 'lv2', 'lv3', 'lv4', 'lv5', 'lv6']) {
+    for (const level of MOL_DRILL_LEVELS) {
       for (const suffix of ['Attempts', 'Correct', 'Accuracy']) out[level + suffix] = Number((row || {})[level + suffix] || 0);
     }
     return out;
@@ -3042,15 +3129,17 @@ class MolProblemService {
     const level = this.normalizeLevel_(options.level);
     if (this.isPracticeLevel_(level)) {
       const groups = this.practiceGroups_(level);
-      const focused = ['lv1', 'lv3'].includes(level);
+      const focused = this.focusedLevel_(level);
       const category = focused ? (options.category || Object.keys(groups)[0]) : '';
       if (focused && !groups[category]) throw new Error('選択した変換はこのレベルでは使えません。');
       const profile = this.getLevelProfile_(level);
       if (focused) profile.typeIds = groups[category];
-      const problem = this.generateLevelProblem_(profile, {});
+      if(level==='lv8' && category==='precision_basic')profile.molValues=[0.5,1,2,3];
+      const problem = this.generateLevelProblem_(profile, options);
       problem.category = category;
       return problem;
     }
+    if (options.level && !['beginner','intermediate','advanced','初級','中級','上級','basic','standard'].includes(String(options.level))) throw new Error('Lv.0〜8からレベルを選んでください。');
     if (level === 'intermediate') {
       return this.generateIntermediateProblem(options);
     }
@@ -3097,6 +3186,7 @@ class MolProblemService {
     return {
       problemId: problem.problemId,
       attemptId: problem.attemptId,
+      curriculumVersion:problem.curriculumVersion,
       level: problem.level,
       problemType: problem.problemType,
       problemTypeId: problem.problemTypeId,
@@ -3211,7 +3301,7 @@ class MolProblemService {
   }
 
   static createStoredProblemKey_(token, attemptId) {
-    return `molProblem:${this.hashString_(`${String(token || '').trim()}::${String(attemptId || '').trim()}`)}`;
+    return `molProblem:v4:${this.hashString_(`${String(token || '').trim()}::${String(attemptId || '').trim()}`)}`;
   }
 
   static getMemoryProblemStore_() {
@@ -3223,6 +3313,7 @@ class MolProblemService {
   }
 
   static createProblemByType_(type, profile) {
+    if(type.id>=15) return this.createFoundationProblem_(type,profile);
     const avogadroConstant = profile.avogadroConstant;
     const molarVolume = 22.4;
     const substance = this.isPracticeLevel_(profile.level) && !this.needsSignificantDigits_(profile.level)
@@ -3355,19 +3446,21 @@ class MolProblemService {
   }
 
   static finalizeProblem_(profile, type, questionText, substance, given, expectedAnswer, unit) {
-    if (this.isPracticeLevel_(profile.level)) {
+    if (this.isPracticeLevel_(profile.level) && type.id<=12) {
       const amount = given.unit === 'mol' ? given.value : given.unit === 'g' ? given.value / substance.molarMass
         : given.unit === 'L' ? given.value / 22.4 : given.value / profile.avogadroConstant;
       expectedAnswer = unit === 'mol' ? amount : unit === 'g' ? amount * substance.molarMass
         : unit === 'L' ? amount * 22.4 : amount * profile.avogadroConstant;
     }
     if (this.isPracticeLevel_(profile.level)) questionText = questionText.replace('標準状態', '標準状態（0 ℃・1 atm）');
+    if(profile.level==='lv8') questionText += ' 答えは有効数字3桁に丸めてください。提示した原子量・定数はこの問題の計算基準値とします。';
     const rawExpected = this.normalizeExactExpectedAnswer_(expectedAnswer);
     const roundedExpected = this.roundToSignificantDigits(rawExpected, profile.significantDigits);
     const storedExpected = this.getExpectedAnswerForLevel_(rawExpected, roundedExpected, profile.level);
     const problem = {
       problemId: '',
       attemptId: '',
+      curriculumVersion:MOL_DRILL_CURRICULUM_VERSION,
       level: profile.level,
       problemType: type.key,
       problemTypeId: type.id,
@@ -3420,6 +3513,16 @@ class MolProblemService {
   }
 
   static buildGivenValues_(problem, profile) {
+    if(this.isPracticeLevel_(profile.level)) {
+      const all=['lv6','lv7','lv8'].includes(profile.level), type=problem.problemType;
+      const needsMass=type==='formula_to_relative_mass' || type.includes('mass') || type==='density_to_mol' || type==='density_to_particles';
+      const values=all?this.atomicValues_('',true):needsMass && !['density_to_mass','density_mass_to_volume'].includes(type)?this.atomicValues_(problem.substance.formula,false):[];
+      if(all || type.includes('particles'))values.push(this.createAvogadroGivenValue_(problem,true));
+      if(all || type.includes('gas_volume'))values.push(this.createMolarVolumeGivenValue_(problem,true));
+      if(type.startsWith('density_'))values.push({label:problem.substance.formula+'（液体）の密度',value:problem.given.density+' g/mL'});
+      else if(['lv7','lv8'].includes(profile.level)) values.push({label:'H2O（液体）の密度',value:'1.00 g/mL'});
+      return values;
+    }
     const requiredValues = this.buildRequiredGivenValues_(problem);
     if (profile.level !== 'advanced') {
       return requiredValues;
@@ -3597,6 +3700,7 @@ class MolProblemService {
   }
 
   static getGivenValuesTitle_(problem) {
+    if(problem && ['lv6','lv7','lv8'].includes(problem.level)) return '資料（必要な値を選ぼう）';
     const values = Array.isArray(problem && problem.givenValues) ? problem.givenValues : [];
     return values.some((item) => item.isRequired === false) ? '与えられた値' : 'この問題で使う値';
   }
@@ -3799,7 +3903,34 @@ class MolProblemService {
     };
   }
 
+  static buildPracticeExplanation_(p) {
+    const s=p.substance,g=p.given, formula=this.formulaExplanation_(s), answer=p.displayAnswer+(p.unit?' '+p.unit:'');
+    if(p.problemType==='formula_to_relative_mass') return s.formula+' の'+(s.type==='ionic'?'式量':'分子量')+'は '+formula+' = '+answer+' です。分子量・式量には単位を付けません。';
+    let text='';
+    if(p.problemType.startsWith('density_')) {
+      text=p.problemType==='density_mass_to_volume'?'体積 = 質量 ÷ 密度 = '+g.value+' ÷ '+g.density+' = '+answer+'。':
+        '質量 = 密度 × 体積 = '+g.density+' × '+g.value+' = '+this.formatPlain_(g.density*g.value)+' g。';
+      if(['density_to_mol','density_to_particles'].includes(p.problemType))text+=s.formula+' の分子量は '+formula+' = '+s.molarMass+'、モル質量は '+s.molarMass+' g/mol。質量をモル質量で割ると '+this.formatPlain_(g.value*g.density/s.molarMass)+' mol。';
+      if(p.problemType==='density_to_particles')text+='これにアボガドロ定数を掛けます。';
+      text+=' 答えは '+answer+' です。液体の体積に標準状態の気体のモル体積は使いません。';
+    } else {
+      // Reuse the established conversion explanation, then include the atomic-mass calculation.
+      text=this.buildExplanation({...p,level:'beginner'});
+      if(p.problemType.includes('mass'))text='原子量から '+formula+' = '+s.molarMass+'。'+text;
+    }
+    if(['lv6','lv7','lv8'].includes(p.level)) {
+      const used=[];
+      if((p.problemType.includes('mass') && !p.problemType.startsWith('density_')) || ['density_to_mol','density_to_particles'].includes(p.problemType))used.push('原子量から求めたモル質量');
+      if(p.problemType.startsWith('density_'))used.push('密度');
+      if(p.problemType.includes('particles'))used.push('アボガドロ定数');
+      if(p.problemType.includes('gas_volume'))used.push('標準状態のモル体積');
+      text+=' 使用する情報：'+used.join('、')+'。それ以外の資料の値は使いません。';
+    }
+    if(p.level==='lv8')text+=' 途中では丸めず、最後に有効数字3桁へ丸めます。末尾の0も桁数に含めます。';
+    return text;
+  }
   static buildExplanation(problem) {
+    if(this.isPracticeLevel_(problem.level)) return this.buildPracticeExplanation_(problem);
     const s = problem.substance || {};
     const g = problem.given || {};
     const answer = `${problem.displayAnswer || this.formatNumberForDisplay_(problem.expectedAnswer, problem.significantDigits)} ${problem.unit}`;
@@ -3888,6 +4019,7 @@ class MolProblemService {
 
   static createProblemCanonicalString_(problem) {
     const canonical = {
+      curriculumVersion:problem.curriculumVersion,
       level: problem.level,
       problemType: problem.problemType,
       problemTypeId: problem.problemTypeId,
@@ -4147,7 +4279,8 @@ class MolProblemService {
       { id: 11, key: 'gas_volume_to_particles', requiresGasAtSTP: true },
       { id: 12, key: 'particles_to_gas_volume', requiresGasAtSTP: true },
       { id: 13, key: 'atomic_mass_to_atom_mass', advancedOnly: true },
-      { id: 14, key: 'mass_to_molar_mass_estimate', advancedOnly: true }
+      { id: 14, key: 'mass_to_molar_mass_estimate', advancedOnly: true },
+      {id:15,key:'formula_to_relative_mass'}, {id:16,key:'density_to_mass'}, {id:17,key:'density_mass_to_volume'}, {id:18,key:'density_to_mol'}, {id:19,key:'density_to_particles'}
     ];
   }
 
@@ -4262,6 +4395,7 @@ class MolProblemService {
   }
 
   static createInputHint_(problem) {
+    if (!problem.unit) return '数値のみ。分子量・式量には単位を付けません。';
     if (this.needsSignificantDigits_(problem.level)) {
       if (problem.unit === '個' || Math.abs(Number(problem.expectedAnswer || 0)) >= 100000) {
         return '有効数字3桁で答えよう。例: 6.02×10^23 または 6.02x10^23';
@@ -4596,27 +4730,27 @@ class AdaptiveProblemService {
 // Versioned, deterministic policy. Progress is derived only from server-issued
 // automatic questions and persisted answers, never from browser-supplied scores.
 class AutoPracticeService {
-  static initial_() { return {version:1, level:'lv1', category:'mol_mass', stageId:0, recent:[], resume:null, reason:'start'}; }
+  static initial_() { return {version:MOL_DRILL_CURRICULUM_VERSION, level:'lv0', category:'formula_mass', stageId:0, recent:[], resume:null, reason:'start'}; }
   static groups_(level) { return MolProblemService.practiceGroups_(level); }
-  static focused_(level) { return ['lv1','lv3'].includes(level); }
+  static focused_(level) { return MolProblemService.focusedLevel_(level); }
   static types_(state) { const groups=this.groups_(state.level); return this.focused_(state.level) ? groups[state.category] : Object.values(groups).flat(); }
-  static metadata_(state) { return {version:1, level:state.level, category:state.category, stageId:state.stageId}; }
+  static metadata_(state) { return {version:MOL_DRILL_CURRICULUM_VERSION, level:state.level, category:state.category, stageId:state.stageId}; }
   static move_(state, level, category, reason) {
-    state.level=level; state.category=this.focused_(level) ? (category || Object.keys(this.groups_(level))[0]) : '';
+    state.level=level; state.category=this.focused_(level) ? (this.groups_(level)[category]?category:Object.keys(this.groups_(level))[0]) : '';
     state.stageId++; state.recent=[]; state.reason=reason;
   }
   static apply_(state, row) {
     const info=AnswerService.parseClientInfo_(row.clientInfo), meta=info.autoPractice;
-    if(!meta || meta.version!==1 || meta.stageId!==state.stageId || meta.level!==state.level || meta.category!==state.category || row.level!==state.level) return state;
+    if(!MolProblemService.currentRow_(row) || !meta || meta.version!==MOL_DRILL_CURRICULUM_VERSION || meta.stageId!==state.stageId || meta.level!==state.level || meta.category!==state.category || row.level!==state.level) return state;
     const type=MolProblemService.getProblemTypes_().find(item=>item.key===row.problemType);
     if(!type || !this.types_(state).includes(type.id)) return state;
     state.recent.push({type:type.id, correct:row.isCorrect===true, precision:row.isCorrect!==true && info.acceptedAnswerType==='precision'});
-    state.recent=state.recent.slice(-10);
-    const focused=this.focused_(state.level), window=state.recent.slice(focused ? -5 : -10);
-    const types=this.types_(state);
-    const ready=window.length >= (focused ? 5 : 10)
-      && window.filter(item=>item.correct).length >= (focused ? 4 : 8)
-      && types.every(id=>window.filter(item=>item.type===id).length >= (focused ? 2 : 1));
+    const types=this.types_(state), size=Math.max(5,types.length*2);
+    state.recent=state.recent.slice(-size);
+    const focused=this.focused_(state.level), window=state.recent;
+    const ready=window.length >= size
+      && window.filter(item=>item.correct).length >= Math.ceil(size*0.8)
+      && types.every(id=>window.filter(item=>item.type===id).length >= 2);
     state.reason=window.slice(-2).some(item=>item.precision) ? 'precision' : 'practice';
     if(ready) {
       if(state.resume) {
@@ -4625,20 +4759,34 @@ class AutoPracticeService {
       } else if(focused) {
         const groups=Object.keys(this.groups_(state.level)), index=groups.indexOf(state.category);
         if(index<groups.length-1) this.move_(state,state.level,groups[index+1],'new-category');
-        else this.move_(state,'lv'+(Number(state.level.slice(2))+1),'','advance');
-      } else if(state.level!=='lv6') this.move_(state,'lv'+(Number(state.level.slice(2))+1),'','advance');
+        else if(state.level!=='lv8') this.move_(state,'lv'+(Number(state.level.slice(2))+1),'','advance');
+        else state.reason='steady';
+      } else if(state.level!=='lv8') this.move_(state,'lv'+(Number(state.level.slice(2))+1),'','advance');
       else state.reason='steady';
-    } else if(!state.resume && state.recent.length>=5 && state.recent.slice(-3).every(item=>!item.correct && !item.precision) && state.level!=='lv1') {
+    } else if(!state.resume && state.recent.length>=5 && state.recent.slice(-3).every(item=>!item.correct && !item.precision) && state.level!=='lv0') {
       // Precision-only mistakes keep the current numerical difficulty. Support
       // preserves the skill family: Lv.5 -> Lv.2, Lv.6 -> Lv.4.
-      const lower={lv2:'lv1',lv3:'lv1',lv4:'lv3',lv5:'lv2',lv6:'lv4'}[state.level];
+      const lower={lv1:'lv0',lv2:'lv1',lv3:'lv1',lv4:'lv3',lv5:'lv5',lv6:'lv1',lv7:type.id>=16?'lv5':'lv3',lv8:type.id>=16?'lv5':type.id<=6?'lv1':'lv3'}[state.level];
       const lastType=type.id;
       let category=Object.keys(this.groups_(lower)).find(key=>this.groups_(lower)[key].includes(lastType));
       if(!category) category=state.category==='volume_particles' ? 'mol_volume' : 'mol_mass';
+      if(lower===state.level && state.category===Object.keys(this.groups_(lower))[0]) return state;
+      if(lower===state.level) category=Object.keys(this.groups_(lower))[0];
       state.resume={level:state.level,category:state.category};
       this.move_(state,lower,category,'support');
     }
     return state;
+  }
+  static progress_(state, rows) {
+    const current=(rows || []).filter(row=>MolProblemService.currentRow_(row)).slice().sort((a,b)=>String(a.timestamp||'').localeCompare(String(b.timestamp||'')));
+    const last=current[current.length-1];
+    if(!last) return null;
+    const auto=current.filter(row=>AnswerService.parseClientInfo_(row.clientInfo).autoPractice);
+    return {version:MOL_DRILL_CURRICULUM_VERSION,level:auto.length?state.level:'',category:auto.length?state.category:'',
+      support:!!state.resume,resumeLevel:state.resume?state.resume.level:'',
+      lastMode:AnswerService.parseClientInfo_(last.clientInfo).autoPractice?'auto':'manual',
+      updatedAt:auto.length?String(auto[auto.length-1].timestamp || ''):'',
+      focusLabel:auto.length?this.plan_(state).focusLabel:''};
   }
   static rebuild_(rows) {
     const state=this.initial_();
@@ -4646,16 +4794,16 @@ class AutoPracticeService {
     return state;
   }
   static plan_(state) {
-    const messages={start:'まずはmolと質量の変換から。できたことを積み上げていこう。',
+    const messages={start:'まずは原子量から分子量・式量を求めよう。',
       practice:'今の変換を練習中。あせらず、式を確かめながら進めよう。',
       'new-category':'この変換はいい感じ！ 次は別の変換を試してみよう。',
       advance:'いろいろな向きでできてきたね。次のレベルを試してみよう。',
       support:'いったん基礎の変換で確認しよう。できてきたら元の練習に戻れるよ。',
       return:'基礎の確認ができたね。さっきの練習をもう一度試してみよう。',
       precision:'数値が合っている問題もあるね。最後に有効数字3桁を確認しよう。',
-      steady:'Lv.6でもできてきたね。いろいろな変換を続けて確かめよう。'};
-    return {mode:'auto', version:1, level:state.level, category:state.category, stageId:state.stageId,
-      focusLabel:({mol_mass:'mol ⇔ 質量',mol_particles:'mol ⇔ 個数',mol_volume:'mol ⇔ 体積',mass_particles:'質量 ⇔ 個数',mass_volume:'質量 ⇔ 体積',volume_particles:'体積 ⇔ 個数'})[state.category] || 'いろいろな変換',
+      steady:'Lv.8までできてきたね。資料を選び、最後の桁数まで確かめよう。'};
+    return {mode:'auto', version:MOL_DRILL_CURRICULUM_VERSION, level:state.level, category:state.category, stageId:state.stageId,
+      focusLabel:({formula_mass:'分子量・式量',density_basics:'密度と質量・体積',density_mol:'密度からmol',density_particles:'密度から個数',precision_basic:'有効数字・基本換算',precision_mixed:'有効数字・総合',mol_mass:'mol ⇔ 質量',mol_particles:'mol ⇔ 個数',mol_volume:'mol ⇔ 体積',mass_particles:'質量 ⇔ 個数',mass_volume:'質量 ⇔ 体積',volume_particles:'体積 ⇔ 個数'})[state.category] || 'いろいろな変換',
       message:messages[state.reason] || messages.practice, support:!!state.resume};
   }
   static issue_(tokenRow) {
@@ -4666,6 +4814,7 @@ class AutoPracticeService {
     const type=types.slice().sort((a,b)=>score(a)-score(b)||a-b)[0];
     const profile=MolProblemService.getLevelProfile_(state.level);
     profile.typeIds=types;
+    if(state.level==='lv8' && state.category==='precision_basic')profile.molValues=[0.5,1,2,3];
     const problem=MolProblemService.generateLevelProblem_(profile,{problemType:type});
     problem.category=state.category;
     problem.autoPractice=this.metadata_(state);
@@ -4680,12 +4829,15 @@ class AutoPracticeService {
 class StudentLearningService {
   static initial_() { return {cells:{},mistakes:[]}; }
   static label_(key) {
+    if(key==='formula_to_relative_mass')return '分子量・式量';
+    const density={density_to_mass:'密度 → 質量',density_mass_to_volume:'密度と質量 → 体積',density_to_mol:'密度 → mol',density_to_particles:'密度 → 個数'};
+    if(density[key])return density[key];
     const units={mol:'mol',mass:'質量',particles:'個数',gas_volume:'体積'};
     return String(key).split('_to_').map(part=>units[part] || part).join(' → ');
   }
   static apply_(data, row) {
     const result=data || this.initial_();
-    if (!/^lv[1-6]$/.test(String(row.level))) return result;
+    if (!MolProblemService.currentRow_(row) || !/^lv[0-8]$/.test(String(row.level))) return result;
     const type=MolProblemService.getProblemTypes_().find(item=>item.key===row.problemType);
     const groups=MolProblemService.practiceGroups_(row.level);
     if (!type || !Object.keys(groups).some(key=>groups[key].includes(type.id))) return result;
@@ -4709,7 +4861,7 @@ class StudentLearningService {
   static rebuild_(rows) { return rows.reduce((data,row)=>this.apply_(data,row),this.initial_()); }
   static check_(data, summary, requestedLevel) {
     const level=String(requestedLevel || 'lv1');
-    if(!/^lv[1-6]$/.test(level)) throw new Error('確認するレベルを選んでください。');
+    if(!/^lv[0-8]$/.test(level)) throw new Error('確認するレベルを選んでください。');
     const groups=MolProblemService.practiceGroups_(level);
     const rows=[];
     for(const category of Object.keys(groups)) for(const id of groups[category]) {
@@ -4730,25 +4882,31 @@ class StudentLearningService {
       evidence:precision.label+'の直近'+precision.recentAttempts+'問で、有効数字だけの違いが'+precision.precision+'問あります。',
       tip:'最後に有効数字3桁へ。末尾の0も大切です（例：1.20、6.00×10^23）。',target:{level,category:precision.category}};
     else if(weak) {
-      const targetLevel=({lv2:'lv1',lv4:'lv3',lv5:'lv1',lv6:'lv3'})[level] || level;
+      const targetLevel=({lv2:'lv1',lv4:'lv3',lv6:'lv1',lv7:weak.problemType.startsWith('density_')?'lv5':'lv3',lv8:weak.problemType.startsWith('density_')?'lv5':weak.problemType.startsWith('mol_to_')||weak.problemType.endsWith('_to_mol')?'lv1':'lv3'})[level] || level;
+      const targetGroups=MolProblemService.practiceGroups_(targetLevel);
+      const targetCategory=Object.keys(targetGroups).find(key=>targetGroups[key].some(id=>MolProblemService.getProblemTypeById_(id).key===weak.problemType)) || Object.keys(targetGroups)[0];
       advice={kind:'practice',message:weak.label+'を、もう少し試してみよう。',
         evidence:'この変換の直近'+weak.recentAttempts+'問は'+weak.recentCorrect+'問正解です。',
-        tip:weak.problemType.startsWith('mol_to_')?'molから求める量の「1 mol分」を掛けてみよう。'
+        tip:weak.problemType==='formula_to_relative_mass'?'原子量に原子の個数を掛け、すべて足してみよう。'
+          :weak.problemType==='density_to_mass'?'質量 = 密度 × 体積です。単位も確かめよう。'
+          :weak.problemType==='density_mass_to_volume'?'体積 = 質量 ÷ 密度です。'
+          :weak.problemType.startsWith('density_')?'密度 × 体積で質量を求め、モル質量で割ってmolに直そう。'
+          :weak.problemType.startsWith('mol_to_')?'molから求める量の「1 mol分」を掛けてみよう。'
           :weak.problemType.endsWith('_to_mol')?'まず「1 mol分の量」で割ると、molに直せます。'
-          :'まずmolに直してから、求める量の「1 mol分」を掛けてみよう。',target:{level:targetLevel,category:weak.category}};
-    } else if(confirmed===6 && level!=='lv6') advice={kind:'challenge',message:'そろそろ次のレベルを試してみてもよさそう！',
-      evidence:'6方向すべてで直近5問中4問以上正解しています。',tip:'難しければ、いつでも好きなレベルへ戻れます。',
-      target:{level:'lv'+(Number(level.slice(2))+1),category:['lv2','lv5'].includes(level)?'mass_particles':'mol_mass'}};
-    else advice={kind:'explore',message:confirmed===6?'ここまでよく取り組めています。この調子で続けよう。':(['lv1','lv3'].includes(level)?'次は'+next.label+'を試してみよう。':'ランダムでいろいろな変換を試してみよう。'),
+          :'まずmolに直してから、求める量の「1 mol分」を掛けてみよう。',target:{level:targetLevel,category:targetCategory}};
+    } else if(confirmed===rows.length && level!=='lv8') advice={kind:'challenge',message:'そろそろ次のレベルを試してみてもよさそう！',
+      evidence:rows.length+'種類すべてで直近5問中4問以上正解しています。',tip:'難しければ、いつでも好きなレベルへ戻れます。',
+      target:{level:'lv'+(Number(level.slice(2))+1),category:Object.keys(MolProblemService.practiceGroups_('lv'+(Number(level.slice(2))+1)))[0]}};
+    else advice={kind:'explore',message:confirmed===rows.length?'ここまでよく取り組めています。この調子で続けよう。':(MolProblemService.focusedLevel_(level)?'次は'+next.label+'を試してみよう。':'ランダムでいろいろな変換を試してみよう。'),
       evidence:next.recentAttempts<3?'まだ記録が少ない変換があります。苦手かどうかは、もう少し試してから。':'この変換の直近'+next.recentAttempts+'問は'+next.recentCorrect+'問正解です。',
       tip:'途中で終わっても、これまでの正解は残ります。自分のペースでどうぞ。',target:{level,category:next.category}};
     return {level,summary:{totalAttempts:Number(summary.totalAttempts || 0),totalCorrect:Number(summary.totalCorrect || 0)},
-      advice,coverage:{confirmed,total:6},rows,mistakes:data.mistakes.slice().reverse()};
+      advice,coverage:{confirmed,total:rows.length},rows,mistakes:data.mistakes.slice().reverse()};
   }
 }
 
 class AnswerService {
-  static runtimeSummaryKey_(tokenRow) { return 'studentSummary:v6:' + String(tokenRow.token); }
+  static runtimeSummaryKey_(tokenRow) { return 'studentSummary:v4-curriculum:' + String(tokenRow.token); }
   static readRuntimeSummaryCache_(tokenRow) {
     try {
       const cache = this.getStudentAccessCache_();
@@ -5490,13 +5648,13 @@ class AnswerService {
   static incrementApproxLevelMetricsFromAggregate_(base, entry, appended, recent10Attempts) {
     const output = {};
     const entryLevel = String(entry && entry.level || '').trim();
-    ['beginner', 'intermediate', 'advanced', 'lv1', 'lv2', 'lv3', 'lv4', 'lv5', 'lv6'].forEach((level) => {
+    ['beginner', 'intermediate', 'advanced'].concat(MOL_DRILL_LEVELS).forEach((level) => {
       const key = `${level[0].toUpperCase()}${level.slice(1)}`;
       const attemptKey = `${level}Attempts`;
       const correctKey = `${level}Correct`;
       const accuracyKey = `${level}Accuracy`;
       const recentAttemptKey = `recent10${key}Attempts`;
-      const matchesLevel = appended && entryLevel === level;
+      const matchesLevel = appended && entryLevel === level && (!MolProblemService.isPracticeLevel_(level) || MolProblemService.currentRow_(entry));
       const attempts = Number(base[attemptKey] || 0) + (matchesLevel ? 1 : 0);
       const correct = Number(base[correctKey] || 0) + (matchesLevel && entry.isCorrect === true ? 1 : 0);
       output[attemptKey] = attempts;
@@ -5547,7 +5705,7 @@ class AnswerService {
 
   static incrementLevelMetricsFromAggregate_(base, entry, appended, recentSummary) {
     const output = {};
-    ['beginner', 'intermediate', 'advanced', 'lv1', 'lv2', 'lv3', 'lv4', 'lv5', 'lv6'].forEach((level) => {
+    ['beginner', 'intermediate', 'advanced'].concat(MOL_DRILL_LEVELS).forEach((level) => {
       const key = `${level[0].toUpperCase()}${level.slice(1)}`;
       const attemptKey = `${level}Attempts`;
       const correctKey = `${level}Correct`;
@@ -5627,6 +5785,7 @@ class AnswerService {
       recent10Accuracy: this.roundRate_(recentCorrect, recentRows.length),
       currentCorrectStreak,
       ...levelMetrics,
+      autoProgress:AutoPracticeService.progress_(AutoPracticeService.rebuild_((logs || []).filter(row=>String(row.rosterKey || '').trim()===normalizedRosterKey)),rows),
       lastAnsweredAt: String(latest.timestamp || ''),
       lastLevel: String(latest.level || ''),
       lastProblemType: String(latest.problemType || ''),
@@ -5664,15 +5823,15 @@ class AnswerService {
       ...this.summarizeSingleLevelMetrics_(rows, recentRows, 'beginner'),
       ...this.summarizeSingleLevelMetrics_(rows, recentRows, 'intermediate'),
       ...this.summarizeSingleLevelMetrics_(rows, recentRows, 'advanced'),
-      ...Object.assign({}, ...['lv1','lv2','lv3','lv4','lv5','lv6'].map(level => this.summarizeSingleLevelMetrics_(rows, recentRows, level)))
+      ...Object.assign({}, ...MOL_DRILL_LEVELS.map(level => this.summarizeSingleLevelMetrics_(rows, recentRows, level)))
     };
   }
 
   static summarizeSingleLevelMetrics_(rows, recentRows, level) {
     const key = `${level[0].toUpperCase()}${level.slice(1)}`;
-    const levelRows = (rows || []).filter((row) => String(row.level || '') === level);
+    const levelRows = (rows || []).filter((row) => String(row.level || '') === level && (!MolProblemService.isPracticeLevel_(level) || MolProblemService.currentRow_(row)));
     const correct = levelRows.filter((row) => row.isCorrect === true).length;
-    const recentAttempts = (recentRows || []).filter((row) => String(row.level || '') === level).length;
+    const recentAttempts = (recentRows || []).filter((row) => String(row.level || '') === level && (!MolProblemService.isPracticeLevel_(level) || MolProblemService.currentRow_(row))).length;
     return {
       [`${level}Attempts`]: levelRows.length,
       [`${level}Correct`]: correct,
@@ -5893,11 +6052,12 @@ class AnswerService {
 
   static buildAnswerClientInfo_(clientInfo, grade, autoPractice) {
     const base = this.parseClientInfo_(clientInfo);
+    base.curriculumVersion=MOL_DRILL_CURRICULUM_VERSION;
     delete base.autoPractice;
     delete base.acceptedAnswerType;
     delete base.acceptedAnswer;
     delete base.exactAnswer;
-    if(autoPractice && autoPractice.version===1) base.autoPractice={...autoPractice};
+    if(autoPractice && autoPractice.version===MOL_DRILL_CURRICULUM_VERSION) base.autoPractice={...autoPractice};
     const acceptedAnswerType = String(grade && grade.acceptedAnswerType || '');
     const exactAnswer = grade && grade.exactAnswer;
     if (acceptedAnswerType !== '') {
@@ -5987,7 +6147,7 @@ class AggregationService {
       .map(([rosterKey, rows]) => {
         const sorted = rows.slice().sort((a, b) => String(a.timestamp || '').localeCompare(String(b.timestamp || '')));
         const latest = sorted[sorted.length - 1] || {};
-        const summary = AnswerService.summarizeAnswerLogsForStudent(rosterKey, sorted);
+        const summary = AnswerService.summarizeAnswerLogsForStudent(rosterKey, rows);
         return {
           updatedAt,
           courseId: String(latest.courseId || ''),
@@ -6011,6 +6171,7 @@ class AggregationService {
       const rosterKey = String(log.rosterKey || '').trim();
       const level = String(log.level || '').trim();
       const problemType = String(log.problemType || '').trim();
+      if(MolProblemService.isPracticeLevel_(level) && !MolProblemService.currentRow_(log)) continue;
       if (rosterKey === '' || TokenService.isTeacherTestStudentRosterKey(rosterKey) || level === '' || problemType === '') {
         continue;
       }
@@ -6078,7 +6239,7 @@ class AggregationService {
           recent10Accuracy,
           totalAccuracy,
           speedImprovementRate,
-          advancedAttempts, lv5Attempts: summary.lv5Attempts, lv6Attempts: summary.lv6Attempts
+          advancedAttempts, lv8Attempts: summary.lv8Attempts
         });
         const followUp = this.isFollowUpStatus_(statusLabel);
         return {
@@ -6097,6 +6258,7 @@ class AggregationService {
           recent10Correct: Number(summary.recent10Correct || 0),
           recent10Accuracy,
           ...MolProblemService.practiceLevelMetrics_(summary),
+          autoProgress:summary.autoProgress || null,
           beginnerAttempts: Number(summary.beginnerAttempts || 0),
           beginnerCorrect: Number(summary.beginnerCorrect || 0),
           beginnerAccuracy: Number(summary.beginnerAccuracy || 0),
@@ -6169,7 +6331,7 @@ class AggregationService {
     if (row.recent10Attempts >= 10 && row.speedImprovementRate >= 0.2 && row.recent10Accuracy < row.totalAccuracy && row.recent10Accuracy < 0.7) {
       return '速度上昇・正答率低下';
     }
-    if ((Number(row.advancedAttempts || 0) + Number(row.lv5Attempts || 0) + Number(row.lv6Attempts || 0)) > 0 && row.recent10Attempts >= 10 && row.recent10Accuracy >= 0.7) {
+    if ((Number(row.advancedAttempts || 0) + Number(row.lv8Attempts || 0)) > 0 && row.recent10Attempts >= 10 && row.recent10Accuracy >= 0.7) {
       return '上級挑戦中';
     }
     if (row.recent10Attempts < 10) {
@@ -7037,6 +7199,7 @@ class MonitorSnapshotService {
   static isUsableDashboardSnapshot_(snapshot) {
     return snapshot
       && typeof snapshot === 'object'
+      && snapshot.appVersion===MOL_DRILL_APP_VERSION
       && !Array.isArray(snapshot)
       && Array.isArray(snapshot.progressRows)
       && snapshot.dashboardMetrics
@@ -7131,11 +7294,11 @@ class MonitorSnapshotService {
 // The teacher refresh cursor is durable. Cache eviction never loses the aggregation position.
 class MonitorRefreshService {
   static emptyState_() {
-    return { version: 1, cursor: 1, firstAttempt: '', lastAttempt: '', students: {}, target: 1, cutoffAt: '' };
+    return { version: 2, cursor: 1, firstAttempt: '', lastAttempt: '', students: {}, target: 1, cutoffAt: '' };
   }
 
   static isUsableState_(state) {
-    return state && state.version === 1 && Number.isInteger(state.cursor) && state.cursor >= 1
+    return state && state.version === 2 && Number.isInteger(state.cursor) && state.cursor >= 1
       && Number.isInteger(state.target) && state.target >= state.cursor && state.students && !Array.isArray(state.students)
       && typeof state.students === 'object';
   }
@@ -7144,7 +7307,7 @@ class MonitorRefreshService {
     this.stateValues_ = null;
     try {
       const cache = MonitorSnapshotService.getScriptCache_();
-      const keys = JSON.parse(cache ? cache.get('monitorRefresh:manifest:v1') || 'null' : 'null');
+      const keys = JSON.parse(cache ? cache.get('monitorRefresh:manifest:v2') || 'null' : 'null');
       if (Array.isArray(keys) && keys.length && keys.length <= 200) {
         const parts = cache.getAll(keys);
         if (keys.every(key => typeof parts[key] === 'string')) {
@@ -7179,9 +7342,9 @@ class MonitorRefreshService {
         keys.push(key);
         pieces[key] = json.slice(offset, offset + 25000);
       }
-      pieces['monitorRefresh:manifest:v1'] = JSON.stringify(keys);
+      pieces['monitorRefresh:manifest:v2'] = JSON.stringify(keys);
       cache.putAll(pieces, 90);
-    } catch (_) { try { cache.remove('monitorRefresh:manifest:v1'); } catch (ignored) {} }
+    } catch (_) { try { cache.remove('monitorRefresh:manifest:v2'); } catch (ignored) {} }
   }
 
   static writeState_(sheet, state) {
@@ -7227,9 +7390,17 @@ class MonitorRefreshService {
     const item = state.students[key];
     const log = { timestamp: String(entry.timestamp || ''), order, level: String(entry.level || ''),
       problemType: String(entry.problemType || ''), isCorrect: entry.isCorrect === true, elapsedMs: Number(entry.elapsedMs || 0) };
+    if(MolProblemService.currentRow_(entry)) {
+      item.autoState=AutoPracticeService.apply_(item.autoState || AutoPracticeService.initial_(),entry);
+      const meta=AnswerService.parseClientInfo_(entry.clientInfo).autoPractice;
+      if(meta && (!item.lastAuto || String(item.lastAuto.timestamp || '')<=String(entry.timestamp || '')))item.lastAuto={timestamp:entry.timestamp,clientInfo:entry.clientInfo};
+      if(!item.lastCurrent || String(item.lastCurrent.timestamp || '')<=String(entry.timestamp || ''))item.lastCurrent={timestamp:entry.timestamp,clientInfo:entry.clientInfo};
+      item.autoProgress=AutoPracticeService.progress_(item.autoState,item.lastAuto && item.lastAuto!==entry?[item.lastAuto,item.lastCurrent]:[item.lastCurrent]);
+    }
+    log.current=MolProblemService.currentRow_(entry);
     item.attempts++;
     item.correct += log.isCorrect ? 1 : 0;
-    if (['beginner', 'intermediate', 'advanced', 'lv1', 'lv2', 'lv3', 'lv4', 'lv5', 'lv6'].includes(log.level)) {
+    if (['beginner', 'intermediate', 'advanced'].concat(MOL_DRILL_LEVELS).includes(log.level) && (!MolProblemService.isPracticeLevel_(log.level) || MolProblemService.currentRow_(entry))) {
       const level = item.levels[log.level] || (item.levels[log.level] = { attempts: 0, correct: 0 });
       level.attempts++;
       level.correct += log.isCorrect ? 1 : 0;
@@ -7251,14 +7422,14 @@ class MonitorRefreshService {
       const firstAverage = AnswerService.averageElapsedMs_(item.first);
       const recentAverage = AnswerService.averageElapsedMs_(item.recent);
       const levels = {};
-      for (const level of ['beginner', 'intermediate', 'advanced', 'lv1', 'lv2', 'lv3', 'lv4', 'lv5', 'lv6']) {
+      for (const level of ['beginner', 'intermediate', 'advanced'].concat(MOL_DRILL_LEVELS)) {
         const count = item.levels[level] || { attempts: 0, correct: 0 };
         levels[level + 'Attempts'] = count.attempts;
         levels[level + 'Correct'] = count.correct;
         levels[level + 'Accuracy'] = AnswerService.roundRate_(count.correct, count.attempts);
-        levels['recent10' + level[0].toUpperCase() + level.slice(1) + 'Attempts'] = item.recent.filter(row => row.level === level).length;
+        levels['recent10' + level[0].toUpperCase() + level.slice(1) + 'Attempts'] = item.recent.filter(row => row.level === level && (!MolProblemService.isPracticeLevel_(level) || row.current)).length;
       }
-      return { rosterKey, totalAttempts: item.attempts, totalCorrect: item.correct,
+      return { rosterKey, autoProgress:item.autoProgress || null, totalAttempts: item.attempts, totalCorrect: item.correct,
         totalAccuracy: AnswerService.roundRate_(item.correct, item.attempts), recent10Attempts: item.recent.length,
         recent10Correct: recentCorrect, recent10Accuracy: AnswerService.roundRate_(recentCorrect, item.recent.length), ...levels,
         lastAnsweredAt: latest.timestamp || '', lastLevel: latest.level || '', lastProblemType: latest.problemType || '',
@@ -7374,6 +7545,8 @@ class MonitorService {
 }
 
 function onOpen(e) {
+  // Simple trigger: menu creation only. Repairs, authorization and data reads
+  // belong to explicit menu actions, never to opening the spreadsheet.
   molDrillOnOpen(e);
 }
 
@@ -7381,7 +7554,8 @@ function molDrillOnOpen(_e) {
   const ui = SpreadsheetApp.getUi();
   const setupMenu = ui.createMenu('⓪ 初期整備・保守')
     .addItem('⓪-1 管理シートを作成・補修', 'setupSheetsFromMenu')
-    .addItem('⓪-2 管理データを全削除して初期状態に戻す', 'reinitializeSheetsFromMenu');
+    .addItem('⓪-2 管理データを全削除して初期状態に戻す', 'reinitializeSheetsFromMenu')
+    .addItem('⓪-3 管理シートの構成を診断', 'inspectManagementSheetsFromMenu');
   const classroomMenu = ui.createMenu('① Classroom同期')
     .addItem('①-1 Classroom一覧を取得', 'refreshClassroomListFromMenu')
     .addItem('①-2 同期対象の説明を表示', 'showCourseSyncSelectionHelpFromMenu')
@@ -7690,7 +7864,36 @@ function revokeSelectedStudentTokenFromMenu() {
 
 function setupSheets() {
   SpreadsheetApp.getUi(); // Spreadsheet/editor context only; unavailable to Web App RPC.
-  return SheetRepository.ensureSheets();
+  return AdminService.withAdminActionLock('setupSheets', () => SheetRepository.ensureSheets());
+}
+
+function inspectManagementSheets() {
+  SpreadsheetApp.getUi(); // Spreadsheet/editor only; never expose metadata to student RPC.
+  const result = SheetRepository.inspectStructure_();
+  console.log(JSON.stringify(result)); // Structure only: no setting values, tokens or student records.
+  return result;
+}
+
+function inspectManagementSheetsFromMenu() {
+  const result = inspectManagementSheets();
+  const lines = [`もるくえ！ v${result.appVersion} 管理シート診断`, result.ok ? '必要なシート・見出し・設定キーは揃っています。' : '構成に確認・補修が必要です。'];
+  if (!result.schema.ok) lines.push(SheetRepository.formatManagementSheetStatusMessage_(result.schema));
+  if (result.settings.missingKeys.length) lines.push(`不足設定: ${result.settings.missingKeys.join(', ')}\n「管理シートを作成・補修」で追加できます。`);
+  if (result.settings.duplicateKeys.length) lines.push(`設定キー重複: ${result.settings.duplicateKeys.join(', ')}。補修前に値を確認してください。`);
+  for (const item of result.schema.unexpectedHeadersBySheet) {
+    const kept = item.headers.filter(header => item.sheetName !== '集計キャッシュ' || !result.obsoleteColumns.includes(header));
+    if (kept.length) lines.push(`独自追加列（保持） ${item.sheetName}: ${kept.join(', ')}`);
+  }
+  if (result.obsoleteColumns.length) lines.push(`旧集計列（補修で除去）: ${result.obsoleteColumns.join(', ')}`);
+  if (result.settings.obsoleteKeys.length) lines.push(`旧設定（補修で除去）: ${result.settings.obsoleteKeys.join(', ')}`);
+  const extraKeys = result.settings.extraKeys.filter(key => !result.settings.obsoleteKeys.includes(key));
+  if (extraKeys.length) lines.push(`独自追加設定（保持）: ${extraKeys.join(', ')}`);
+  if (result.extraSheets.length) lines.push(`管理対象外シート（保持）: ${result.extraSheets.join(', ')}`);
+  lines.push('現行仕様: Lv.0〜8、管理用10シート、設定10項目。',
+    ...result.sheets.map(sheet => `${sheet.name}: ${sheet.requiredColumns}列 / 最終使用行 ${sheet.lastRow}`),
+    '最終使用行は解答件数ではありません。診断はデータを書き換えません。');
+  SpreadsheetApp.getUi().alert(lines.join('\n'));
+  return result;
 }
 
 function runMenuOperation_(label, operationName, callback, formatSuccessMessage, options) {
@@ -7883,87 +8086,6 @@ function configureDistributionSettingsFromMenu() {
     'MENU_CONFIGURE_DISTRIBUTION_SETTINGS',
     () => AdminService.saveSettingsFromMenu({ dryRun, batchSize, enableDistributionLog }),
     () => '配付設定を変更しました。'
-  );
-}
-
-function configureProblemSettingsFromMenu() {
-  const settings = readAdminSettingsForMenu_();
-  const adaptiveProblemSelection = promptMenuBoolean_(
-    '出題・採点設定を変更: 適応出題',
-    '適応出題',
-    settings.adaptiveProblemSelection,
-    'true の場合、生徒ごとの問題タイプ別キャッシュを使って出題タイプを調整します。'
-  );
-  if (adaptiveProblemSelection === null) {
-    return null;
-  }
-  const beginnerAvogadroConstant = promptMenuPositiveNumber_(
-    '出題・採点設定を変更: 初級アボガドロ定数',
-    '初級アボガドロ定数',
-    settings.beginnerAvogadroConstant,
-    '初級レベルの問題生成と採点に使うアボガドロ定数です。'
-  );
-  if (beginnerAvogadroConstant === null) {
-    return null;
-  }
-  const beginnerTolerance = promptMenuPositiveNumber_(
-    '出題・採点設定を変更: 初級許容誤差',
-    '初級許容誤差',
-    settings.beginnerTolerance,
-    '初級レベルの数値解答に使う相対許容誤差です。'
-  );
-  if (beginnerTolerance === null) {
-    return null;
-  }
-  const intermediateAvogadroConstant = promptMenuPositiveNumber_(
-    '出題・採点設定を変更: 中級アボガドロ定数',
-    '中級アボガドロ定数',
-    settings.intermediateAvogadroConstant,
-    '中級レベルの問題生成と採点に使うアボガドロ定数です。'
-  );
-  if (intermediateAvogadroConstant === null) {
-    return null;
-  }
-  const intermediateTolerance = promptMenuPositiveNumber_(
-    '出題・採点設定を変更: 中級許容誤差',
-    '中級許容誤差',
-    settings.intermediateTolerance,
-    '中級レベルの数値解答に使う相対許容誤差です。'
-  );
-  if (intermediateTolerance === null) {
-    return null;
-  }
-  const advancedAvogadroConstant = promptMenuPositiveNumber_(
-    '出題・採点設定を変更: 上級アボガドロ定数',
-    '上級アボガドロ定数',
-    settings.advancedAvogadroConstant,
-    '上級レベルの問題生成と採点に使うアボガドロ定数です。'
-  );
-  if (advancedAvogadroConstant === null) {
-    return null;
-  }
-  const advancedTolerance = promptMenuPositiveNumber_(
-    '出題・採点設定を変更: 上級許容誤差',
-    '上級許容誤差',
-    settings.advancedTolerance,
-    '上級レベルの数値解答に使う相対許容誤差です。'
-  );
-  if (advancedTolerance === null) {
-    return null;
-  }
-  return runMenuOperation_(
-    '出題・採点設定を変更',
-    'MENU_CONFIGURE_PROBLEM_SETTINGS',
-    () => AdminService.saveSettingsFromMenu({
-      adaptiveProblemSelection,
-      beginnerAvogadroConstant,
-      beginnerTolerance,
-      intermediateAvogadroConstant,
-      intermediateTolerance,
-      advancedAvogadroConstant,
-      advancedTolerance
-    }),
-    () => '出題・採点設定を変更しました。'
   );
 }
 
@@ -8692,7 +8814,7 @@ function readMonitorStudentAnswerReview_(sheet, key, options) {
   const opts = options || {};
   const result = String(opts.result || 'all');
   const level = String(opts.level || 'all');
-  if (!['all', 'correct', 'incorrect'].includes(result) || !['all', 'lv1', 'lv2', 'lv3', 'lv4', 'lv5', 'lv6'].includes(level)) {
+  if (!['all', 'correct', 'incorrect'].includes(result) || !['all'].concat(MOL_DRILL_LEVELS).includes(level)) {
     throw new Error('レビューの絞り込み条件が不正です。');
   }
   const headers = SheetRepository.getHeaderColumnMap_(sheet);

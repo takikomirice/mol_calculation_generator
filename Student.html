@@ -618,7 +618,7 @@
         <button id="manualModeButton" class="mode-button" type="button" aria-pressed="true">マニュアル</button>
         <button id="autoModeButton" class="mode-button" type="button" aria-pressed="false">オートレベリング</button>
       </div>
-      <p id="practiceModeHelp" class="helper">マニュアルでは、Lv.1〜Lv.6と練習する変換を選べます。</p>
+      <p id="practiceModeHelp" class="helper">マニュアルでは、Lv.0〜Lv.8と練習する変換を選べます。</p>
       <div id="autoPracticeDetails" class="auto-current" role="status" aria-live="polite" hidden>
         <span class="status-label">オートレベリング中・現在のレベル</span>
         <strong id="autoPracticeLevel">確認中…</strong>
@@ -629,19 +629,22 @@
     <section class="card" id="manualLevelPanel" aria-label="レベル選択">
       <span class="section-label">レベル選択</span>
       <div class="level-buttons" id="levelButtons" role="group" aria-label="問題レベル">
-        <button class="level-button active" type="button" data-level="lv1" aria-pressed="true"><span class="level-name">Lv.1</span><span class="level-copy">molと1種類の変換</span></button>
+        <button class="level-button active" type="button" data-level="lv0" aria-pressed="true"><span class="level-name">Lv.0</span><span class="level-copy">分子量・式量</span></button>
+        <button class="level-button" type="button" data-level="lv1" aria-pressed="false"><span class="level-name">Lv.1</span><span class="level-copy">molと1種類の変換</span></button>
         <button class="level-button" type="button" data-level="lv2" aria-pressed="false"><span class="level-name">Lv.2</span><span class="level-copy">molとの変換・ランダム</span></button>
         <button class="level-button" type="button" data-level="lv3" aria-pressed="false"><span class="level-name">Lv.3</span><span class="level-copy">molを経由する1種類の変換</span></button>
         <button class="level-button" type="button" data-level="lv4" aria-pressed="false"><span class="level-name">Lv.4</span><span class="level-copy">molを経由・ランダム</span></button>
-        <button class="level-button" type="button" data-level="lv5" aria-pressed="false"><span class="level-name">Lv.5</span><span class="level-copy">Lv.2＋有効数字3桁</span></button>
-        <button class="level-button" type="button" data-level="lv6" aria-pressed="false"><span class="level-name">Lv.6</span><span class="level-copy">Lv.4＋有効数字3桁</span></button>
+        <button class="level-button" type="button" data-level="lv5" aria-pressed="false"><span class="level-name">Lv.5</span><span class="level-copy">密度を使う計算</span></button>
+        <button class="level-button" type="button" data-level="lv6" aria-pressed="false"><span class="level-name">Lv.6</span><span class="level-copy">資料を選ぶ・基本換算</span></button>
+        <button class="level-button" type="button" data-level="lv7" aria-pressed="false"><span class="level-name">Lv.7</span><span class="level-copy">資料を選ぶ・密度と総合</span></button>
+        <button class="level-button" type="button" data-level="lv8" aria-pressed="false"><span class="level-name">Lv.8</span><span class="level-copy">有効数字3桁</span></button>
       </div>
     </section>
 
     <section class="card" id="categoryPanel" aria-label="変換の選択">
       <label for="categorySelect">練習する変換</label>
       <select id="categorySelect" aria-label="練習する変換"></select>
-      <p class="helper">選んだ2つの量の間で、往復の変換を練習します。</p>
+      <p class="helper">選んだ種類の問題を練習します。</p>
     </section>
     <section class="card" aria-label="問題">
       <div class="card-head">
@@ -721,6 +724,7 @@
     const initialAdminToken = <?!= JSON.stringify(typeof initialAdminToken === 'undefined' ? '' : initialAdminToken) ?>;
     const initialTeacherPreview = <?!= JSON.stringify(typeof initialTeacherPreview === 'undefined' ? false : initialTeacherPreview) ?>;
     const LEVEL_LABELS = {
+      lv0:'Lv.0',lv7:'Lv.7',lv8:'Lv.8',
       lv1: 'Lv.1',
       lv2: 'Lv.2',
       lv3: 'Lv.3',
@@ -752,9 +756,9 @@
       adminToken: (initialAdminToken || '').trim(),
       teacherPreview: initialTeacherPreview === true || params.get('preview') === 'teacher' || params.get('teacherPreview') === '1',
       practiceMode: 'manual',
-      manualSelection: {level:'lv1', category:'mol_mass'},
-      selectedLevel: 'lv1',
-      selectedCategory: 'mol_mass',
+      manualSelection: {level:'lv0', category:'formula_mass'},
+      selectedLevel: 'lv0',
+      selectedCategory: 'formula_mass',
       problem: null,
       pendingProblem: null,
       prefetchedProblem: null,
@@ -885,7 +889,7 @@
     }
 
     function hasSignificantDigitContext(data) {
-      return ['lv5', 'lv6', 'advanced'].includes(data.level) && (data.requiresRounding === true || Number(data.significantDigits || 0) >= 3);
+      return data.level === 'lv8' && (data.requiresRounding === true || Number(data.significantDigits || 0) >= 3);
     }
 
     function buildResultTitle(data, correct) {
@@ -977,7 +981,7 @@
     }
 
     function selectLevel(level) {
-      state.selectedLevel = LEVEL_LABELS[level] ? level : 'lv1';
+      state.selectedLevel = LEVEL_LABELS[level] ? level : 'lv0';
       elements.currentLevelLabel.textContent = LEVEL_LABELS[state.selectedLevel];
       renderCategoryOptions();
       elements.levelButtons.forEach(function (button) {
@@ -988,10 +992,13 @@
     }
 
     function renderCategoryOptions() {
-      const groups = state.selectedLevel === 'lv3'
-        ? { mass_particles: '質量 ⇔ 個数', mass_volume: '質量 ⇔ 体積', volume_particles: '体積 ⇔ 個数' }
-        : { mol_mass: 'mol ⇔ 質量', mol_particles: 'mol ⇔ 個数', mol_volume: 'mol ⇔ 体積' };
-      const focused = ['lv1', 'lv3'].includes(state.selectedLevel);
+      const groups = ({
+        lv0:{formula_mass:'分子量・式量'},
+        lv3:{mass_particles:'質量 ⇔ 個数',mass_volume:'質量 ⇔ 体積',volume_particles:'体積 ⇔ 個数'},
+        lv5:{density_basics:'密度と質量・体積',density_mol:'密度からmol',density_particles:'密度から個数'},
+        lv8:{precision_basic:'有効数字・基本換算',precision_mixed:'有効数字・総合'}
+      })[state.selectedLevel] || {mol_mass:'mol ⇔ 質量',mol_particles:'mol ⇔ 個数',mol_volume:'mol ⇔ 体積'};
+      const focused = ['lv0','lv1','lv3','lv5','lv8'].includes(state.selectedLevel);
       if (!groups[state.selectedCategory]) state.selectedCategory = Object.keys(groups)[0];
       elements.categoryPanel.hidden = !focused || state.practiceMode === 'auto';
       elements.categorySelect.replaceChildren();
@@ -1025,7 +1032,7 @@
       if (!problem || !attemptId || getProblemLevel(problem) !== nextLevel) {
         return false;
       }
-      if (['lv1', 'lv3'].includes(nextLevel) && problem.category !== state.selectedCategory) return false;
+      if (['lv0','lv1','lv3','lv5','lv8'].includes(nextLevel) && problem.category !== state.selectedCategory) return false;
       return attemptId !== getProblemAttemptId(state.problem);
     }
 
@@ -1110,7 +1117,7 @@
     function renderGivenValues(problem) {
       const values = Array.isArray(problem && problem.givenValues) ? problem.givenValues : [];
       const title = String(problem && problem.givenValuesTitle || 'この問題で使う値');
-      elements.givenValuesTitle.textContent = title === '与えられた値' ? '与えられた値' : 'この問題で使う値';
+      elements.givenValuesTitle.textContent = title;
       elements.givenValuesPanel.setAttribute('aria-label', elements.givenValuesTitle.textContent);
       elements.givenValuesList.innerHTML = '';
 
@@ -1402,7 +1409,7 @@
         elements.learningTip.textContent=check.advice.tip;
         state.learningTarget=check.advice.target;
         elements.learningPractice.textContent=LEVEL_LABELS[check.advice.target.level]+'でこの練習を試す';
-        elements.learningCoverage.textContent='変換ごとの記録を見る（直近5問中4問以上正解：'+check.coverage.confirmed+' / 6方向）';
+        elements.learningCoverage.textContent='変換ごとの記録を見る（直近5問中4問以上正解：'+check.coverage.confirmed+' / '+check.coverage.total+'種類）';
         elements.learningRows.replaceChildren();
         check.rows.forEach(function(row) {
           const item=document.createElement('li');
@@ -1466,8 +1473,8 @@
       if(state.teacherPreview) return;
       if(state.practiceMode==='manual') state.manualSelection={level:state.selectedLevel,category:state.selectedCategory};
       try {
-        localStorage.setItem('molPracticeMode',state.practiceMode);
-        localStorage.setItem('molManualSelection',JSON.stringify(state.manualSelection));
+        localStorage.setItem('molPracticeModeV4',state.practiceMode);
+        localStorage.setItem('molManualSelectionV4',JSON.stringify(state.manualSelection));
       } catch(_) {}
     }
     function renderPracticeMode(plan) {
@@ -1478,7 +1485,7 @@
       elements.autoPracticeDetails.hidden=!automatic;
       elements.practiceModeHelp.textContent=state.teacherPreview ? 'マニュアルで確認できます。オートレベリングは、履歴を記録する生徒画面で利用できます。'
         : automatic ? '解答に合わせてレベルと変換を調整します。マニュアルへはいつでも戻せます。切り替えると問題が変わります。'
-        : 'Lv.1〜Lv.6を自分で選べます。Lv.1・Lv.3では変換も選べます。モードを切り替えると問題が変わります。';
+        : 'Lv.0〜Lv.8を自分で選べます。Lv.1・Lv.3・Lv.5・Lv.8では練習する種類も選べます。モードを切り替えると問題が変わります。';
       const active=automatic && state.problem && plan && plan.mode==='auto';
       elements.autoPracticeLevel.textContent=active ? LEVEL_LABELS[state.problem.level] || '確認中…' : '確認中…';
       elements.autoPracticeFocus.textContent=active ? plan.focusLabel || '' : '';
@@ -1502,12 +1509,12 @@
     elements.manualModeButton.addEventListener('click',()=>changePracticeMode('manual'));
     elements.autoModeButton.addEventListener('click',()=>changePracticeMode('auto'));
     try {
-      const manual=JSON.parse(localStorage.getItem('molManualSelection') || 'null');
+      const manual=JSON.parse(localStorage.getItem('molManualSelectionV4') || 'null');
       if(manual && LEVEL_LABELS[manual.level]) {
         state.manualSelection={level:manual.level,category:typeof manual.category==='string' ? manual.category : 'mol_mass'};
         state.selectedLevel=manual.level;state.selectedCategory=state.manualSelection.category;
       }
-      if(!state.teacherPreview && localStorage.getItem('molPracticeMode')==='auto') state.practiceMode='auto';
+      if(!state.teacherPreview && localStorage.getItem('molPracticeModeV4')==='auto') state.practiceMode='auto';
     } catch(_) {}
     renderPracticeMode();
 
