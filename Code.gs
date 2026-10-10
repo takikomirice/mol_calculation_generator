@@ -2,7 +2,7 @@
 
 const MOL_DRILL_APP_NAME = 'もるくえ！';
 const MOL_DRILL_FORMAL_DESCRIPTION = 'Classroom連携型モル計算練習アプリ';
-const MOL_DRILL_APP_VERSION = '4.0.2';
+const MOL_DRILL_APP_VERSION = '4.0.3';
 const MOL_DRILL_CURRICULUM_VERSION = 4;
 const MOL_DRILL_LEVELS = Array.from({length:9}, (_,i) => 'lv'+i);
 const MOL_DRILL_DEFAULT_CLASSROOM_SEND_BATCH_SIZE = 40;

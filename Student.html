@@ -621,18 +621,18 @@
     <section class="card" aria-label="練習モード">
       <span class="section-label">練習モード</span>
       <div class="mode-buttons" role="group" aria-label="練習モードの切り替え">
-        <button id="manualModeButton" class="mode-button" type="button" aria-pressed="true">マニュアル</button>
-        <button id="autoModeButton" class="mode-button" type="button" aria-pressed="false">オートレベリング</button>
+        <button id="manualModeButton" class="mode-button" type="button" aria-pressed="false">マニュアル</button>
+        <button id="autoModeButton" class="mode-button" type="button" aria-pressed="true">オートレベリング</button>
       </div>
-      <p id="practiceModeHelp" class="helper">マニュアルでは、Lv.0〜Lv.8と練習する変換を選べます。</p>
-      <div id="autoPracticeDetails" class="auto-current" role="status" aria-live="polite" hidden>
+      <p id="practiceModeHelp" class="helper">解答に合わせてレベルと変換を調整します。マニュアルへはいつでも戻せます。切り替えると問題が変わります。</p>
+      <div id="autoPracticeDetails" class="auto-current" role="status" aria-live="polite">
         <span class="status-label">オートレベリング中・現在のレベル</span>
         <strong id="autoPracticeLevel">確認中…</strong>
         <span id="autoPracticeFocus"></span>
         <p id="autoPracticeMessage" class="helper"></p>
       </div>
     </section>
-    <section class="card" id="manualLevelPanel" aria-label="レベル選択">
+    <section class="card" id="manualLevelPanel" aria-label="レベル選択" hidden>
       <span class="section-label">レベル選択</span>
       <div class="level-buttons" id="levelButtons" role="group" aria-label="問題レベル">
         <button class="level-button active" type="button" data-level="lv0" aria-pressed="true"><span class="level-name">Lv.0</span><span class="level-copy">分子量・式量</span></button>
@@ -761,7 +761,7 @@
       token: (params.get('t') || params.get('token') || initialToken || '').trim(),
       adminToken: (initialAdminToken || '').trim(),
       teacherPreview: initialTeacherPreview === true || params.get('preview') === 'teacher' || params.get('teacherPreview') === '1',
-      practiceMode: 'manual',
+      practiceMode: 'auto',
       manualSelection: {level:'lv0', category:'formula_mass'},
       selectedLevel: 'lv0',
       selectedCategory: 'formula_mass',
@@ -1535,13 +1535,15 @@
     }
     elements.manualModeButton.addEventListener('click',()=>changePracticeMode('manual'));
     elements.autoModeButton.addEventListener('click',()=>changePracticeMode('auto'));
+    if(state.teacherPreview) state.practiceMode='manual';
     try {
+      const savedMode=localStorage.getItem('molPracticeModeV4');
+      if(!state.teacherPreview && (savedMode==='manual' || savedMode==='auto')) state.practiceMode=savedMode;
       const manual=JSON.parse(localStorage.getItem('molManualSelectionV4') || 'null');
       if(manual && LEVEL_LABELS[manual.level]) {
         state.manualSelection={level:manual.level,category:typeof manual.category==='string' ? manual.category : 'mol_mass'};
         state.selectedLevel=manual.level;state.selectedCategory=state.manualSelection.category;
       }
-      if(!state.teacherPreview && localStorage.getItem('molPracticeModeV4')==='auto') state.practiceMode='auto';
     } catch(_) {}
     renderPracticeMode();
 

@@ -97,7 +97,7 @@ test('large dashboard snapshots fit cells, survive cache loss, and preserve unre
   target.getRange=function(...args){const range=originalRange.apply(this,args),write=range.setValues;range.setValues=function(rows){assert.ok(rows.every(row=>row.every(v=>String(v).length<=50000)),'Google Sheets cell limit');return write.call(this,rows);};return range;};
   append(env,'モニターキャッシュ',{key:'refresh-state:0',json:'preserve-state'});
   append(env,'モニターキャッシュ',{key:'custom',json:'preserve-custom'});
-  const base={appVersion:'4.0.2',generatedAt:'2026-09-08T03:00:00Z',dashboardMetrics:{},courseOverview:{},studentOverview:{},tokenOverview:{}};
+  const base={appVersion:'4.0.3',generatedAt:'2026-09-08T03:00:00Z',dashboardMetrics:{},courseOverview:{},studentOverview:{},tokenOverview:{}};
   const snapshot={...base,progressRows:Array.from({length:100},(_,i)=>({rosterKey:'course::'+i,name:'生徒'.repeat(900),lv8Attempts:i}))};
   env.MonitorSnapshotService.buildDashboardSnapshot=()=>snapshot;
   env.MonitorSnapshotService.writeDashboardSnapshot();
