@@ -120,6 +120,53 @@ test('six-level metrics appear in teacher aggregation and header serialization',
   for(let i=1;i<=6;i++){assert.equal(row[`lv${i}Attempts`],1);assert.equal(restored[`lv${i}Correct`],i%2===1?1:0);}
 });
 
+test('practice startup defaults to auto, restores explicit choices, and keeps teacher preview manual',async(t)=>{
+  const browser=await chromium.launch({headless:true});
+  const source=await readFile('Student.html','utf8');
+  const cases=[
+    {name:'first visit',mode:'auto'},
+    {name:'saved manual',saved:'manual',mode:'manual'},
+    {name:'saved auto',saved:'auto',mode:'auto'},
+    {name:'unknown saved mode',saved:'unknown',mode:'auto'},
+    {name:'unavailable storage',blocked:true,mode:'auto'},
+    {name:'malformed manual selection',saved:'manual',malformed:true,mode:'manual'},
+    {name:'teacher preview',teacher:true,mode:'manual'},
+    {name:'teacher preview with saved auto',teacher:true,saved:'auto',mode:'manual'}
+  ];
+  try {
+    for(const scenario of cases) await t.test(scenario.name,async()=>{
+      const r=await runtime();const page=await browser.newPage({viewport:{width:390,height:844}});
+      const errors=[];const calls=[];page.on('pageerror',error=>errors.push(error.message));
+      await page.exposeFunction('gasCall',async(method,args)=>{
+        calls.push({method,args});
+        return JSON.parse(JSON.stringify(r.AnswerService[method](...args)));
+      });
+      await page.addInitScript(({saved,blocked,malformed})=>{
+        if(blocked) {Object.defineProperty(window,'localStorage',{get(){throw Error('storage unavailable');}});return;}
+        if(saved) localStorage.setItem('molPracticeMode',saved);
+        if(saved || malformed) localStorage.setItem('molManualSelection',malformed?'{invalid':JSON.stringify({level:'lv3',category:'mass_volume'}));
+      },scenario);
+      const bridge=`<script>window.google={script:{run:{withSuccessHandler(success){return {withFailureHandler(failure){return new Proxy({},{get:(_,method)=>(...args)=>window.gasCall(method,args).then(success,failure)});}};}}}};<\/script>`;
+      const html=source.replace(/<\?!= [\s\S]*?\?>/g,snippet=>snippet.includes('initialTeacherPreview')?String(!!scenario.teacher):snippet.includes('initialAdminToken')?'"teacher-secret"':scenario.teacher?'""':'"student-token"');
+      await page.route('https://mol.test/**',route=>route.fulfill({contentType:'text/html',body:bridge+html}));
+      try {
+        await page.goto('https://mol.test/');
+        await page.waitForFunction(()=>!document.querySelector('#submitButton').disabled,null,{timeout:5000}).catch(async()=>{throw Error(await page.locator('#errorMessage').innerText());});
+        const automatic=scenario.mode==='auto';
+        assert.equal(await page.locator('#autoModeButton').getAttribute('aria-pressed'),String(automatic));
+        assert.equal(await page.locator('#manualModeButton').getAttribute('aria-pressed'),String(!automatic));
+        assert.equal(await page.locator('#manualLevelPanel').isVisible(),!automatic);
+        assert.equal(await page.locator('#autoPracticeDetails').isVisible(),automatic);
+        assert.equal(calls[0].method,scenario.teacher?'initializeTeacherPreviewSession':'initializeStudentSession');
+        if(!scenario.teacher) assert.equal(calls[0].args[1].practiceMode,scenario.mode);
+        if(scenario.teacher) assert.equal(await page.locator('#autoModeButton').isDisabled(),true);
+        if(!automatic && scenario.saved && !scenario.malformed) assert.equal(await page.locator('#currentLevelLabel').innerText(),'Lv.3');
+        assert.deepEqual(errors,[]);
+      } finally {await page.close();}
+    });
+  } finally {await browser.close();}
+});
+
 test('live JavaScript UI switches focus and levels, prevents double submit, and renders an exact cumulative summary',async()=>{
   const r=await runtime();const browser=await chromium.launch({headless:true});
   const page=await browser.newPage({viewport:{width:390,height:844}});page.setDefaultTimeout(5000);const errors=[];page.on('pageerror',e=>errors.push(e.message));
@@ -136,6 +183,8 @@ test('live JavaScript UI switches focus and levels, prevents double submit, and 
     await page.setContent(bridge+html);
     await page.getByRole('button',{name:'解答する',exact:true}).waitFor();
     await page.waitForFunction(()=>document.querySelector('#submitButton').disabled===false).catch(async e=>{throw Error(JSON.stringify({errors,detail:await page.locator('#errorMessage').innerText()}))});
+    await page.getByRole('button',{name:'マニュアル',exact:true}).click();
+    await page.waitForFunction(()=>!document.querySelector('#submitButton').disabled);
     assert.equal(await page.locator('[data-level]').count(),6);
     await page.getByRole('combobox',{name:'練習する変換'}).selectOption('mol_volume');
     await page.waitForFunction(()=>document.querySelector('#submitButton').disabled===false);
@@ -235,6 +284,7 @@ test('automatic policy requires directional coverage and keeps precision mistake
 
 test('automatic UI changes mode, ignores stale manual prefetch, returns to manual and resumes after reload',async()=>{
   const r=await runtime();const browser=await chromium.launch({headless:true});const page=await browser.newPage({viewport:{width:390,height:844}});
+  await page.addInitScript(()=>{if(!localStorage.getItem('molPracticeMode'))localStorage.setItem('molPracticeMode','manual');});
   const errors=[];page.on('pageerror',error=>errors.push(error.message));let release,hold=true,failAuto=false;const calls=[];
   await page.exposeFunction('gasCall',async(method,args)=>{
     calls.push({method,mode:args[1]?.practiceMode});
@@ -393,6 +443,7 @@ test('student self-study UI keeps earned progress, reviews mistakes safely, retr
     assert.ok(await page.evaluate(()=>document.querySelector('#learningDialog').scrollWidth<=document.querySelector('#learningDialog').clientWidth));
     await page.keyboard.press('Escape');assert.equal(await page.locator('#learningDialog').isVisible(),false);
     assert.equal(await page.locator('#learningCheckButton').evaluate(el=>el===document.activeElement),true);
+    await page.getByRole('button',{name:'マニュアル',exact:true}).click();await page.waitForFunction(()=>!document.querySelector('#submitButton').disabled);
     holdCheck=true;await page.getByRole('button',{name:'苦手チェック',exact:true}).click();
     await page.locator('#learningStatus').getByText('記録を確認しています…',{exact:true}).waitFor();
     await page.keyboard.press('Escape');
